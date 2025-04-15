@@ -34,5 +34,67 @@ message CreditCSV {
 message CreditsCSV {
   repeated CreditCSV credits = 1;
 }
-// [START credits messages]
+// [END credits messages]
+
+// [START movies messages]
+message MovieCSV {
+  int32 id = 1;
+  bool adult = 2;
+  string belongs_to_collection = 3;
+  int32 budget = 4;
+
+  message Genre {
+    int32 id = 1;
+    string name = 2;
+  }
+
+  repeated Genre genres = 5;
+  string homepage = 6;
+  string imdb_id = 7;
+  string original_language = 8;
+  string original_title = 9;
+  string overview = 10;
+  float popularity = 11;
+  string poster_path = 12;
+
+  message ProductionCompany {
+    int32 id = 1;
+    string name = 2;
+  }
+
+  repeated ProductionCompany companies = 13;
+
+  message ProductionCountry {
+    string iso_3166_1 = 1;
+    string name = 2;
+  }
+
+  repeated ProductionCountry countries = 14;
+
+  string release_date = 15;
+  int64 revenue = 16;
+  float runtime = 17;
+
+  message SpokenLanguage {
+    string iso_639_1 = 1;
+    string name = 2;
+  }
+
+  repeated SpokenLanguage languages = 18;
+
+  string status = 19;
+  string tagline = 20;
+  string title = 21;
+
+  bool video = 22;
+  float vote_average = 23;
+  int32 vote_count = 24;
+
+}
+
+// Batch of movies from file
+message MoviesCSV {
+  repeated MovieCSV movies = 1;
+}
+// [END movies messages]
 // [END messages]
