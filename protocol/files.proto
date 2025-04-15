@@ -1,0 +1,23 @@
+// [START declaration]
+syntax = "proto3";
+package files;
+// [END declaration]
+
+// [START go_declaration]
+option go_package = "./filespb";
+// [END go_declaration]
+
+
+// [START messages]
+message RatingCSV {
+  int32 userId = 1;
+  int32 movieId = 2;
+  float rating = 3;
+  string timestamp = 4;
+}
+
+// Batch of ratings from file
+message RatingsCSV {
+  repeated RatingCSV ratings = 1;
+}
+// [END messages]
