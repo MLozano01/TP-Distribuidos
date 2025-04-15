@@ -9,6 +9,7 @@ option go_package = "./filespb";
 
 
 // [START messages]
+// [START ratings messages]
 message RatingCSV {
   int32 userId = 1;
   int32 movieId = 2;
@@ -20,4 +21,18 @@ message RatingCSV {
 message RatingsCSV {
   repeated RatingCSV ratings = 1;
 }
+// [END ratings messages]
+
+// [START credits messages]
+message CreditCSV {
+  string cast = 1;
+  string crew = 2;
+  int32 id = 3;
+}
+
+// Batch of credits from file
+message CreditsCSV {
+  repeated CreditCSV credits = 1;
+}
+// [START credits messages]
 // [END messages]
