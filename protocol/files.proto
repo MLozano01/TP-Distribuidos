@@ -3,10 +3,6 @@ syntax = "proto3";
 package files;
 // [END declaration]
 
-// [START go_declaration]
-option go_package = "./filespb";
-// [END go_declaration]
-
 
 // [START messages]
 // [START ratings messages]
