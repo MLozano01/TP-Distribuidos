@@ -20,7 +20,7 @@ class Protocol:
   def __init__(self, max_batch_size):
     self.msg_in_creation = None #pb msg
     self.batch_ready = bytearray()
-    self.max_batch_size = max_batch_size
+    self.max_batch_size = int(max_batch_size)
 
     self.__file_classes = {FileType.MOVIES: files_pb2.MoviesCSV(), 
                          FileType.RATINGS: files_pb2.RatingsCSV(), 
@@ -41,14 +41,13 @@ class Protocol:
   def add_to_batch(self, type, data):
     is_ready = False
     msg_data = self.update_msg(type, data)
-    print(f"msg_data: {msg_data}")
     parsed = msg_data.SerializeToString() #actually bytes, str is a container
     new_len = len(parsed) + CODE_LENGTH + INT_LENGTH ## full msg len
-
+    print(f"new len: {new_len} | max: {self.max_batch_size}")
     if new_len > self.max_batch_size:
         self.reset_batch_message()
         is_ready = True
-        msg_data = self.updated_msg(type, data)
+        msg_data = self.update_msg(type, data)
     
     self.msg_in_creation = msg_data
     return is_ready
@@ -58,11 +57,11 @@ class Protocol:
       self.msg_in_creation = self.__file_classes.get(type)
 
     if type == FileType.MOVIES:
-      self.update_movies_msg(data)
+      return self.update_movies_msg(data)
     elif type == FileType.RATINGS:
-      self.update_ratings_msg(data)
+      return self.update_ratings_msg(data)
     elif type == FileType.CREDITS:
-      self.update_credits_msg(data)
+      return self.update_credits_msg(data)
   
 
   def update_ratings_msg(self, rating):
@@ -77,14 +76,14 @@ class Protocol:
     msg.ratings.append(rating_pb)
     return msg
   
-  def update_credits_msg(self, rating):
+  def update_credits_msg(self, credit):
     msg = files_pb2.CreditsCSV()
     if self.msg_in_creation.credits:
       msg.credits.extend(self.msg_in_creation.credits)
     credit_pb = files_pb2.CreditCSV()
-    credit_pb.cast = rating.get('cast', '')
-    credit_pb.crew = rating.get('crew', '')
-    credit_pb.id = rating.get('id', -1)
+    credit_pb.cast = credit.get('cast', '')
+    credit_pb.crew = credit.get('crew', '')
+    credit_pb.id = int(credit.get('id', -1))
     msg.credits.append(credit_pb)
     return msg
 
@@ -93,28 +92,28 @@ class Protocol:
     if self.msg_in_creation.movies:
       msg.movies.extend(self.msg_in_creation.movies)
     movie_pb = files_pb2.MovieCSV()
-    movie_pb.id = movie_pb.get('id', -1)
-    movie_pb.adult = movie_pb.get('adult', False)
-    movie_pb.belongs_to_collection = movie_pb.get('belongs_to_collection', '')
+    movie_pb.id = movie.get('id', -1)
+    movie_pb.adult = movie.get('adult', False)
+    movie_pb.belongs_to_collection = movie.get('belongs_to_collection', '')
     #TODO: genres
-    movie_pb.homepage = movie_pb.get('homepage', '')
-    movie_pb.imdb_id = movie_pb.get('imdb_id', '')
-    movie_pb.original_language = movie_pb.get('original_language', '')
-    movie_pb.original_title = movie_pb.get('original_title', '')
-    movie_pb.overview = movie_pb.get('overview', '')
-    movie_pb.popularity = movie_pb.get('popularity', -1.0)
-    movie_pb.poster_path = movie_pb.get('poster_path', '')
+    movie_pb.homepage = movie.get('homepage', '')
+    movie_pb.imdb_id = movie.get('imdb_id', '')
+    movie_pb.original_language = movie.get('original_language', '')
+    movie_pb.original_title = movie.get('original_title', '')
+    movie_pb.overview = movie.get('overview', '')
+    movie_pb.popularity = movie.get('popularity', -1.0)
+    movie_pb.poster_path = movie.get('poster_path', '')
     #TODO: companies and countries
-    movie_pb.release_date = movie_pb.get('release_date', '')
-    movie_pb.revenue = movie_pb.get('revenue', -1.0)
-    movie_pb.runtime = movie_pb.get('runtime', -1.0)
+    movie_pb.release_date = movie.get('release_date', '')
+    movie_pb.revenue = movie.get('revenue', -1.0)
+    movie_pb.runtime = movie.get('runtime', -1.0)
     #TODO: languages
-    movie_pb.status = movie_pb.get('status', '')
-    movie_pb.tagline = movie_pb.get('tagline', '')
-    movie_pb.title = movie_pb.get('title', '')
-    movie_pb.video = movie_pb.get('video', False)
-    movie_pb.vote_average = movie_pb.get('vote_average', -1.0)
-    movie_pb.vote_count = movie_pb.get('vote_count', -1)
+    movie_pb.status = movie.get('status', '')
+    movie_pb.tagline = movie.get('tagline', '')
+    movie_pb.title = movie.get('title', '')
+    movie_pb.video = movie.get('video', False)
+    movie_pb.vote_average = movie.get('vote_average', -1.0)
+    movie_pb.vote_count = movie.get('vote_count', -1)
     msg.movies.append(movie_pb)
     return msg
   
@@ -137,3 +136,5 @@ class Protocol:
     message.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
     message.extend(len_batch.to_bytes(INT_LENGTH, byteorder='big'))
     message.extend(batch)
+
+    return message
