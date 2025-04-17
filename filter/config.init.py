@@ -12,15 +12,19 @@ def initialize_config():
     with config parameters
     """
 
+    config_params = {}
+
     config = ConfigParser(os.environ)
     # If config.ini does not exists original config object is not modified
     config.read("config.ini")
 
     config_params = {}
+
     try:
-        config_params["port"] = int(os.getenv('SERVER_PORT', config["DEFAULT"]["SERVER_PORT"]))
-        config_params["listen_backlog"] = int(os.getenv('SERVER_LISTEN_BACKLOG', config["DEFAULT"]["SERVER_LISTEN_BACKLOG"]))
-        config_params["logging_level"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"])
+        config_params["num_filters"] = int(os.getenv('NUM_FILTERS'))
+        for i in range(config_params["num_filters"]):
+            config_params[f"filter_{i}"] = os.getenv(f'FILTER_{i}')
+        config_params["logging_level"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"]) 
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
     except ValueError as e:
