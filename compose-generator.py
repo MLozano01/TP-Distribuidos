@@ -20,7 +20,7 @@ def create_yaml_file(client_amount):
     network = create_network()
     rabbit = create_rabbit()
     content = f"""
-name: tp0
+version: "3.8"
 services:
   {rabbit}
   {server}
@@ -41,7 +41,7 @@ def create_client(id):
   client{id}:
     container_name: client{id}
     image: client:latest
-    entrypoint: python3 client.py
+    entrypoint: python3 main.py
     environment:
       - CLI_ID={id}
     networks:
@@ -63,7 +63,7 @@ def create_server(client_amount):
     server = f"""server:
     container_name: server
     image: server:latest
-    entrypoint: python3 server.py
+    entrypoint: python3 main.py
     environment:
       - NUM_CLIENTS={client_amount}
     networks:
@@ -89,8 +89,8 @@ def create_network():
 def create_rabbit():  
     rabbit = """rabbitmq:
     build:
-      - context: ./rabbitmq
-      - dockerfile: rabbitmq.dockerfile
+      context: ./rabbitmq
+      dockerfile: rabbitmq.dockerfile
     ports:
       - 15672:15672
     """
