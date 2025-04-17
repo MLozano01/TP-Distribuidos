@@ -1,4 +1,3 @@
-
 from protocol import files_pb2
 
 from enum import Enum
@@ -41,7 +40,8 @@ class Protocol:
 
   def add_to_batch(self, type, data):
     is_ready = False
-    msg_data = self.updated_msg(type, data)
+    msg_data = self.update_msg(type, data)
+    print(f"msg_data: {msg_data}")
     parsed = msg_data.SerializeToString() #actually bytes, str is a container
     new_len = len(parsed) + CODE_LENGTH + INT_LENGTH ## full msg len
 
@@ -53,7 +53,7 @@ class Protocol:
     self.msg_in_creation = msg_data
     return is_ready
   
-  def updated_msg(self, type, data):
+  def update_msg(self, type, data):
     if self.msg_in_creation == None:
       self.msg_in_creation = self.__file_classes.get(type)
 
@@ -137,6 +137,3 @@ class Protocol:
     message.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
     message.extend(len_batch.to_bytes(INT_LENGTH, byteorder='big'))
     message.extend(batch)
-
-
-
