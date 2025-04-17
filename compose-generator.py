@@ -41,7 +41,7 @@ def create_client(id):
   client{id}:
     container_name: client{id}
     image: client:latest
-    entrypoint: python3 client.py
+    entrypoint: python3 /main.py
     environment:
       - CLI_ID={id}
     networks:
