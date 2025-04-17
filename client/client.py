@@ -21,8 +21,8 @@ class Client:
     
     except socket.error as err:
       logging.info(f"A socket error occurred: {err}")
-    except Exception as err:
-      logging.info(f"An unexpected error occurred: {err}")
+    # except Exception as err:
+    #   logging.info(f"An unexpected error occurred: {err}")
 
     finally:
       pass
