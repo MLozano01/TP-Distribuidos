@@ -7,6 +7,9 @@ services:
       dockerfile: rabbitmq.dockerfile
     ports:
       - 15672:15672
+    environment:
+      - RABBITMQ_LOGS=-
+      - RABBITMQ_LOG_LEVEL=warning
     
   server:
     container_name: server
@@ -41,6 +44,22 @@ services:
       - ./.data/credits.csv:/credits.csv
       - ./.data/ratings.csv:/ratings.csv
       - ./.data/movies_metadata.csv:/movies_metadata.csv
+    
+  
+  filter:
+    container_name: filter
+    image: filter:latest
+    environment:
+      - CLI_ID=
+    networks:
+      - tp_network
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/config.ini:/config.ini
     
 networks:
   tp_network:

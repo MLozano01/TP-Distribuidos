@@ -4,4 +4,4 @@ COPY filter /
 COPY protocol /protocol
 COPY requirements.txt /
 
-ENTRYPOINT ["python3", "/filter.py"]
+ENTRYPOINT ["python3", "/main.py"]

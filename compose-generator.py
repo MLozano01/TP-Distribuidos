@@ -19,6 +19,7 @@ def create_yaml_file(client_amount):
     server = create_server(client_amount)
     network = create_network()
     rabbit = create_rabbit()
+    # filter_cont = create_filter()
     content = f"""
 version: "3.8"
 services:
@@ -92,8 +93,28 @@ def create_rabbit():
       dockerfile: rabbitmq.dockerfile
     ports:
       - 15672:15672
+    environment:
+      - RABBITMQ_LOGS=-
+      - RABBITMQ_LOG_LEVEL=warning
     """
     return rabbit
+
+# def create_filter():
+  #   filter_cont = f"""
+  # filter:
+  #   container_name: filter
+  #   image: filter:latest
+  #   networks:
+  #     - {NETWORK_NAME}
+  #   depends_on:
+  #     - server
+  #     - rabbitmq
+  #   links:
+  #     - rabbitmq
+  #   volumes:
+  #     - ./filter/config.ini:/config.ini
+  #   """ 
+  #   return filter_cont
 
 def main(client_amount):
     docker_yaml_generator(client_amount)
