@@ -4,7 +4,7 @@ from configparser import ConfigParser
 import logging
 import os
 
-from client.client import Client
+from client import Client
 
 def initialize_config():
     """ Parse env variables or config file to find program config params
@@ -23,8 +23,8 @@ def initialize_config():
 
     config_params = {}
     try:
-        config_params["server_addr"] = int(os.getenv('SERVER_ADRESS', config["DEFAULT"]["SERVER_ADRESS"]))
-        config_params["client_id"] = int(os.getenv('CLIENT_ID', config["DEFAULT"]["CLIENT_ID"]))
+        config_params["server_port"] = int(os.getenv('SERVER_PORT', config["DEFAULT"]["SERVER_PORT"]))
+        config_params["client_id"] = int(os.getenv('CLIENT_ID', 0))
         config_params["logging_level"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"])
         config_params["max_batch_size"] = os.getenv('MAX_BATCH_SIZE', config["DEFAULT"]["MAX_BATCH_SIZE"])
 
@@ -38,7 +38,7 @@ def initialize_config():
 def main():
     config_params = initialize_config()
     logging_level = config_params["logging_level"]
-    server_addr = config_params["server_addr"]
+    server_port = config_params["server_port"]
     client_id = config_params["client_id"]
     max_batch_size = config_params["max_batch_size"]
 
@@ -46,11 +46,11 @@ def main():
 
     # Log config parameters at the beginning of the program to verify the configuration
     # of the component
-    logging.debug(f"action: config | result: success | server_address: {server_addr} | "
+    logging.debug(f"action: config | result: success | server_port: {server_port} | "
                   f"client_id: {client_id} | logging_level: {logging_level}")
 
     
-    client = Client(server_addr, client_id, max_batch_size)
+    client = Client(server_port, client_id, max_batch_size)
     client.run()
     
 

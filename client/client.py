@@ -2,21 +2,21 @@ import socket
 import logging
 import csv
 
-from protocol.common.protocol import Protocol, FileType
+from protocol.protocol import Protocol, FileType
 
 class Client:
-  def __init__(self, server_addr, id, max_batch_size):
-    self.server_addr = tuple(server_addr.split(":"))
+  def __init__(self, server_port, id, max_batch_size):
+    self.server_port = server_port
     self.id = id
     self.protocol = Protocol(max_batch_size)
     self.client_socket = None
 
   def run(self):
     try:
-      self.client_socket = socket.create_connection(self.server_addr)
+      # self.client_socket = socket.create_connection(self.server_addr)
       
-      self.send_data("movies_metadata.csv", FileType.MOVIES)
-      self.send_data("ratings.csv", FileType.RATINGS)
+      # self.send_data("movies_metadata.csv", FileType.MOVIES)
+      # self.send_data("ratings.csv", FileType.RATINGS)
       self.send_data("credits.csv", FileType.CREDITS)
     
     except socket.error as err:
@@ -25,9 +25,10 @@ class Client:
       logging.info(f"An unexpected error occurred: {err}")
 
     finally:
-        if self.client_socket:
-            self.client_socket.close()
-            logging.info("Connection closed")
+      pass
+        # if self.client_socket:
+        #     self.client_socket.close()
+        #     logging.info("Connection closed")
   
   
   def send_data(self, path, type):
@@ -44,4 +45,5 @@ class Client:
      if len(message) == 0:
         return
      
-     self.client_socket.sendall(message)
+    #  self.client_socket.sendall(message)
+
