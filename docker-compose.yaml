@@ -11,7 +11,7 @@ services:
   server:
     container_name: server
     image: server:latest
-    entrypoint: python3 main.py
+    entrypoint: python3 /main.py
     environment:
       - NUM_CLIENTS=1
     networks:
@@ -27,22 +27,20 @@ services:
   client1:
     container_name: client1
     image: client:latest
-    entrypoint: python3 main.py
     environment:
       - CLI_ID=1
     networks:
       - tp_network
     depends_on:
       - server
-
       - rabbitmq
     links:
       - rabbitmq
     volumes:
       - ./client/config.ini:/config.ini
-      - ./.data/credits.csv.csv:/credits.csv.csv
-      - ./.data/ratings.csv.csv:/ratings.csv.csv
-      - ./.data/movies_metadata.csv.csv:/movies_metadata.csv.csv
+      - ./.data/credits.csv:/credits.csv
+      - ./.data/ratings.csv:/ratings.csv
+      - ./.data/movies_metadata.csv:/movies_metadata.csv
     
 networks:
   tp_network:

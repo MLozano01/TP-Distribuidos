@@ -41,21 +41,20 @@ def create_client(id):
   client{id}:
     container_name: client{id}
     image: client:latest
-    entrypoint: python3 main.py
     environment:
       - CLI_ID={id}
     networks:
       - {NETWORK_NAME}
     depends_on:
-      - server\n
+      - server
       - rabbitmq
     links:
       - rabbitmq
     volumes:
       - ./client/config.ini:/config.ini
-      - ./.data/{CREDITS_DATASET}.csv:/{CREDITS_DATASET}.csv
-      - ./.data/{RATINGS_DATASET}.csv:/{RATINGS_DATASET}.csv
-      - ./.data/{MOVIES_DATASET}.csv:/{MOVIES_DATASET}.csv
+      - ./.data/{CREDITS_DATASET}:/{CREDITS_DATASET}
+      - ./.data/{RATINGS_DATASET}:/{RATINGS_DATASET}
+      - ./.data/{MOVIES_DATASET}:/{MOVIES_DATASET}
     """ 
     return client
 
@@ -63,7 +62,7 @@ def create_server(client_amount):
     server = f"""server:
     container_name: server
     image: server:latest
-    entrypoint: python3 main.py
+    entrypoint: python3 /main.py
     environment:
       - NUM_CLIENTS={client_amount}
     networks:
