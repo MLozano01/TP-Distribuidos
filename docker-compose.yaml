@@ -5,8 +5,11 @@ services:
     build:
       context: ./rabbitmq
       dockerfile: rabbitmq.dockerfile
+    hostname: rabbitmq
     ports:
-      - 15672:15672
+      - 5672:5672
+    networks:
+      - tp_network
     
   server:
     container_name: server

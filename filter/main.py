@@ -1,11 +1,13 @@
 import logging
-import logging
 import common.config_init as config_init
+from utils.utils import config_logger
+
 from common.filter import Filter
 
 def main():
     config = config_init.initialize_config()
-    logging.basicConfig(level=config["logging_level"])
+    config_logger(config["logging_level"])
+
     logging.info("Filter started")
 
     config.pop("logging_level", None)

@@ -2,11 +2,12 @@
 import logging
 from common.server import Server
 from common.config_init import initialize_config
+from utils.utils import config_logger
 
 def main():
 
     config = initialize_config()
-    logging.basicConfig(level=config["logging_level"])
+    config_logger(config["logging_level"])
 
     server = Server(config["port"], config["listen_backlog"])
     logging.info("Server started")

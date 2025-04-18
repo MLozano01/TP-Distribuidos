@@ -87,12 +87,15 @@ def create_network():
     return network
 
 def create_rabbit():  
-    rabbit = """rabbitmq:
+    rabbit = f"""rabbitmq:
     build:
       context: ./rabbitmq
       dockerfile: rabbitmq.dockerfile
+    hostname: rabbitmq
     ports:
-      - 15672:15672
+      - 5672:5672
+    networks:
+      - {NETWORK_NAME}
     """
     return rabbit
 
