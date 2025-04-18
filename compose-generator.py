@@ -9,6 +9,10 @@ RATINGS_DATASET = "ratings.csv"
 NETWORK_NAME = "tp_network"
 NETWORK_IP = " 172.25.125.0/24"
 
+CONFIG_FILE = "config.ini"
+
+FILTER_BY_ARG_SPA = "filter_by_arg_spa.ini"
+
 def docker_yaml_generator(client_amount):
 
     with open(FILE_NAME, 'w') as f:
@@ -53,7 +57,7 @@ def create_client(id):
     links:
       - rabbitmq
     volumes:
-      - ./client/config.ini:/config.ini
+      - ./client/{CONFIG_FILE}:/{CONFIG_FILE}
       - ./.data/{CREDITS_DATASET}:/{CREDITS_DATASET}
       - ./.data/{RATINGS_DATASET}:/{RATINGS_DATASET}
       - ./.data/{MOVIES_DATASET}:/{MOVIES_DATASET}
@@ -74,7 +78,7 @@ def create_server(client_amount):
     links:
       - rabbitmq
     volumes:
-      - ./server/config.ini:/config.ini
+      - ./server/{CONFIG_FILE}:/{CONFIG_FILE}
     """
     return server
 
@@ -113,7 +117,8 @@ def create_filter():
     links:
       - rabbitmq
     volumes:
-      - ./filter/config.ini:/config.ini
+      - ./filter/{CONFIG_FILE}:/{CONFIG_FILE}
+      - ./filter/filters/{FILTER_BY_ARG_SPA}:/{FILTER_BY_ARG_SPA}
     """ 
     return filter_cont
 

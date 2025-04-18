@@ -11,6 +11,25 @@ services:
     networks:
       - tp_network
     
+  
+  client1:
+    container_name: client1
+    image: client:latest
+    environment:
+      - CLI_ID=1
+    networks:
+      - tp_network
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./client/config.ini:/config.ini
+      - ./.data/credits.csv:/credits.csv
+      - ./.data/ratings.csv:/ratings.csv
+      - ./.data/movies_metadata.csv:/movies_metadata.csv
+    
   server:
     container_name: server
     image: server:latest
@@ -39,6 +58,7 @@ services:
       - rabbitmq
     volumes:
       - ./filter/config.ini:/config.ini
+      - ./filter/filters/filter_by_arg_spa.ini:/filter_by_arg_spa.ini
     
 networks:
   tp_network:
