@@ -15,9 +15,9 @@ class Client:
     try:
       # self.client_socket = socket.create_connection(self.server_addr)
       
-      # self.send_data("movies_metadata.csv", FileType.MOVIES)
-      # self.send_data("ratings.csv", FileType.RATINGS)
+      self.send_data("movies_metadata.csv", FileType.MOVIES)
       self.send_data("credits.csv", FileType.CREDITS)
+      self.send_data("ratings.csv", FileType.RATINGS)
     
     except socket.error as err:
       logging.info(f"A socket error occurred: {err}")
@@ -45,7 +45,7 @@ class Client:
     if len(message) == 0:
       return
     
-    print(F"ENVIANDO {len(message)}")
+    # print(F"ENVIANDO {len(message)}")
     
     #  self.client_socket.sendall(message)
 

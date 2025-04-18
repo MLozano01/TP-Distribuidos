@@ -38,6 +38,26 @@ class Protocol:
   def define_buffer_size(self, msg):
     return int.from_bytes(msg[CODE_LENGTH::], byteorder='big')
   
+  def reset_batch_message(self):
+    self.batch_ready = self.msg_in_creation
+    self.msg_in_creation = None
+
+  def get_batch_msg(self, force_send, type):
+    if force_send:
+      self.reset_batch_message()
+    
+    batch = self.batch_ready.SerializeToString()
+    len_batch = len(batch)
+    if len_batch == 0:
+      return bytearray()
+    
+    message = bytearray()
+    code = self.__type_codes.get(type)
+    message.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
+    message.extend(len_batch.to_bytes(INT_LENGTH, byteorder='big'))
+    message.extend(batch)
+
+    return message
 
   def add_to_batch(self, type, data):
     is_ready = False
@@ -69,10 +89,10 @@ class Protocol:
     if self.msg_in_creation.ratings:
       msg.ratings.extend(self.msg_in_creation.ratings)
     rating_pb = files_pb2.RatingCSV()
-    rating_pb.userId = int(rating.get('userId', -1))
-    rating_pb.movieId = int(rating.get('movieId', -1))
-    rating_pb.rating = float(rating.get('rating', -1.0))
-    rating_pb.timestamp = rating.get('timestamp', '')
+    rating_pb.userId = to_int(rating.get('userId', -1))
+    rating_pb.movieId = to_int(rating.get('movieId', -1))
+    rating_pb.rating = to_float(rating.get('rating', -1.0))
+    rating_pb.timestamp = to_string(rating.get('timestamp', ''))
     msg.ratings.append(rating_pb)
     return msg
   
@@ -83,7 +103,7 @@ class Protocol:
     credit_pb = files_pb2.CreditCSV()
     self.create_cast(credit_pb, credit.get('cast', ''))
     self.create_crew(credit_pb, credit.get('crew', ''))
-    credit_pb.id = int(credit.get('id', -1))
+    credit_pb.id = to_int(credit.get('id', -1))
     msg.credits.append(credit_pb)
     return msg
   
@@ -93,14 +113,14 @@ class Protocol:
     data_list = self.create_data_list(cast_list)
     for cast in data_list:
       cast_pb = credit_pb.cast.add()
-      cast_pb.cast_id = int(cast.get('cast_id', -1))
-      cast_pb.character = cast.get('character', '')
-      cast_pb.credit_id = cast.get('credit_id', '')
-      cast_pb.gender = int(cast.get('gender', -1))
-      cast_pb.id = int(cast.get('id', -1))
-      cast_pb.name = cast.get('name', '')
-      cast_pb.order = int(cast.get('order', -1))
-      cast_pb.profile_path = cast.get('profile_path', '')
+      cast_pb.cast_id = to_int(cast.get('cast_id', -1))
+      cast_pb.character = to_string(cast.get('character', ''))
+      cast_pb.credit_id = to_string(cast.get('credit_id', ''))
+      cast_pb.gender = to_int(cast.get('gender', -1))
+      cast_pb.id = to_int(cast.get('id', -1))
+      cast_pb.name = to_string(cast.get('name', ''))
+      cast_pb.order = to_int(cast.get('order', -1))
+      cast_pb.profile_path = to_string(cast.get('profile_path', ''))
 
   def create_data_list(self, string_data):
     string_data = string_data.replace('[', "")
@@ -127,13 +147,13 @@ class Protocol:
     data_list = self.create_data_list(crew_list)
     for crew in data_list:
       crew_pb = credit_pb.crew.add()
-      crew_pb.credit_id = crew.get('credit_id', '')
-      crew_pb.department = crew.get('department', '')
-      crew_pb.gender = int(crew.get('gender', -1))
-      crew_pb.id = int(crew.get('id', -1))
-      crew_pb.job = crew.get('job', '')
-      crew_pb.name = crew.get('name', '')
-      crew_pb.profile_path = crew.get('profile_path', '')
+      crew_pb.credit_id = to_string(crew.get('credit_id', ''))
+      crew_pb.department = to_string(crew.get('department', ''))
+      crew_pb.gender = to_int(crew.get('gender', -1))
+      crew_pb.id = to_int(crew.get('id', -1))
+      crew_pb.job = to_string(crew.get('job', ''))
+      crew_pb.name = to_string(crew.get('name', ''))
+      crew_pb.profile_path = to_string(crew.get('profile_path', ''))
 
 
   def update_movies_msg(self, movie):
@@ -205,24 +225,4 @@ class Protocol:
       language_pb = movie_pb.languages.add()
       language_pb.iso_639_1 = to_string(language.get('iso_639_1', ''))
       language_pb.name = to_string(language.get('name', ''))
-  
-  def reset_batch_message(self):
-    self.batch_ready = self.msg_in_creation
-    self.msg_in_creation = None
 
-  def get_batch_msg(self, force_send, type):
-    if force_send:
-      self.reset_batch_message()
-    
-    batch = self.batch_ready.SerializeToString()
-    len_batch = len(batch)
-    if len_batch == 0:
-      return bytearray()
-    
-    message = bytearray()
-    code = self.__type_codes.get(type)
-    message.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
-    message.extend(len_batch.to_bytes(INT_LENGTH, byteorder='big'))
-    message.extend(batch)
-
-    return message
