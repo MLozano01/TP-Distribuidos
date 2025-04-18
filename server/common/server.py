@@ -1,7 +1,7 @@
 
 import socket
 import logging
-from protocol.protocol import RabbitMQ
+from protocol.rabbit_protocol import RabbitMQ
 
 class Server:
     def __init__(self, port, listen_backlog):

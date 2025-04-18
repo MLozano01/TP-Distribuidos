@@ -24,6 +24,7 @@ def create_yaml_file(client_amount):
 version: "3.8"
 services:
   {rabbit}
+  {clients}
   {server}
   {filter_cont}
 networks:

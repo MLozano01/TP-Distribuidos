@@ -13,7 +13,7 @@ class Client:
 
   def run(self):
     try:
-      # self.client_socket = socket.create_connection(self.server_addr)
+      self.client_socket = socket.create_connection(('server', self.server_port))
       
       self.send_data("movies_metadata.csv", FileType.MOVIES)
       self.send_data("credits.csv", FileType.CREDITS)
@@ -21,14 +21,13 @@ class Client:
     
     except socket.error as err:
       logging.info(f"A socket error occurred: {err}")
-    # except Exception as err:
-    #   logging.info(f"An unexpected error occurred: {err}")
+    except Exception as err:
+      logging.info(f"An unexpected error occurred: {err}")
 
     finally:
-      pass
-        # if self.client_socket:
-        #     self.client_socket.close()
-        #     logging.info("Connection closed")
+      if self.client_socket:
+        self.client_socket.close()
+        logging.info("Connection closed")
   
   
   def send_data(self, path, type):
@@ -45,7 +44,7 @@ class Client:
     if len(message) == 0:
       return
     
+    self.client_socket.sendall(message)
     # print(F"ENVIANDO {len(message)}")
     
-    #  self.client_socket.sendall(message)
 

@@ -1,5 +1,5 @@
 
-from protocol.protocol import RabbitMQ
+from protocol.rabbit_protocol import RabbitMQ
 import logging
 
 class Filter:
