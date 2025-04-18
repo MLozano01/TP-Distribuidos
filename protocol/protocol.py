@@ -1,4 +1,5 @@
 from protocol import files_pb2
+from protocol.parsing_proto_utils import *
 
 from enum import Enum
 
@@ -140,32 +141,71 @@ class Protocol:
     if self.msg_in_creation.movies:
       msg.movies.extend(self.msg_in_creation.movies)
     movie_pb = files_pb2.MovieCSV()
-    movie_pb.id = movie.get('id', -1)
-    movie_pb.adult = movie.get('adult', False)
-    movie_pb.belongs_to_collection = movie.get('belongs_to_collection', '')
-    #TODO: genres
-    movie_pb.homepage = movie.get('homepage', '')
-    movie_pb.imdb_id = movie.get('imdb_id', '')
-    movie_pb.original_language = movie.get('original_language', '')
-    movie_pb.original_title = movie.get('original_title', '')
-    movie_pb.overview = movie.get('overview', '')
-    movie_pb.popularity = movie.get('popularity', -1.0)
-    movie_pb.poster_path = movie.get('poster_path', '')
-    #TODO: companies and countries
-    movie_pb.release_date = movie.get('release_date', '')
-    movie_pb.revenue = movie.get('revenue', -1.0)
-    movie_pb.runtime = movie.get('runtime', -1.0)
-    #TODO: languages
-    movie_pb.status = movie.get('status', '')
-    movie_pb.tagline = movie.get('tagline', '')
-    movie_pb.title = movie.get('title', '')
-    movie_pb.video = movie.get('video', False)
-    movie_pb.vote_average = movie.get('vote_average', -1.0)
-    movie_pb.vote_count = movie.get('vote_count', -1)
+    movie_pb.id = to_int(movie.get('id', -1))
+    movie_pb.adult = to_bool(movie.get('adult', 'False'))
+    self.create_collection(movie_pb, movie.get('belongs_to_collection', ''))
+    self.create_genres(movie_pb, movie.get('genres', ''))
+    movie_pb.homepage = to_string(movie.get('homepage', ''))
+    movie_pb.imdb_id = to_string(movie.get('imdb_id', ''))
+    movie_pb.original_language = to_string(movie.get('original_language', ''))
+    movie_pb.original_title = to_string(movie.get('original_title', ''))
+    movie_pb.overview = to_string(movie.get('overview', ''))
+    movie_pb.popularity = to_float(movie.get('popularity', -1.0))
+    movie_pb.poster_path = to_string(movie.get('poster_path', ''))
+    self.create_companies(movie_pb, movie.get('companies', ''))
+    self.create_countries(movie_pb, movie.get('contries', ''))
+    movie_pb.release_date = to_string(movie.get('release_date', ''))
+    movie_pb.revenue = to_int(movie.get('revenue', -1))
+    movie_pb.runtime = to_float(movie.get('runtime', -1.0))
+    self.create_languages(movie_pb, movie.get('languages', ''))
+    movie_pb.status = to_string(movie.get('status', ''))
+    movie_pb.tagline = to_string(movie.get('tagline', ''))
+    movie_pb.title = to_string(movie.get('title', ''))
+    if(type(to_bool(movie.get('video', 'False'))) is not bool):
+      print(f"Rompio con este valor {movie_pb.title}: {to_bool(movie.get('video', 'False'))} | {type(to_bool(movie.get('video', 'False')))}")
+    movie_pb.video = to_bool(movie.get('video', 'False'))
+    movie_pb.vote_average = to_float(movie.get('vote_average', -1.0))
+    movie_pb.vote_count = to_int(movie.get('vote_count', -1))
     msg.movies.append(movie_pb)
     return msg
   
+  def create_collection(self, movie_pb, collection_data):
+    data_list = self.create_data_list(collection_data)
+    for collection in data_list:
+      collection_pb = movie_pb.belongs_to_collection
+      collection_pb.id = to_int(collection.get('id', -1))
+      collection_pb.name = to_string(collection.get('name', ''))
+      collection_pb.poster_path = to_string(collection.get('poster_path', ''))
+      collection_pb.backdrop_path = to_string(collection.get('backdrop_path', ''))
 
+  def create_genres(self, movie_pb, genres_data):
+    data_list = self.create_data_list(genres_data)
+    for genre in data_list:
+      genre_pb = movie_pb.genres.add()
+      genre_pb.id = to_int(genre.get('id', -1))
+      genre_pb.name = to_string(genre.get('name', ''))
+
+  def create_companies(self, movie_pb, companies_data):
+    data_list = self.create_data_list(companies_data)
+    for company in data_list:
+      company_pb = movie_pb.companies.add()
+      company_pb.id = to_int(company.get('id', -1))
+      company_pb.name = to_string(company.get('name', ''))
+
+  def create_countries(self, movie_pb, countries_data):
+    data_list = self.create_data_list(countries_data)
+    for country in data_list:
+      country_pb = movie_pb.countries.add()
+      country_pb.iso_3166_1 = to_string(country.get('iso_3166_1', ''))
+      country_pb.name = to_string(country.get('name', ''))
+  
+  def create_languages(self, movie_pb, languages_data):
+    data_list = self.create_data_list(languages_data)
+    for language in data_list:
+      language_pb = movie_pb.languages.add()
+      language_pb.iso_639_1 = to_string(language.get('iso_639_1', ''))
+      language_pb.name = to_string(language.get('name', ''))
+  
   def reset_batch_message(self):
     self.batch_ready = self.msg_in_creation
     self.msg_in_creation = None

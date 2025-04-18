@@ -58,7 +58,14 @@ message CreditsCSV {
 message MovieCSV {
   int32 id = 1;
   bool adult = 2;
-  string belongs_to_collection = 3;
+  message Collection {
+    int32 id = 1;
+    string name = 2;
+    string poster_path = 3;
+    string backdrop_path = 4;
+  }
+  
+  Collection belongs_to_collection = 3;
   int32 budget = 4;
 
   message Genre {
