@@ -43,7 +43,6 @@ class Protocol:
     msg_data = self.update_msg(type, data)
     parsed = msg_data.SerializeToString() #actually bytes, str is a container
     new_len = len(parsed) + CODE_LENGTH + INT_LENGTH ## full msg len
-    print(f"new len: {new_len} | max: {self.max_batch_size}")
     if new_len > self.max_batch_size:
         self.reset_batch_message()
         is_ready = True
@@ -69,9 +68,9 @@ class Protocol:
     if self.msg_in_creation.ratings:
       msg.ratings.extend(self.msg_in_creation.ratings)
     rating_pb = files_pb2.RatingCSV()
-    rating_pb.userId = rating.get('userId', -1)
-    rating_pb.movieId = rating.get('movieId', -1)
-    rating_pb.rating = rating.get('rating', -1.0)
+    rating_pb.userId = int(rating.get('userId', -1))
+    rating_pb.movieId = int(rating.get('movieId', -1))
+    rating_pb.rating = float(rating.get('rating', -1.0))
     rating_pb.timestamp = rating.get('timestamp', '')
     msg.ratings.append(rating_pb)
     return msg
@@ -81,11 +80,60 @@ class Protocol:
     if self.msg_in_creation.credits:
       msg.credits.extend(self.msg_in_creation.credits)
     credit_pb = files_pb2.CreditCSV()
-    credit_pb.cast = credit.get('cast', '')
-    credit_pb.crew = credit.get('crew', '')
+    self.create_cast(credit_pb, credit.get('cast', ''))
+    self.create_crew(credit_pb, credit.get('crew', ''))
     credit_pb.id = int(credit.get('id', -1))
     msg.credits.append(credit_pb)
     return msg
+  
+  def create_cast(self, credit_pb, cast_list):
+    if cast_list == '' or cast_list == None:
+      return 
+    data_list = self.create_data_list(cast_list)
+    for cast in data_list:
+      cast_pb = credit_pb.cast.add()
+      cast_pb.cast_id = int(cast.get('cast_id', -1))
+      cast_pb.character = cast.get('character', '')
+      cast_pb.credit_id = cast.get('credit_id', '')
+      cast_pb.gender = int(cast.get('gender', -1))
+      cast_pb.id = int(cast.get('id', -1))
+      cast_pb.name = cast.get('name', '')
+      cast_pb.order = int(cast.get('order', -1))
+      cast_pb.profile_path = cast.get('profile_path', '')
+
+  def create_data_list(self, string_data):
+    string_data = string_data.replace('[', "")
+    string_data = string_data.replace(']', "")
+    data_list = string_data.split('}')
+    list_values = []
+    for data in data_list:
+      data = data.replace('{', "")
+      values = data.split(",")
+      dict_value = dict()
+      for val in values:
+        key_value = val.split(':')
+        if len(key_value) != 2:
+          continue
+        [key, value] = key_value
+        dict_value[key.strip()] = value.strip()
+      list_values.append(dict_value)
+
+    return list_values
+  
+  def create_crew(self, credit_pb, crew_list):
+    if crew_list == '' or crew_list == None:
+      return 
+    data_list = self.create_data_list(crew_list)
+    for crew in data_list:
+      crew_pb = credit_pb.crew.add()
+      crew_pb.credit_id = crew.get('credit_id', '')
+      crew_pb.department = crew.get('department', '')
+      crew_pb.gender = int(crew.get('gender', -1))
+      crew_pb.id = int(crew.get('id', -1))
+      crew_pb.job = crew.get('job', '')
+      crew_pb.name = crew.get('name', '')
+      crew_pb.profile_path = crew.get('profile_path', '')
+
 
   def update_movies_msg(self, movie):
     msg = files_pb2.MoviesCSV()

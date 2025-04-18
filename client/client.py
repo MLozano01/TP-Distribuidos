@@ -32,18 +32,20 @@ class Client:
   
   
   def send_data(self, path, type):
-     with open(path, "r") as file:
-        for data in csv.DictReader(file):
-          ready_to_send = self.protocol.add_to_batch(type, data)
+    with open(path, "r") as file:
+      for data in csv.DictReader(file):
+        ready_to_send = self.protocol.add_to_batch(type, data)
 
-          if ready_to_send:
-            self.send_batch(False, type)
-        self.send_batch(True, type)
+        if ready_to_send:
+          self.send_batch(False, type)
+      self.send_batch(True, type)
   
   def send_batch(self, last_send, type):
-     message = self.protocol.get_batch_msg(last_send, type)
-     if len(message) == 0:
-        return
-     
+    message = self.protocol.get_batch_msg(last_send, type)
+    if len(message) == 0:
+      return
+    
+    print(F"ENVIANDO {len(message)}")
+    
     #  self.client_socket.sendall(message)
 
