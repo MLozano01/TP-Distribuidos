@@ -1,7 +1,9 @@
 
 import socket
 import logging
+from protocol.protocol import Protocol
 from protocol.rabbit_protocol import RabbitMQ
+from protocol.utils.socket_utils import recvall
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -9,6 +11,7 @@ class Server:
         self.socket.bind(('', port))
         self.socket.listen(listen_backlog)
         self.running = True
+        self.protocol = Protocol()
 
 
     def run(self):
@@ -17,7 +20,7 @@ class Server:
                 conn, addr = self.socket.accept()
                 logging.info(f"Connection accepted from {addr}")
                 # Handle the connection
-                # self.handle_connection(conn)
+                self.handle_connection(conn)
             except Exception as e:
                 logging.error(f"Error accepting connection: {e}")
                 break
@@ -27,8 +30,22 @@ class Server:
         logging.info(f"Connection accepted from {addr}")
         return conn
     
-    def handle_connection(self, conn):
-        queue = RabbitMQ("exchange", "name", "key", "direct")
+    def handle_connection(self, conn: socket.socket):
+        closed_socket = False
+        while not closed_socket:
+            read_amount = self.protocol.define_initial_buffer_size()
+            buffer = bytearray()
+            closed_socket = recvall(conn, buffer, read_amount)
+            if closed_socket:
+                return
+            read_amount = self.protocol.define_buffer_size(buffer)
+            closed_socket = recvall(conn, buffer, read_amount)
+            if closed_socket:
+                return
+            
+            msg = self.protocol.decode_msg(buffer)
+            print(msg)
+        # queue = RabbitMQ("exchange", "name", "key", "direct")
 
         
     def close_socket(self):

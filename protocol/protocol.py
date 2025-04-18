@@ -1,5 +1,5 @@
 from protocol import files_pb2
-from protocol.parsing_proto_utils import *
+from protocol.utils.parsing_proto_utils import *
 
 from enum import Enum
 
@@ -18,7 +18,7 @@ class FileType(Enum):
 
 
 class Protocol:
-  def __init__(self, max_batch_size):
+  def __init__(self, max_batch_size=2000):
     self.msg_in_creation = None #pb msg
     self.batch_ready = bytearray()
     self.max_batch_size = int(max_batch_size)
@@ -226,3 +226,20 @@ class Protocol:
       language_pb.iso_639_1 = to_string(language.get('iso_639_1', ''))
       language_pb.name = to_string(language.get('name', ''))
 
+
+  def decode_msg(self, msg_buffer):
+    code = int.from_bytes(msg_buffer[:CODE_LENGTH], byteorder='big')
+
+    if code == MOVIES_FILE_CODE:
+      return self.decode_movies_msg(msg_buffer)
+    elif code == RATINGS_FILE_CODE:
+      return self.decode_ratings_msg(msg_buffer)
+    elif code == CREDITS_FILE_CODE:
+      return self.decode_credits_msg(msg_buffer)
+  
+  def decode_movies_msg(self, msg_buffer):
+    pass
+  def decode_ratings_msg(self, msg_buffer):
+    pass
+  def decode_credits_msg(self, msg_buffer):
+    pass
