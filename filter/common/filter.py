@@ -19,7 +19,10 @@ class Filter:
         logging.info(f"Received message: {body.decode()}")
         # message = body.decode()
 
-    def filter_by(data):
+    def filter(data):
+        pass
+
+    def apply_filter(self, data):
         pass
 
     def end_filter(self):
