@@ -17,14 +17,14 @@ class Server:
 
     def run(self):
 
-        self.test_queue()
+        # self.test_queue()
 
         while self.running:
             try:
                 conn, addr = self.socket.accept()
                 logging.info(f"Connection accepted from {addr}")
                 # Handle the connection
-                # self.handle_connection(conn)
+                self.handle_connection(conn)
             except Exception as e:
                 logging.error(f"Error accepting connection: {e}")
                 break

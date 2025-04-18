@@ -110,8 +110,10 @@ class Protocol:
   def create_cast(self, credit_pb, cast_list):
     if cast_list == '' or cast_list == None:
       return 
-    data_list = self.create_data_list(cast_list)
+    data_list = create_data_list(cast_list)
     for cast in data_list:
+      if not cast:
+        return
       cast_pb = credit_pb.cast.add()
       cast_pb.cast_id = to_int(cast.get('cast_id', -1))
       cast_pb.character = to_string(cast.get('character', ''))
@@ -121,31 +123,14 @@ class Protocol:
       cast_pb.name = to_string(cast.get('name', ''))
       cast_pb.order = to_int(cast.get('order', -1))
       cast_pb.profile_path = to_string(cast.get('profile_path', ''))
-
-  def create_data_list(self, string_data):
-    string_data = string_data.replace('[', "")
-    string_data = string_data.replace(']', "")
-    data_list = string_data.split('}')
-    list_values = []
-    for data in data_list:
-      data = data.replace('{', "")
-      values = data.split(",")
-      dict_value = dict()
-      for val in values:
-        key_value = val.split(':')
-        if len(key_value) != 2:
-          continue
-        [key, value] = key_value
-        dict_value[key.strip()] = value.strip()
-      list_values.append(dict_value)
-
-    return list_values
   
   def create_crew(self, credit_pb, crew_list):
     if crew_list == '' or crew_list == None:
       return 
-    data_list = self.create_data_list(crew_list)
+    data_list = create_data_list(crew_list)
     for crew in data_list:
+      if not crew:
+        return
       crew_pb = credit_pb.crew.add()
       crew_pb.credit_id = to_string(crew.get('credit_id', ''))
       crew_pb.department = to_string(crew.get('department', ''))
@@ -181,8 +166,6 @@ class Protocol:
     movie_pb.status = to_string(movie.get('status', ''))
     movie_pb.tagline = to_string(movie.get('tagline', ''))
     movie_pb.title = to_string(movie.get('title', ''))
-    if(type(to_bool(movie.get('video', 'False'))) is not bool):
-      print(f"Rompio con este valor {movie_pb.title}: {to_bool(movie.get('video', 'False'))} | {type(to_bool(movie.get('video', 'False')))}")
     movie_pb.video = to_bool(movie.get('video', 'False'))
     movie_pb.vote_average = to_float(movie.get('vote_average', -1.0))
     movie_pb.vote_count = to_int(movie.get('vote_count', -1))
@@ -190,38 +173,48 @@ class Protocol:
     return msg
   
   def create_collection(self, movie_pb, collection_data):
-    data_list = self.create_data_list(collection_data)
-    for collection in data_list:
-      collection_pb = movie_pb.belongs_to_collection
-      collection_pb.id = to_int(collection.get('id', -1))
-      collection_pb.name = to_string(collection.get('name', ''))
-      collection_pb.poster_path = to_string(collection.get('poster_path', ''))
-      collection_pb.backdrop_path = to_string(collection.get('backdrop_path', ''))
+    data_list = create_data_list(collection_data)
+    collection = data_list[0]
+    if not collection:
+      return
+    collection_pb = movie_pb.belongs_to_collection
+    collection_pb.id = to_int(collection.get('id', -1))
+    collection_pb.name = to_string(collection.get('name', ''))
+    collection_pb.poster_path = to_string(collection.get('poster_path', ''))
+    collection_pb.backdrop_path = to_string(collection.get('backdrop_path', ''))
 
   def create_genres(self, movie_pb, genres_data):
-    data_list = self.create_data_list(genres_data)
+    data_list = create_data_list(genres_data)
     for genre in data_list:
+      if not genre:
+        return
       genre_pb = movie_pb.genres.add()
       genre_pb.id = to_int(genre.get('id', -1))
       genre_pb.name = to_string(genre.get('name', ''))
 
   def create_companies(self, movie_pb, companies_data):
-    data_list = self.create_data_list(companies_data)
+    data_list = create_data_list(companies_data)
     for company in data_list:
+      if not company:
+        return
       company_pb = movie_pb.companies.add()
       company_pb.id = to_int(company.get('id', -1))
       company_pb.name = to_string(company.get('name', ''))
 
   def create_countries(self, movie_pb, countries_data):
-    data_list = self.create_data_list(countries_data)
+    data_list = create_data_list(countries_data)
     for country in data_list:
+      if not country:
+        return
       country_pb = movie_pb.countries.add()
       country_pb.iso_3166_1 = to_string(country.get('iso_3166_1', ''))
       country_pb.name = to_string(country.get('name', ''))
   
   def create_languages(self, movie_pb, languages_data):
-    data_list = self.create_data_list(languages_data)
+    data_list = create_data_list(languages_data)
     for language in data_list:
+      if not language:
+        return
       language_pb = movie_pb.languages.add()
       language_pb.iso_639_1 = to_string(language.get('iso_639_1', ''))
       language_pb.name = to_string(language.get('name', ''))
@@ -230,16 +223,26 @@ class Protocol:
   def decode_msg(self, msg_buffer):
     code = int.from_bytes(msg_buffer[:CODE_LENGTH], byteorder='big')
 
+    msg = msg_buffer[CODE_LENGTH + INT_LENGTH::]
     if code == MOVIES_FILE_CODE:
-      return self.decode_movies_msg(msg_buffer)
+      return self.decode_movies_msg(msg)
     elif code == RATINGS_FILE_CODE:
-      return self.decode_ratings_msg(msg_buffer)
+      return self.decode_ratings_msg(msg)
     elif code == CREDITS_FILE_CODE:
-      return self.decode_credits_msg(msg_buffer)
+      return self.decode_credits_msg(msg)
   
   def decode_movies_msg(self, msg_buffer):
-    pass
+    movies = files_pb2.MoviesCSV()
+    movies.ParseFromString(msg_buffer)
+    return movies
+  
   def decode_ratings_msg(self, msg_buffer):
-    pass
+    ratings = files_pb2.RatingsCSV()
+    ratings.ParseFromString(msg_buffer)
+    return ratings
+  
   def decode_credits_msg(self, msg_buffer):
-    pass
+    credits = files_pb2.CreditsCSV()
+    credits.ParseFromString(msg_buffer)
+    return credits
+  

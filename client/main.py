@@ -51,7 +51,7 @@ def main():
 
     
     client = Client(server_port, client_id, max_batch_size)
-    # client.run()
+    client.run()
     
 
 def initialize_log(logging_level):
