@@ -2,7 +2,9 @@
 import socket
 import logging
 import time
+from protocol.protocol import Protocol
 from protocol.rabbit_protocol import RabbitMQ
+from protocol.utils.socket_utils import recvall
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -10,6 +12,7 @@ class Server:
         self.socket.bind(('', port))
         self.socket.listen(listen_backlog)
         self.running = True
+        self.protocol = Protocol()
 
 
     def run(self):
@@ -37,6 +40,23 @@ class Server:
         message = "Hello, World!"
         time.sleep(5)
         queue.publish(message)
+
+
+    def handle_connection(self, conn: socket.socket):
+        closed_socket = False
+        while not closed_socket:
+            read_amount = self.protocol.define_initial_buffer_size()
+            buffer = bytearray()
+            closed_socket = recvall(conn, buffer, read_amount)
+            if closed_socket:
+                return
+            read_amount = self.protocol.define_buffer_size(buffer)
+            closed_socket = recvall(conn, buffer, read_amount)
+            if closed_socket:
+                return
+            
+            msg = self.protocol.decode_msg(buffer)
+            print(msg)
 
         
     def close_socket(self):

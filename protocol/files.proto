@@ -20,8 +20,31 @@ message RatingsCSV {
 
 // [START credits messages]
 message CreditCSV {
-  string cast = 1;
-  string crew = 2;
+  message Cast {
+    int32 cast_id = 1;
+    string character = 2;
+    string credit_id = 3;
+
+    int32 gender = 4;
+    int32 id = 5;
+    string name = 6;
+    int32 order = 7;
+    string profile_path = 8; 
+  }
+
+  repeated Cast cast = 1;
+
+  message Crew {
+    string credit_id = 1;
+    string department = 2;
+    int32 gender = 3;
+    int32 id = 4;
+    string job = 5;
+    string name = 6;
+    string profile_path = 7;
+  }
+  repeated Crew crew = 2;
+
   int32 id = 3;
 }
 
@@ -35,7 +58,14 @@ message CreditsCSV {
 message MovieCSV {
   int32 id = 1;
   bool adult = 2;
-  string belongs_to_collection = 3;
+  message Collection {
+    int32 id = 1;
+    string name = 2;
+    string poster_path = 3;
+    string backdrop_path = 4;
+  }
+  
+  Collection belongs_to_collection = 3;
   int32 budget = 4;
 
   message Genre {
