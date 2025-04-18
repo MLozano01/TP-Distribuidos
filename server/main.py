@@ -1,7 +1,7 @@
 
 import logging
-from server.server import Server
-from server.config_init import initialize_config
+from common.server import Server
+from common.config_init import initialize_config
 
 def main():
 

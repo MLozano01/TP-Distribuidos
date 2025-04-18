@@ -24,7 +24,12 @@ def initialize_config():
         config_params["num_filters"] = int(os.getenv('NUM_FILTERS'))
         for i in range(config_params["num_filters"]):
             config_params[f"filter_{i}"] = os.getenv(f'FILTER_{i}')
-        config_params["logging_level"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"]) 
+        config_params["logging_level"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"])
+        config_params["name"] = os.getenv('NAME', config["DEFAULT"]["NAME"])
+        config_params["exchange"] = os.getenv('EXCHANGE', config["DEFAULT"]["EXCHANGE"])
+        config_params["queue_name"] = os.getenv('QUEUE_NAME', config["DEFAULT"]["QUEUE_NAME"])
+        config_params["routing_key"] = os.getenv('ROUTING_KEY', config["DEFAULT"]["ROUTING_KEY"])
+        config_params["type"] = os.getenv('TYPE', config["DEFAULT"]["TYPE"]) 
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
     except ValueError as e:

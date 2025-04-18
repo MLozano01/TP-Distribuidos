@@ -1,6 +1,7 @@
 
 import socket
 import logging
+from protocol.protocol import RabbitMQ
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -25,6 +26,9 @@ class Server:
         conn, addr = self.socket.accept()
         logging.info(f"Connection accepted from {addr}")
         return conn
+    
+    def handle_connection(self, conn):
+        queue = RabbitMQ("exchange", "name", "key", "direct")
 
         
     def close_socket(self):

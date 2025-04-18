@@ -4,4 +4,6 @@ COPY filter /
 COPY protocol /protocol
 COPY requirements.txt /
 
+RUN pip install -r requirements.txt
+
 ENTRYPOINT ["python3", "/main.py"]

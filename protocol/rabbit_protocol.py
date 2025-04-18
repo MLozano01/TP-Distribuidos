@@ -44,8 +44,6 @@ class RabbitMQ:
         finally:
             self.close_channel(self.channel)
 
-
-
     def publish(self):
 
         """Used to publish messages to the queue."""
@@ -71,12 +69,12 @@ class RabbitMQ:
 
         try:
             result = self.channel.queue_declare(queue='', exclusive=True)
-            queue_name = result.method.queue
+            self.q_name = result.method.queue
 
-            self.channel.queue_bind(exchange=self.topic, queue=queue_name, routing_key=self.topic)
-            self.channel.basic_consume(queue=queue_name, on_message_callback=callback, auto_ack=True)
+            self.channel.queue_bind(exchange=self.topic, queue=self.q_name, routing_key=self.topic)
+            self.channel.basic_consume(queue=self.q_name, on_message_callback=callback, auto_ack=True)
 
-            logging.info(f"Waiting for messages in {queue_name}. To exit press CTRL+C")
+            logging.info(f"Waiting for messages in {self.q_name}. To exit press CTRL+C")
 
             self.channel.start_consuming()
 
@@ -84,7 +82,7 @@ class RabbitMQ:
             logging.info("Exiting...")
 
         except Exception as e:
-            logging.error(f"Failed to consume from {queue_name}: {e}")
+            logging.error(f"Failed to consume from {self.q_name}: {e}")
             raise e
         
         finally:

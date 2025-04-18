@@ -1,12 +1,14 @@
 import logging
 import logging
-import filter.config_init as config_init
-from filter.filter import Filter
+import common.config_init as config_init
+from common.filter import Filter
 
 def main():
     config = config_init.initialize_config()
     logging.basicConfig(level=config["logging_level"])
     logging.info("Filter started")
+
+    config.pop("logging_level", None)
 
     try:
         filter_instance = Filter(**config)
