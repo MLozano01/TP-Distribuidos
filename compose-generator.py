@@ -19,12 +19,13 @@ def create_yaml_file(client_amount):
     server = create_server(client_amount)
     network = create_network()
     rabbit = create_rabbit()
+    filter_cont = create_filter()
     content = f"""
-name: tp0
+version: "3.8"
 services:
   {rabbit}
   {server}
-  {clients}
+  {filter_cont}
 networks:
   {network}
 """
@@ -41,21 +42,20 @@ def create_client(id):
   client{id}:
     container_name: client{id}
     image: client:latest
-    entrypoint: python3 /main.py
     environment:
       - CLI_ID={id}
     networks:
       - {NETWORK_NAME}
     depends_on:
-      - server\n
+      - server
       - rabbitmq
     links:
       - rabbitmq
     volumes:
       - ./client/config.ini:/config.ini
-      - ./.data/{CREDITS_DATASET}.csv:/{CREDITS_DATASET}.csv
-      - ./.data/{RATINGS_DATASET}.csv:/{RATINGS_DATASET}.csv
-      - ./.data/{MOVIES_DATASET}.csv:/{MOVIES_DATASET}.csv
+      - ./.data/{CREDITS_DATASET}:/{CREDITS_DATASET}
+      - ./.data/{RATINGS_DATASET}:/{RATINGS_DATASET}
+      - ./.data/{MOVIES_DATASET}:/{MOVIES_DATASET}
     """ 
     return client
 
@@ -63,7 +63,7 @@ def create_server(client_amount):
     server = f"""server:
     container_name: server
     image: server:latest
-    entrypoint: python3 server.py
+    entrypoint: python3 /main.py
     environment:
       - NUM_CLIENTS={client_amount}
     networks:
@@ -89,12 +89,29 @@ def create_network():
 def create_rabbit():  
     rabbit = """rabbitmq:
     build:
-      - context: ./rabbitmq
-      - dockerfile: rabbitmq.dockerfile
+      context: ./rabbitmq
+      dockerfile: rabbitmq.dockerfile
     ports:
       - 15672:15672
     """
     return rabbit
+
+def create_filter():
+    filter_cont = f"""
+  filter:
+    container_name: filter
+    image: filter:latest
+    networks:
+      - {NETWORK_NAME}
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/config.ini:/config.ini
+    """ 
+    return filter_cont
 
 def main(client_amount):
     docker_yaml_generator(client_amount)

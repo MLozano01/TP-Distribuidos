@@ -1,6 +1,6 @@
 FROM python:3.9.7-slim
 
-COPY client /
+COPY filter /
 COPY protocol /protocol
 COPY requirements.txt /
 

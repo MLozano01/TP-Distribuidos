@@ -1,0 +1,46 @@
+
+version: "3.8"
+services:
+  rabbitmq:
+    build:
+      context: ./rabbitmq
+      dockerfile: rabbitmq.dockerfile
+    ports:
+      - 15672:15672
+    
+  server:
+    container_name: server
+    image: server:latest
+    entrypoint: python3 /main.py
+    environment:
+      - NUM_CLIENTS=1
+    networks:
+      - tp_network
+    depends_on:
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./server/config.ini:/config.ini
+    
+  
+  filter:
+    container_name: filter
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/config.ini:/config.ini
+    
+networks:
+  tp_network:
+    ipam:
+      driver: default
+      config:
+        - subnet:  172.25.125.0/24
+    
