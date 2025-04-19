@@ -48,11 +48,15 @@ def get_os_filters(filter_file):
     filter_config.read(filter_file)
 
     try:
-        config_params["exchange"] = os.getenv('EXCHANGE', filter_config["DEFAULT"]["EXCHANGE"])
         config_params["num_filters"] = int(os.getenv('NUM_FILTERS',  filter_config["DEFAULT"]["NUM_FILTERS"]))
-        config_params["queue_name"] = os.getenv('QUEUE_NAME', filter_config["DEFAULT"]["QUEUE_NAME"])
-        config_params["routing_key"] = os.getenv('ROUTING_KEY', filter_config["DEFAULT"]["ROUTING_KEY"])
-        config_params["exc_type"] = os.getenv('TYPE', filter_config["DEFAULT"]["TYPE"]) 
+        config_params["queue_rcv_name"] = os.getenv('QUEUE_RCV_NAME', filter_config["DEFAULT"]["QUEUE_RCV_NAME"])
+        config_params["routing_rcv_key"] = os.getenv('ROUTING_KEY_RCV', filter_config["DEFAULT"]["ROUTING_KEY_RCV"])
+        config_params["exchange_rcv"] = os.getenv('EXCHANGE_RCV', filter_config["DEFAULT"]["EXCHANGE_RCV"])
+        config_params["exc_rcv_type"] = os.getenv('TYPE_RCV', filter_config["DEFAULT"]["TYPE_RCV"]) 
+        config_params["queue_snd_name"] = os.getenv('QUEUE_SND_NAME', filter_config["DEFAULT"]["QUEUE_SND_NAME"])
+        config_params["routing_snd_key"] = os.getenv('ROUTING_KEY_SND', filter_config["DEFAULT"]["ROUTING_KEY_SND"])
+        config_params["exchange_snd"] = os.getenv('EXCHANGE_SND', filter_config["DEFAULT"]["EXCHANGE_SND"])
+        config_params["exc_snd_type"] = os.getenv('TYPE_SND', filter_config["DEFAULT"]["TYPE_SND"])
         for i in range(config_params["num_filters"]):
             wanted_filter = f'FILTER_{i}'
             config_params[f"filter_{i}"] = os.getenv(wanted_filter, filter_config["DEFAULT"][wanted_filter])

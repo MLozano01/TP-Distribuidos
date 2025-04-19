@@ -5,18 +5,20 @@ import json
 
 class Filter:
     def __init__(self, filters, **kwargs):
-        self.queue = None
+        self.queue_rcv = None
+        self.queue_snd = None
         self.filters = filters
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-    def settle_queues(self):
-        pass
+    def _settle_queues(self):
+        self.queue_rcv = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type)
+        self.queue_snd = RabbitMQ(self.exchange_snd, self.queue_snd_name, self.routing_snd_key, self.exc_snd_type)
         
     def start(self):
         """Start the filter to consume messages from the queue."""
-        self.queue = RabbitMQ(self.exchange, self.queue_name, self.routing_key, self.exc_type)
-        self.queue.consume(self.callback)
+        self._settle_queues()
+        self.queue_rcv.consume(self.callback)
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
@@ -34,10 +36,9 @@ class Filter:
                         result[movie['title']] = movie
             
             if result:
-                logging.info(f"Filtered movies: {result}")
-                self.queue.publish(json.dumps(result))
+                self.queue_snd.publish(json.dumps(result))
             else:
-                logging.info("No movies matched the filter criteria.")
+                logging.info(f"No movies matched the filter criteria.")
 
         except json.JSONDecodeError as e:
             logging.error(f"Failed to decode JSON: {e}")
@@ -45,7 +46,6 @@ class Filter:
         except Exception as e:
             logging.error(f"Error processing message: {e}")
             return
-        
 
     def filter(self, data):
         pass
@@ -55,6 +55,8 @@ class Filter:
 
     def end_filter(self):
         """End the filter and close the queue."""
-        if self.queue:
-            self.queue.close_channel()
-            logging.info("Filter Stopped")
+        if self.queue_rcv:
+            self.queue_rcv.close_channel()
+        if self.queue_snd:
+            self.queue_snd.close_channel()
+        logging.info("Filter Stopped")

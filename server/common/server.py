@@ -14,7 +14,7 @@ class Server:
         self.socket.listen(listen_backlog)
         self.running = True
         self.protocol = Protocol()
-        self.queue = RabbitMQ("exchange", "name", "key", "direct")
+        self.queue = RabbitMQ("exchange_rcv_movies", "rcv_movies", "movies_plain", "direct")
 
     def run(self):
 
