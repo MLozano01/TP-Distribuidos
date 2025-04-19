@@ -58,9 +58,9 @@ def create_client(id):
       - rabbitmq
     volumes:
       - ./client/{CONFIG_FILE}:/{CONFIG_FILE}
-      - ./.data/{CREDITS_DATASET}:/{CREDITS_DATASET}
-      - ./.data/{RATINGS_DATASET}:/{RATINGS_DATASET}
-      - ./.data/{MOVIES_DATASET}:/{MOVIES_DATASET}
+      - ./data/{CREDITS_DATASET}:/{CREDITS_DATASET}
+      - ./data/{RATINGS_DATASET}:/{RATINGS_DATASET}
+      - ./data/{MOVIES_DATASET}:/{MOVIES_DATASET}
     """ 
     return client
 

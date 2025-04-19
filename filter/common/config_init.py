@@ -3,7 +3,7 @@ import os
 
 CONFIG_FILE = "config.ini"
 
-def initialize_config(filter_file):
+def initialize_config():
     """ Parse env variables or config file to find program config params
 
     Function that search and parse program configuration parameters in the
@@ -27,6 +27,21 @@ def initialize_config(filter_file):
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
     except ValueError as e:
         raise ValueError("Key could not be parsed. Error: {}. Aborting server".format(e))
+
+    return config_params
+
+def config_filters(filter_file):
+    """ Parse env variables or config file to find program config params
+
+    Function that search and parse program configuration parameters in the
+    program environment variables first and the in a config file. 
+    If at least one of the config parameters is not found a KeyError exception 
+    is thrown. If a parameter could not be parsed, a ValueError is thrown. 
+    If parsing succeeded, the function returns a ConfigParser object 
+    with config parameters
+    """
+    config_params = {}
+
     
     filter_config = ConfigParser(os.environ)
     filter_config.read(filter_file)

@@ -2,6 +2,7 @@
 import socket
 import logging
 import time
+import json
 from protocol.protocol import Protocol
 from protocol.rabbit_protocol import RabbitMQ
 from protocol.utils.socket_utils import recvall
@@ -13,7 +14,7 @@ class Server:
         self.socket.listen(listen_backlog)
         self.running = True
         self.protocol = Protocol()
-
+        self.queue = RabbitMQ("exchange", "name", "key", "direct")
 
     def run(self):
 
@@ -55,9 +56,14 @@ class Server:
             if closed_socket:
                 return
             
-            msg = self.protocol.decode_msg(buffer)
-            print(msg)
+            msg = self.protocol.decode_movies_msg(buffer)
+            # msg_str = self.protocol.encode_movies_to_str(msg)
+            self.queue.publish(msg.SerializeToString())
+            time.sleep(10)
 
+
+    def start_queue(self):
+        self.queue = RabbitMQ("exchange", "name", "key", "direct")
         
     def close_socket(self):
         self.socket.shutdown(socket.SHUT_RDWR)

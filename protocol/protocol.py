@@ -1,5 +1,6 @@
 from protocol import files_pb2
 from protocol.utils.parsing_proto_utils import *
+from google.protobuf.json_format import MessageToJson
 
 from enum import Enum
 
@@ -245,4 +246,6 @@ class Protocol:
     credits = files_pb2.CreditsCSV()
     credits.ParseFromString(msg_buffer)
     return credits
-  
+
+  def encode_movies_to_str(self, msg):
+    return msg.SerializeToString()

@@ -26,9 +26,9 @@ services:
       - rabbitmq
     volumes:
       - ./client/config.ini:/config.ini
-      - ./.data/credits.csv:/credits.csv
-      - ./.data/ratings.csv:/ratings.csv
-      - ./.data/movies_metadata.csv:/movies_metadata.csv
+      - ./data/credits.csv:/credits.csv
+      - ./data/ratings.csv:/ratings.csv
+      - ./data/movies_metadata.csv:/movies_metadata.csv
     
   server:
     container_name: server

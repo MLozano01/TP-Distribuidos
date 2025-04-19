@@ -4,19 +4,14 @@ from utils.utils import config_logger
 from common.filter import Filter
 
 def main():
-    config = config_init.initialize_config("/filter_by_arg_spa.ini")
+    config = config_init.initialize_config()
     config_logger(config["logging_level"])
 
+    config_filters = config_init.config_filters("/filter_by_arg_spa.ini")
     logging.info("Filter started")
 
-    config.pop("logging_level", None)
-
-    for filter in config:
-        if filter.startswith("filter_"):
-            logging.info(f"Filter {filter} is set")
-
     try:
-        filter_instance = Filter(**config)
+        filter_instance = Filter(**config_filters)
         filter_instance.start()
     except KeyboardInterrupt:
         logging.info("Filter stopped by user")
