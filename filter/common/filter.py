@@ -17,8 +17,16 @@ class Filter:
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
-        logging.info("Received message")
-        self.filter(body.decode())
+        logging.info(f"Received message")
+        try:
+            data = json.loads(body)
+            logging.info(f"Data to JSON correct type message: {type(data)}")
+            for movie in data['movies']:
+                # logging.info(f"{movie}")
+                logging.info(movie["releaseDate"])
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to decode JSON: {e}")
+            return
 
         
 
