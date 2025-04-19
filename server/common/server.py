@@ -45,6 +45,7 @@ class Server:
 
     def handle_connection(self, conn: socket.socket):
         closed_socket = False
+        time.sleep(10)
         while not closed_socket:
             read_amount = self.protocol.define_initial_buffer_size()
             buffer = bytearray()
@@ -62,7 +63,7 @@ class Server:
             json_msg = self.protocol.encode_movies_to_json(msg)
 
             self.queue.publish(json_msg)
-            time.sleep(10)
+            time.sleep(5)
 
 
     def start_queue(self):

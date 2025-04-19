@@ -1,5 +1,6 @@
 from configparser import ConfigParser
 import os
+import logging
 
 CONFIG_FILE = "config.ini"
 
@@ -52,9 +53,9 @@ def get_os_filters(filter_file):
         config_params["queue_name"] = os.getenv('QUEUE_NAME', filter_config["DEFAULT"]["QUEUE_NAME"])
         config_params["routing_key"] = os.getenv('ROUTING_KEY', filter_config["DEFAULT"]["ROUTING_KEY"])
         config_params["exc_type"] = os.getenv('TYPE', filter_config["DEFAULT"]["TYPE"]) 
-        for i in range(1, config_params["num_filters"]):
+        for i in range(config_params["num_filters"]):
             wanted_filter = f'FILTER_{i}'
-            config_params[f"filter_{i}"] = os.getenv(wanted_filter, filter_config["DEFAULT"][wanted_filter]) 
+            config_params[f"filter_{i}"] = os.getenv(wanted_filter, filter_config["DEFAULT"][wanted_filter])
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
     except ValueError as e:
@@ -67,10 +68,12 @@ def config_filters(filer_file):
     config_params = get_os_filters(filer_file)
     filters = {}
 
-    for i in range(1, config_params["num_filters"]):
+    for i in range(config_params["num_filters"]):
         filter_name = config_params[f"filter_{i}"]
         filter_split = filter_name.split('_')
-        filters.get(filter_split[0], []).append(filter_split[1])
+        filters.setdefault(filter_split[0], []).append(config_params[f"filter_{i}"])
         config_params.pop(f"filter_{i}")
+
+    logging.info(f"Filters: {filters}")
     
     return config_params, filters

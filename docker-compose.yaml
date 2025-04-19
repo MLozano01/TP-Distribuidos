@@ -58,7 +58,7 @@ services:
       - rabbitmq
     volumes:
       - ./filter/config.ini:/config.ini
-      - ./filter/filters/filter_by_arg_spa.ini:/filter_by_arg_spa.ini
+      - ./filter/filters/filter_2000.ini:/filter_2000.ini
     
 networks:
   tp_network:

@@ -7,7 +7,7 @@ def main():
     config = config_init.initialize_config()
     config_logger(config["logging_level"])
 
-    config_params, config_filters = config_init.config_filters("/filter_by_arg_spa.ini")
+    config_params, config_filters = config_init.config_filters("/filter_2000.ini")
     logging.info("Filter started")
 
     try:

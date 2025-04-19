@@ -10,6 +10,9 @@ class Filter:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
+    def settle_queues(self):
+        pass
+        
     def start(self):
         """Start the filter to consume messages from the queue."""
         self.queue = RabbitMQ(self.exchange, self.queue_name, self.routing_key, self.exc_type)
@@ -18,28 +21,34 @@ class Filter:
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
         logging.info(f"Received message")
+        result = {}
         try:
             data = json.loads(body)
-            logging.info(f"Data to JSON correct type message: {type(data)}")
             for movie in data['movies']:
-                # logging.info(f"{movie}")
-                logging.info(movie["releaseDate"])
+
+                for filter in self.filters.values():
+                    filter_info = filter[0].split("_")
+                    movie_year = movie[filter_info[0]].split("-")[0]
+
+                    if int(movie_year) > int(filter_info[1]):
+                        result[movie['title']] = movie
+            
+            if result:
+                logging.info(f"Filtered movies: {result}")
+                self.queue.publish(json.dumps(result))
+            else:
+                logging.info("No movies matched the filter criteria.")
+
         except json.JSONDecodeError as e:
             logging.error(f"Failed to decode JSON: {e}")
             return
-
+        except Exception as e:
+            logging.error(f"Error processing message: {e}")
+            return
         
 
     def filter(self, data):
-        result = {}
-        try:
-            data = json.loads(data)
-            
-        except json.JSONDecodeError as e:
-            logging.error(f"Failed to decode JSON: {e}")
-            return
-        for movie in data["movies"]:
-            print(movie["releaseDate"])
+        pass
 
     def apply_filter(self, data):
         pass

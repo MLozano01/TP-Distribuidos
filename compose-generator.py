@@ -11,7 +11,7 @@ NETWORK_IP = " 172.25.125.0/24"
 
 CONFIG_FILE = "config.ini"
 
-FILTER_BY_ARG_SPA = "filter_by_arg_spa.ini"
+FILTER_BY_ARG_SPA = "filter_2000.ini"
 
 def docker_yaml_generator(client_amount):
 

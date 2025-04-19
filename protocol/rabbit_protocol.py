@@ -75,6 +75,10 @@ class RabbitMQ:
 
     def close_channel(self):
         """Used to close the channel."""
-        self.channel.connection.close()
-        self.channel.close()
+        if self.channel.is_open:
+            self.channel.stop_consuming()
+            self.channel.close()
+            logging.info("Stopped consuming messages")
+        else:
+            logging.info("Channel is already closed")
         logging.info("Channel closed")
