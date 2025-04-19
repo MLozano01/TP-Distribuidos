@@ -30,7 +30,7 @@ def initialize_config():
 
     return config_params
 
-def config_filters(filter_file):
+def get_os_filters(filter_file):
     """ Parse env variables or config file to find program config params
 
     Function that search and parse program configuration parameters in the
@@ -45,7 +45,6 @@ def config_filters(filter_file):
     
     filter_config = ConfigParser(os.environ)
     filter_config.read(filter_file)
-
 
     try:
         config_params["exchange"] = os.getenv('EXCHANGE', filter_config["DEFAULT"]["EXCHANGE"])
@@ -62,3 +61,16 @@ def config_filters(filter_file):
         raise ValueError("Key could not be parsed. Error: {}. Aborting server".format(e))
 
     return config_params
+
+def config_filters(filer_file):
+
+    config_params = get_os_filters(filer_file)
+    filters = {}
+
+    for i in range(1, config_params["num_filters"]):
+        filter_name = config_params[f"filter_{i}"]
+        filter_split = filter_name.split('_')
+        filters.get(filter_split[0], []).append(filter_split[1])
+        config_params.pop(f"filter_{i}")
+    
+    return config_params, filters

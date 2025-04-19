@@ -47,9 +47,9 @@ class RabbitMQ:
                                     delivery_mode=2,
                                 ))
 
-            logging.info(f"Sent message: {message}, with routing key: {self.key}")
+            logging.info(f"Sent message with routing key: {self.key}")
         except Exception as e:
-            logging.error(f"Failed to send message: {message} : {e}")
+            logging.error(f"Failed to send message: {e}")
             raise e
 
 

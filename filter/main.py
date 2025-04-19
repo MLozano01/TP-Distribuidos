@@ -7,11 +7,11 @@ def main():
     config = config_init.initialize_config()
     config_logger(config["logging_level"])
 
-    config_filters = config_init.config_filters("/filter_by_arg_spa.ini")
+    config_params, config_filters = config_init.config_filters("/filter_by_arg_spa.ini")
     logging.info("Filter started")
 
     try:
-        filter_instance = Filter(**config_filters)
+        filter_instance = Filter(config_filters, **config_params)
         filter_instance.start()
     except KeyboardInterrupt:
         logging.info("Filter stopped by user")

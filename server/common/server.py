@@ -56,9 +56,12 @@ class Server:
             if closed_socket:
                 return
             
-            msg = self.protocol.decode_movies_msg(buffer)
-            # msg_str = self.protocol.encode_movies_to_str(msg)
-            self.queue.publish(msg.SerializeToString())
+            msg = self.protocol.decode_msg(buffer)
+            # print(msg)
+
+            json_msg = self.protocol.encode_movies_to_json(msg)
+
+            self.queue.publish(json_msg)
             time.sleep(10)
 
 
