@@ -153,6 +153,7 @@ class Protocol:
     movie_pb.id = to_int(movie.get('id', -1))
     movie_pb.adult = to_bool(movie.get('adult', 'False'))
     self.create_collection(movie_pb, movie.get('belongs_to_collection', ''))
+    movie_pb.budget = to_int(movie.get('budget', -1))
     self.create_genres(movie_pb, movie.get('genres', ''))
     movie_pb.homepage = to_string(movie.get('homepage', ''))
     movie_pb.imdb_id = to_string(movie.get('imdb_id', ''))
@@ -161,12 +162,12 @@ class Protocol:
     movie_pb.overview = to_string(movie.get('overview', ''))
     movie_pb.popularity = to_float(movie.get('popularity', -1.0))
     movie_pb.poster_path = to_string(movie.get('poster_path', ''))
-    self.create_companies(movie_pb, movie.get('companies', ''))
-    self.create_countries(movie_pb, movie.get('contries', ''))
+    self.create_companies(movie_pb, movie.get('production_companies', ''))
+    self.create_countries(movie_pb, movie.get('production_countries', ''))
     movie_pb.release_date = to_string(movie.get('release_date', ''))
     movie_pb.revenue = to_int(movie.get('revenue', -1))
     movie_pb.runtime = to_float(movie.get('runtime', -1.0))
-    self.create_languages(movie_pb, movie.get('languages', ''))
+    self.create_languages(movie_pb, movie.get('spoken_languages', ''))
     movie_pb.status = to_string(movie.get('status', ''))
     movie_pb.tagline = to_string(movie.get('tagline', ''))
     movie_pb.title = to_string(movie.get('title', ''))
@@ -229,11 +230,11 @@ class Protocol:
 
     msg = msg_buffer[CODE_LENGTH + INT_LENGTH::]
     if code == MOVIES_FILE_CODE:
-      return self.decode_movies_msg(msg)
+      return FileType.MOVIES, self.decode_movies_msg(msg)
     elif code == RATINGS_FILE_CODE:
-      return self.decode_ratings_msg(msg)
+      return FileType.RATINGS, self.decode_ratings_msg(msg)
     elif code == CREDITS_FILE_CODE:
-      return self.decode_credits_msg(msg)
+      return FileType.CREDITS, self.decode_credits_msg(msg)
   
   def decode_movies_msg(self, msg_buffer):
     movies = files_pb2.MoviesCSV()
