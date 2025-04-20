@@ -31,7 +31,7 @@ def initialize_config():
 
     return config_params
 
-def get_os_filters(filter_file):
+def config_init(filter_file):
     """ Parse env variables or config file to find program config params
 
     Function that search and parse program configuration parameters in the
@@ -48,7 +48,7 @@ def get_os_filters(filter_file):
     filter_config.read(filter_file)
 
     try:
-        config_params["num_filters"] = int(os.getenv('NUM_FILTERS',  filter_config["DEFAULT"]["NUM_FILTERS"]))
+        # config_params["num_filters"] = int(os.getenv('NUM_FILTERS',  filter_config["DEFAULT"]["NUM_FILTERS"]))
         config_params["queue_rcv_name"] = os.getenv('QUEUE_RCV_NAME', filter_config["DEFAULT"]["QUEUE_RCV_NAME"])
         config_params["routing_rcv_key"] = os.getenv('ROUTING_KEY_RCV', filter_config["DEFAULT"]["ROUTING_KEY_RCV"])
         config_params["exchange_rcv"] = os.getenv('EXCHANGE_RCV', filter_config["DEFAULT"]["EXCHANGE_RCV"])
@@ -57,27 +57,13 @@ def get_os_filters(filter_file):
         config_params["routing_snd_key"] = os.getenv('ROUTING_KEY_SND', filter_config["DEFAULT"]["ROUTING_KEY_SND"])
         config_params["exchange_snd"] = os.getenv('EXCHANGE_SND', filter_config["DEFAULT"]["EXCHANGE_SND"])
         config_params["exc_snd_type"] = os.getenv('TYPE_SND', filter_config["DEFAULT"]["TYPE_SND"])
-        for i in range(config_params["num_filters"]):
-            wanted_filter = f'FILTER_{i}'
-            config_params[f"filter_{i}"] = os.getenv(wanted_filter, filter_config["DEFAULT"][wanted_filter])
+
+        config_params["file_name"] = os.getenv('FILE', filter_config["DEFAULT"]["FILE"])
+
+        config_params[f"filter_by"] = os.getenv("FILTER", filter_config["DEFAULT"]["FILTER"])
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
     except ValueError as e:
         raise ValueError("Key could not be parsed. Error: {}. Aborting server".format(e))
 
     return config_params
-
-def config_filters(filer_file):
-
-    config_params = get_os_filters(filer_file)
-    filters = {}
-
-    for i in range(config_params["num_filters"]):
-        filter_name = config_params[f"filter_{i}"]
-        filter_split = filter_name.split('_')
-        filters.setdefault(filter_split[0], []).append(config_params[f"filter_{i}"])
-        config_params.pop(f"filter_{i}")
-
-    logging.info(f"Filters: {filters}")
-    
-    return config_params, filters

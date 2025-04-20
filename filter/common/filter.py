@@ -1,13 +1,14 @@
 
 from protocol.rabbit_protocol import RabbitMQ
+from common.aux import parse_filter_funct
 import logging
 import json
 
+
 class Filter:
-    def __init__(self, filters, **kwargs):
+    def __init__(self, **kwargs):
         self.queue_rcv = None
         self.queue_snd = None
-        self.filters = filters
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -23,22 +24,19 @@ class Filter:
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
         logging.info(f"Received message")
+        self.filter(body)
+
+    def filter(self, data):
         result = {}
         try:
-            data = json.loads(body)
-            for movie in data['movies']:
+            data = json.loads(data)
 
-                for filter in self.filters.values():
-                    filter_info = filter[0].split("_")
-                    movie_year = movie[filter_info[0]].split("-")[0]
-
-                    if int(movie_year) > int(filter_info[1]):
-                        result[movie['title']] = movie
+            result = parse_filter_funct(data, self.filter_by, self.file_name)
             
             if result:
                 self.queue_snd.publish(json.dumps(result))
             else:
-                logging.info(f"No movies matched the filter criteria.")
+                logging.info(f"No {self.file_name} matched the filter criteria.")
 
         except json.JSONDecodeError as e:
             logging.error(f"Failed to decode JSON: {e}")
@@ -46,12 +44,6 @@ class Filter:
         except Exception as e:
             logging.error(f"Error processing message: {e}")
             return
-
-    def filter(self, data):
-        pass
-
-    def apply_filter(self, data):
-        pass
 
     def end_filter(self):
         """End the filter and close the queue."""

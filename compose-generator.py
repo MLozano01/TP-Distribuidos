@@ -11,7 +11,9 @@ NETWORK_IP = " 172.25.125.0/24"
 
 CONFIG_FILE = "config.ini"
 
-FILTER_BY_ARG_SPA = "filter_2000.ini"
+FILTER_MOVIES_BY_2000 = "filter_2000_movies.ini"
+FILTER_MOVIES_BY_ARG_SPA = "filter_Arg_Spa_movies.ini"
+
 
 def docker_yaml_generator(client_amount):
 
@@ -118,7 +120,8 @@ def create_filter():
       - rabbitmq
     volumes:
       - ./filter/{CONFIG_FILE}:/{CONFIG_FILE}
-      - ./filter/filters/{FILTER_BY_ARG_SPA}:/{FILTER_BY_ARG_SPA}
+      - ./filter/filters/{FILTER_MOVIES_BY_2000}:/{FILTER_MOVIES_BY_2000}
+      - ./filter/filters/{FILTER_MOVIES_BY_ARG_SPA}:/{FILTER_MOVIES_BY_ARG_SPA}
     """ 
     return filter_cont
 
