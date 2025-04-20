@@ -4,7 +4,7 @@ import socket
 import logging
 import time
 import json
-from protocol.protocol import Protocol
+from protocol.protocol import Protocol, FileType
 from protocol.rabbit_protocol import RabbitMQ
 from protocol.utils.socket_utils import recvall
 
@@ -13,6 +13,10 @@ class Client:
     self.socket = client_sock
     self.data_controller = None
     self.result_controller = None
+    self.movies_queue = RabbitMQ("exchange_rcv_movies", "rcv_movies", "movies_plain", "direct")
+    self.ratings_queue = RabbitMQ("exchange_rcv_ratings", "rcv_ratings", "ratings_plain", "direct")
+    self.credits_queue = RabbitMQ("exchange_rcv_credits", "rcv_credits", "credits_plain", "direct")
+    self.protocol = Protocol()
 
   def run(self):
     self.data_controller = Process(target=self.handle_connection, args=[self.socket])
@@ -32,38 +36,51 @@ class Client:
   
 
   def handle_connection(self, conn: socket.socket):
-    queue = RabbitMQ("exchange_rcv_movies", "rcv_movies", "movies_plain", "direct")
-    protocol = Protocol()
-
     closed_socket = False
     time.sleep(10)
     while not closed_socket:
-      read_amount = protocol.define_initial_buffer_size()
+      read_amount = self.protocol.define_initial_buffer_size()
       buffer = bytearray()
       closed_socket = recvall(conn, buffer, read_amount)
       if closed_socket:
         return
-      read_amount = protocol.define_buffer_size(buffer)
+      read_amount = self.protocol.define_buffer_size(buffer)
       closed_socket = recvall(conn, buffer, read_amount)
       if closed_socket:
         return
       
-      msg = protocol.decode_msg(buffer)
+      type, msg = self.protocol.decode_msg(buffer)
 
-      json_msg = protocol.encode_movies_to_json(msg)
-
-      queue.publish(json_msg)
+      logging.info(f"type: {type} | msg {msg}")
+      if type == FileType.MOVIES:
+        self.filter_movies(msg)
+      elif type == FileType.RATINGS:
+        self.filter_ratings(msg)
+      elif type == FileType.CREDITS:
+        self.filter_credits(msg)
       # time.sleep(5)
   
+
+  def filter_movies(self, movies):
+    logging.info(f"Movies: {movies}")
+    json_msg = self.protocol.encode_movies_to_json(movies)
+    self.movies_queue.publish(json_msg)
+  
+  def filter_ratings(self, ratings):
+    pass
+
+  def filter_credits(self, credits):
+    pass
+
+
   def return_results(self, conn: socket.socket):
     queue = RabbitMQ('exchange_snd_movies', 'snd_movies', 'filtered_by_2000', 'direct')
     queue.consume(self.result_controller_func)
   
   def result_controller_func(self, ch, method, properties, body):
-    protocol = Protocol()
     try:
       # data = json.loads(body)
-      msg = protocol.create_result(body)
+      msg = self.protocol.create_result(body)
 
       self.socket.sendall(msg)
     except json.JSONDecodeError as e:
