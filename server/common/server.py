@@ -16,7 +16,7 @@ class Server:
         # self.test_queue()
 
         while self.running:
-            # try:
+            try:
                 conn, addr = self.socket.accept()
                 logging.info(f"Connection accepted from {addr}")
                 # Handle the connection
@@ -26,9 +26,9 @@ class Server:
                 logging.info(f"Client added")
                 client.run()
                 
-            # except Exception as e:
-            #     logging.error(f"Error accepting connection: {e}")
-            #     break
+            except Exception as e:
+                logging.error(f"Error accepting connection: {e}")
+                break
 
     def accept_connection(self):
         conn, addr = self.socket.accept()

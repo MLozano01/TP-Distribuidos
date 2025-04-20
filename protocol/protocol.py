@@ -1,6 +1,7 @@
 from protocol import files_pb2
 from protocol.utils.parsing_proto_utils import *
 from google.protobuf import json_format
+import json
 
 from enum import Enum
 
@@ -11,6 +12,8 @@ BOOL_LENGTH = 1
 MOVIES_FILE_CODE = 1
 RATINGS_FILE_CODE = 2
 CREDITS_FILE_CODE = 3
+
+RESULT_CODE = 4
 
 class FileType(Enum):
     MOVIES = 1
@@ -250,3 +253,29 @@ class Protocol:
   def encode_movies_to_json(self, movies):
     json_str = json_format.MessageToJson(movies)
     return json_str
+  
+
+  def create_result(self, data):
+    movies_pb = files_pb2.MoviesCSV()
+    try:
+      movies_string = data.decode('utf-8')
+      movies = json.loads(movies_string)
+      
+      for title in movies.keys():
+        movie_pb = movies_pb.movies.add()
+        movie_pb.original_title = title
+      
+    except Exception as e:
+      pass
+    finally:
+      message = bytearray()
+      result = movies_pb.SerializeToString()
+      len_msg = len(result)
+      message.extend(RESULT_CODE.to_bytes(CODE_LENGTH, byteorder='big'))
+      message.extend(len_msg.to_bytes(INT_LENGTH, byteorder='big'))
+      message.extend(result)
+      return message
+
+  def decode_result(self, buffer):
+    msg = buffer[CODE_LENGTH + INT_LENGTH::]
+    return self.decode_movies_msg(msg)

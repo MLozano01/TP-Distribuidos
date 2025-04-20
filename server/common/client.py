@@ -60,13 +60,12 @@ class Client:
     queue.consume(self.result_controller_func)
   
   def result_controller_func(self, ch, method, properties, body):
-    logging.info(f"Received result: {body}")
     protocol = Protocol()
     try:
       # data = json.loads(body)
-      # msg = protocol.create_result(data)
+      msg = protocol.create_result(body)
 
-      self.socket.sendall(body)
+      self.socket.sendall(msg)
     except json.JSONDecodeError as e:
       logging.error(f"Failed to decode JSON: {e}")
       return
