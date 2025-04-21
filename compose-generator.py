@@ -26,6 +26,7 @@ def create_yaml_file(client_amount):
     network = create_network()
     rabbit = create_rabbit()
     filter_cont = create_filter()
+    transformer = create_transformer()
     content = f"""
 version: "3.8"
 services:
@@ -33,6 +34,7 @@ services:
   {clients}
   {server}
   {filter_cont}
+  {transformer}
 networks:
   {network}
 """
@@ -122,6 +124,23 @@ def create_filter():
       - ./filter/{CONFIG_FILE}:/{CONFIG_FILE}
       - ./filter/filters/{FILTER_MOVIES_BY_2000}:/{FILTER_MOVIES_BY_2000}
       - ./filter/filters/{FILTER_MOVIES_BY_ARG_SPA}:/{FILTER_MOVIES_BY_ARG_SPA}
+    """ 
+    return filter_cont
+
+def create_transformer():
+    filter_cont = f"""
+  transformer:
+    container_name: transformer
+    image: transformer:latest
+    networks:
+      - {NETWORK_NAME}
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./transformer/{CONFIG_FILE}:/{CONFIG_FILE}
     """ 
     return filter_cont
 

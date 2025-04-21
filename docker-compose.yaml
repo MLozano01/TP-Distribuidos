@@ -59,6 +59,21 @@ services:
     volumes:
       - ./filter/config.ini:/config.ini
       - ./filter/filters/filter_2000_movies.ini:/filter_2000_movies.ini
+      - ./filter/filters/filter_Arg_Spa_movies.ini:/filter_Arg_Spa_movies.ini
+    
+  
+  transformer:
+    container_name: transformer
+    image: transformer:latest
+    networks:
+      - tp_network
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./transformer/config.ini:/config.ini
     
 networks:
   tp_network:
