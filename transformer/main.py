@@ -10,14 +10,15 @@ def main():
     logging.info("Transformer started")
 
     try:
-        transformer_instance = Transformer(config)
+        transformer_instance = Transformer(**config)
         transformer_instance.start()
     except KeyboardInterrupt:
         logging.info("Transformer stopped by user")
     except Exception as e:
         logging.error(f"Transformer error: {e}")
     finally:
-        transformer_instance.stop()
+        if transformer_instance:
+            transformer_instance.stop()
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

@@ -62,7 +62,7 @@ class RabbitMQ:
             self.channel.queue_bind(exchange=self.exchange, queue=self.q_name, routing_key=self.key)
             self.channel.basic_consume(queue=self.q_name, on_message_callback=callback, auto_ack=True)
 
-            logging.info(f"Waiting for messages in {self.q_name}, with routing_kay {self.key}. To exit press CTRL+C")
+            logging.info(f"Waiting for messages in {self.q_name}, with routing_key {self.key}. To exit press CTRL+C")
 
             self.channel.start_consuming()
 

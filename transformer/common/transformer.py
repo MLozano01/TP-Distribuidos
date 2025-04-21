@@ -29,6 +29,7 @@ class Transformer:
     def start(self):
         """Start the Transformer to consume messages from the queue."""
         try:
+            self._initialize_sentiment_analyzer()
             self._settle_queues()
             self.queue_rcv.consume(self._process_message)
         except Exception as e:
@@ -52,55 +53,95 @@ class Transformer:
 
 
     def _calculate_rate(self, revenue, budget):
-        """Calculates revenue/budget ratio, handling division by zero."""
-        if budget and budget > 0:
-            try:
-                return float(revenue) / float(budget)
-            except (ValueError, TypeError):
-                logging.warning(f"Invalid type for revenue or budget: rev={revenue}, bud={budget}. Returning 0.0")
-                return 0.0
-        return 0.0
+        """Calculates revenue/budget ratio. Assumes budget is not zero."""
+        try:
+            # Ensure they are treated as numbers
+            return float(revenue) / float(budget)
+        except (ValueError, TypeError, ZeroDivisionError) as e:
+            # Log warning if conversion/division fails unexpectedly despite prior checks
+            logging.warning(f"Rate calculation error for rev={revenue}, bud={budget}: {e}. Returning 0.0")
+            return 0.0
 
     def _process_message(self, ch, method, properties, body):
-        """Callback function to process received messages."""
+        """Callback function to process received messages"""
+        processed_movies = {}
         try:
             data = json.loads(body)
-            result = {}
-            if not data:
-                 logging.info("Received empty or invalid movies batch. Skipping.")
+
+            if not data or 'movies' not in data or not isinstance(data['movies'], list):
+                 logging.warning("Received empty or invalid movies batch structure. Skipping.")
                  return
 
             logging.info(f"Processing batch with {len(data['movies'])} movies.")
 
             for movie in data["movies"]:
-                sentiment = None
-                if movie["overview"]:
+                # Ensure movie is a dictionary
+                if not isinstance(movie, dict):
+                    logging.warning(f"Skipping non-dictionary item in movies list: {movie}")
+                    continue
+
+                # Safely get budget and revenue
+                budget_val = movie.get("budget")
+                revenue_val = movie.get("revenue")
+
+                # Check if budget and revenue exist, are numeric, and > 0
+                try:
+                    is_budget_valid = budget_val is not None and float(budget_val) > 0
+                    is_revenue_valid = revenue_val is not None and float(revenue_val) > 0
+                except (ValueError, TypeError):
+                    # If conversion to float fails, treat as invalid
+                    is_budget_valid = False
+                    is_revenue_valid = False
+                    movie_id = movie.get('id', 'UNKNOWN')
+                    logging.warning(f"Invalid numeric value for budget/revenue for movie ID {movie_id}. Skipping.")
+
+
+                if is_budget_valid and is_revenue_valid:
+                    # --- Process only movies that pass the filter ---
+                    # Calculate Sentiment (handle missing overview
+                    sentiment = None
+                    overview = movie.get("overview", "")
                     try:
-                        result = self.sentiment_analyzer(movie["overview"][:512])
-                        if result and isinstance(result, list):
-                           sentiment = result[0]['label']
+                        # Pass overview (potentially empty) to analyzer
+                        sentiment_result = self.sentiment_analyzer(overview[:512])
+                        if sentiment_result and isinstance(sentiment_result, list):
+                           sentiment = sentiment_result[0]['label']
                     except Exception as e:
-                        logging.error(f"Sentiment analysis failed for movie id {movie.id}: {e}", exc_info=True)
-                movie['sentiment'] = sentiment
+                        movie_id = movie.get('id', 'UNKNOWN')
+                        logging.error(f"Sentiment analysis failed for movie id {movie_id}: {e}", exc_info=True)
+                    
+                    movie['sentiment'] = sentiment
 
-                revenue = movie["revenue"] if movie["revenue"] else 0
-                budget = movie["budget"] if movie["budget"] else 0
-                movie['rate_revenue_budget'] = self._calculate_rate(revenue, budget)
+                    # Calculate Rate (direct division is safe here)
+                    movie['rate_revenue_budget'] = self._calculate_rate(revenue_val, budget_val)
 
-                result[movie["title"]] = movie
-            
-            if result:
-                self.queue_snd.publish(json.dumps(result))
+                    # Add to results if title exists
+                    title = movie.get("title")
+                    if title:
+                        processed_movies[title] = movie
+                    else:
+                        movie_id = movie.get('id', 'UNKNOWN')
+                        logging.warning(f"Filtered movie with ID {movie_id} is missing a title. Skipping adding to results.")
+                else:
+                    # Log movies being skipped due to the filter
+                    movie_id = movie.get('id', 'UNKNOWN')
+                    logging.debug(f"Skipping movie ID {movie_id} due to zero/missing/invalid budget or revenue.")
+
+            if processed_movies:
+                json_output_string = json.dumps(processed_movies)
+                logging.info(f"Sending processed movies data (JSON): {json_output_string}")
+                self.queue_snd.publish(json_output_string)
+                logging.info(f"Successfully processed and sent {len(processed_movies)} movies matching criteria.")
             else:
-                logging.info(f"No movie matched the transformer criteria.")
+                logging.info(f"No movies suitable for sending after processing and filtering.")
+
 
         except json.JSONDecodeError as e:
             logging.error(f"Failed to decode JSON: {e}")
             return
         except Exception as e:
-            logging.error(f"Error processing message: {e}")
+            logging.error(f"Error processing message: {e}", exc_info=True)
             return
-
 
     def stop(self):
         """End the filter and close the queue."""
