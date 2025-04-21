@@ -257,26 +257,22 @@ class Protocol:
   
 
   def create_result(self, data):
-    movies_pb = files_pb2.MoviesCSV()
-    try:
-      movies_string = data.decode('utf-8')
-      movies = json.loads(movies_string)
-      
-      for title in movies.keys():
-        movie_pb = movies_pb.movies.add()
-        movie_pb.original_title = title
-      
-    except Exception as e:
-      pass
-    finally:
-      message = bytearray()
-      result = movies_pb.SerializeToString()
-      len_msg = len(result)
-      message.extend(RESULT_CODE.to_bytes(CODE_LENGTH, byteorder='big'))
-      message.extend(len_msg.to_bytes(INT_LENGTH, byteorder='big'))
-      message.extend(result)
-      return message
+    message = bytearray()
+    len_msg = len(data)
+    message.extend(RESULT_CODE.to_bytes(CODE_LENGTH, byteorder='big'))
+    message.extend(len_msg.to_bytes(INT_LENGTH, byteorder='big'))
+    message.extend(data)
+    return message
 
   def decode_result(self, buffer):
     msg = buffer[CODE_LENGTH + INT_LENGTH::]
     return self.decode_movies_msg(msg)
+  
+  def create_movie_list(self, movies):
+    movies_pb = files_pb2.MoviesCSV()
+
+    for movie in movies:
+      movies_pb.movies.append(movie)
+
+    movies_pb_str = movies_pb.SerializeToString()
+    return movies_pb_str

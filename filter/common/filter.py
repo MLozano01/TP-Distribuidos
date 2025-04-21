@@ -3,6 +3,7 @@ from protocol.rabbit_protocol import RabbitMQ
 from common.aux import parse_filter_funct
 import logging
 import json
+from protocol.protocol import Protocol
 
 
 class Filter:
@@ -28,16 +29,16 @@ class Filter:
         self.filter(body)
 
     def filter(self, data):
-        result = {}
         try:
-            data = json.loads(data)
+            protocol = Protocol()
+            decoded_msg = protocol.decode_movies_msg(data)
 
-            # logging.info(data)
 
-            result = parse_filter_funct(data, self.filter_by, self.file_name)
+            result = parse_filter_funct(decoded_msg, self.filter_by, self.file_name)
+
             
             if result:
-                self.queue_snd.publish(json.dumps(result))
+                self.queue_snd.publish(protocol.create_movie_list(result))
             else:
                 logging.info(f"No {self.file_name} matched the filter criteria.")
 

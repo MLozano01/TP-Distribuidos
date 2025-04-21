@@ -4,8 +4,10 @@ import socket
 import logging
 import time
 import json
+from protocol import files_pb2
 from protocol.protocol import Protocol, FileType
 from protocol.rabbit_protocol import RabbitMQ
+from protocol.utils.parsing_proto_utils import is_date
 from protocol.utils.socket_utils import recvall
 
 class Client:
@@ -51,7 +53,6 @@ class Client:
       
       type, msg = self.protocol.decode_msg(buffer)
 
-      # logging.info(f"type: {type} | msg {msg}")
       if type == FileType.MOVIES:
         self.filter_movies(msg)
         time.sleep(1)
@@ -61,18 +62,76 @@ class Client:
         self.filter_credits(msg)
   
 
-  def filter_movies(self, movies):
-    # logging.info(f"Movies: {movies}")
-    json_msg = self.protocol.encode_movies_to_json(movies)
-    self.movies_queue.publish(json_msg)
-    
+  def filter_movies(self, movies_csv):
+    movies_pb = files_pb2.MoviesCSV()
+    for movie in movies_csv.movies:
+      if not movie.id or movie.id < 0 or not movie.title or not movie.release_date:
+        continue
+      if not is_date(movie.release_date) or not movie.overview:
+        continue
+      if not movie.budget or movie.budget < 0 or not movie.revenue or movie.revenue < 0:
+        continue
+      
+      genres = map(lambda genre: genre.name, movie.genres)
+      genres = list(filter(lambda name: name, genres))
+      if not len(genres):
+        continue
 
+      countries = map(lambda country: country.name, movie.countries)
+      countries = list(filter(lambda name: name, countries))
+      if not len(countries):
+        continue
+
+      movie_pb = movies_pb.movies.add()
+      movie_pb.id = movie.id
+      movie_pb.title = movie.title
+      movie_pb.release_date = movie.release_date
+      movie_pb.overview = movie.overview
+      movie_pb.budget = movie.budget
+      movie_pb.revenue = movie.revenue
+
+      for genre in genres:
+        genre_pb = movie_pb.genres.add()
+        genre_pb.name = genre
+      for country in countries:
+        country_pb = movie_pb.countries.add()
+        country_pb.name = country
+
+    if not len(movies_pb.movies):
+      return
+    self.movies_queue.publish(movies_pb.SerializeToString())
   
-  def filter_ratings(self, ratings):
-    pass
+  def filter_ratings(self, ratings_csv):
+    ratings_pb = files_pb2.RatingsCSV()
+    for rating in ratings_csv.ratings:
+      if not rating.movieId or rating.movieId < 0 or not rating.rating or rating.rating < 0:
+        continue
+      rating_pb = ratings_pb.ratings.add()
+      rating_pb.movieId = rating.movieId
+      rating_pb.rating = rating.rating
+    if not len(ratings_pb.ratings):
+      return
+    self.ratings_queue.publish(ratings_pb.SerializeToString())
 
-  def filter_credits(self, credits):
-    pass
+  def filter_credits(self, credits_csv):
+    credits_pb = files_pb2.CreditsCSV()
+    for credit in credits_csv.credits:
+      if not credit.id or credit.id < 0 or not len(credit.cast):
+        continue
+
+      names = map(lambda cast: cast.name, credit.cast)
+      names = list(filter(lambda name: name, names))
+      if not len(names):
+        continue
+
+      credit_pb = credits_pb.credits.add()
+      for name in names:
+        cast_pb = credit_pb.cast.add()
+        cast_pb.name = name
+
+    if not len(credits_pb.credits):
+      return
+    self.credits_queue.publish(credits_pb.SerializeToString())
 
 
   def return_results(self, conn: socket.socket):
@@ -82,8 +141,8 @@ class Client:
   def result_controller_func(self, ch, method, properties, body):
     try:
       # data = json.loads(body)
+      logging.info("got result: {body}")
       msg = self.protocol.create_result(body)
-
       self.socket.sendall(msg)
     except json.JSONDecodeError as e:
       logging.error(f"Failed to decode JSON: {e}")

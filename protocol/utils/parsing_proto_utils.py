@@ -1,3 +1,6 @@
+from datetime import datetime
+
+
 def to_float(value) -> float:
   try:
     return float(value if value else -1.0)
@@ -40,3 +43,10 @@ def create_data_list(string_data):
 def remove_quotes(data):
   new_data = data.strip(" '")
   return new_data
+
+def is_date(str_data):
+  try:
+    datetime.strptime(str_data, '%Y-%m-%d')
+    return True
+  except ValueError as e:
+    return False
