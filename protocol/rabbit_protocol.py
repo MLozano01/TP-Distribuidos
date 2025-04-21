@@ -21,7 +21,7 @@ class RabbitMQ:
             connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
 
             channel = connection.channel()
-            channel.exchange_declare(exchange=self.exchange, exchange_type=self.exc_type)
+            channel.exchange_declare(exchange=self.exchange, exchange_type=self.exc_type, durable=True)
 
             logging.info(f"Channel created with exchange {self.exchange} of type {self.exc_type}")
 

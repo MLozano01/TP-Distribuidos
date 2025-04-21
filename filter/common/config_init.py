@@ -24,6 +24,9 @@ def initialize_config():
 
     try:
         config_params["logging_level"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"])
+        config_params["filter_num"] = int(os.getenv('FILTER_NUM', config["DEFAULT"]["FILTER_NUM"]))
+        for i in range(config_params["filter_num"]):
+            config_params[f"filter_{i}"] = os.getenv(f'FILTER_{i}', config["DEFAULT"][f"FILTER_{i}"])
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
     except ValueError as e:
@@ -31,7 +34,7 @@ def initialize_config():
 
     return config_params
 
-def config_init(filter_file):
+def config_filter(filter_file):
     """ Parse env variables or config file to find program config params
 
     Function that search and parse program configuration parameters in the
@@ -48,7 +51,6 @@ def config_init(filter_file):
     filter_config.read(filter_file)
 
     try:
-        # config_params["num_filters"] = int(os.getenv('NUM_FILTERS',  filter_config["DEFAULT"]["NUM_FILTERS"]))
         config_params["queue_rcv_name"] = os.getenv('QUEUE_RCV_NAME', filter_config["DEFAULT"]["QUEUE_RCV_NAME"])
         config_params["routing_rcv_key"] = os.getenv('ROUTING_KEY_RCV', filter_config["DEFAULT"]["ROUTING_KEY_RCV"])
         config_params["exchange_rcv"] = os.getenv('EXCHANGE_RCV', filter_config["DEFAULT"]["EXCHANGE_RCV"])

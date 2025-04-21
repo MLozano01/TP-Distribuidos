@@ -13,6 +13,8 @@ CONFIG_FILE = "config.ini"
 
 FILTER_MOVIES_BY_2000 = "filter_2000_movies.ini"
 FILTER_MOVIES_BY_ARG_SPA = "filter_Arg_Spa_movies.ini"
+FILTER_MOVIES_BY_ARG = "filter_Arg_movies.ini"
+
 
 
 def docker_yaml_generator(client_amount):
@@ -122,6 +124,7 @@ def create_filter():
       - ./filter/{CONFIG_FILE}:/{CONFIG_FILE}
       - ./filter/filters/{FILTER_MOVIES_BY_2000}:/{FILTER_MOVIES_BY_2000}
       - ./filter/filters/{FILTER_MOVIES_BY_ARG_SPA}:/{FILTER_MOVIES_BY_ARG_SPA}
+      - ./filter/filters/{FILTER_MOVIES_BY_ARG}:/{FILTER_MOVIES_BY_ARG}
     """ 
     return filter_cont
 
