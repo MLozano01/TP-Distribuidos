@@ -17,18 +17,18 @@ FILTER_MOVIES_BY_ARG = "filter_Arg_movies.ini"
 
 
 
-def docker_yaml_generator(client_amount):
+def docker_yaml_generator(client_amount, transformer_replicas):
 
     with open(FILE_NAME, 'w') as f:
-        f.write(create_yaml_file(client_amount))
+        f.write(create_yaml_file(client_amount, transformer_replicas))
 
-def create_yaml_file(client_amount):
+def create_yaml_file(client_amount, transformer_replicas):
     clients = join_clients(client_amount)
     server = create_server(client_amount)
     network = create_network()
     rabbit = create_rabbit()
     filter_cont = create_filter()
-    transformer = create_transformer()
+    transformer = create_transformer(transformer_replicas)
     content = f"""
 version: "3.8"
 services:
@@ -130,10 +130,9 @@ def create_filter():
     """ 
     return filter_cont
 
-def create_transformer():
-    filter_cont = f"""
+def create_transformer(replicas=1):
+    transformer_yaml = f"""
   transformer:
-    container_name: transformer
     image: transformer:latest
     networks:
       - {NETWORK_NAME}
@@ -144,11 +143,46 @@ def create_transformer():
       - rabbitmq
     volumes:
       - ./transformer/{CONFIG_FILE}:/{CONFIG_FILE}
-    """ 
-    return filter_cont
+    """
 
-def main(client_amount):
-    docker_yaml_generator(client_amount)
+    if replicas > 1:
+        transformer_yaml += f"""deploy:
+      replicas: {replicas}
+    """
+    # If replicas is 1, add back the container_name
+    else: # Handles replicas == 1 case
+         lines = transformer_yaml.strip().split('\n')
+         lines.insert(1, f"    container_name: transformer")
+         transformer_yaml = "\n".join(lines) + "\n"
+
+    return transformer_yaml
+
+def main(client_amount, transformer_replicas=1):
+    docker_yaml_generator(client_amount, transformer_replicas)
 
 if __name__ == "__main__":
-    main(client_amount=int(sys.argv[1]))
+    if len(sys.argv) < 2:
+        print("Usage: python compose-generator.py <client_amount> [transformer_replicas]")
+        sys.exit(1)
+
+    try:
+        client_amount = int(sys.argv[1])
+        if client_amount < 1:
+             print("client_amount must be 1 or greater.")
+             sys.exit(1)
+    except ValueError:
+        print("client_amount must be an integer.")
+        sys.exit(1)
+
+    transformer_replicas = 1 # Default
+    if len(sys.argv) > 2:
+        try:
+            transformer_replicas = int(sys.argv[2])
+            if transformer_replicas < 1:
+                print("transformer_replicas must be 1 or greater.")
+                sys.exit(1)
+        except ValueError:
+            print("transformer_replicas must be an integer.")
+            sys.exit(1)
+
+    main(client_amount, transformer_replicas)
