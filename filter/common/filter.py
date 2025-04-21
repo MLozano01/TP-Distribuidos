@@ -11,25 +11,28 @@ class Filter:
         self.queue_snd = None
         for key, value in kwargs.items():
             setattr(self, key, value)
+        self.is_alive = True
 
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type)
         self.queue_snd = RabbitMQ(self.exchange_snd, self.queue_snd_name, self.routing_snd_key, self.exc_snd_type)
         
-    def start(self):
+    def run(self):
         """Start the filter to consume messages from the queue."""
         self._settle_queues()
         self.queue_rcv.consume(self.callback)
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
-        logging.info(f"Received message")
+        logging.info(f"Received message, with routing key: {method.routing_key}")
         self.filter(body)
 
     def filter(self, data):
         result = {}
         try:
             data = json.loads(data)
+
+            # logging.info(data)
 
             result = parse_filter_funct(data, self.filter_by, self.file_name)
             
@@ -51,4 +54,5 @@ class Filter:
             self.queue_rcv.close_channel()
         if self.queue_snd:
             self.queue_snd.close_channel()
+        self.is_alive = False
         logging.info("Filter Stopped")
