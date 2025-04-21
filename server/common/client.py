@@ -54,7 +54,7 @@ class Client:
       # logging.info(f"type: {type} | msg {msg}")
       if type == FileType.MOVIES:
         self.filter_movies(msg)
-        time.sleep(5)
+        time.sleep(1)
       elif type == FileType.RATINGS:
         self.filter_ratings(msg)
       elif type == FileType.CREDITS:
