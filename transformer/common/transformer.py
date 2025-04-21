@@ -166,6 +166,8 @@ class Transformer:
 
                     movie_pb.rate_revenue_budget = self._calculate_rate(revenue_val, budget_val)
 
+                    #logging.info(f"Processed movie ID {movie_pb.id}: Sentiment='{movie_pb.sentiment}', Rate='{movie_pb.rate_revenue_budget:.4f}'")
+
                     processed_movies_list.append(movie_pb)
                 else:
                     #movie_id = movie_pb.id if movie_pb.id else 'UNKNOWN_PROTO_ID'
