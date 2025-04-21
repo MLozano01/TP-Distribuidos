@@ -7,7 +7,7 @@ def main():
     config = config_init.initialize_config()
     config_logger(config["logging_level"])
 
-    config_params = config_init.config_init("/filter_2000_movies.ini")
+    config_params = config_init.config_init("/filter_Arg_Spa_movies.ini")
     logging.info("Filter started")
 
     try:

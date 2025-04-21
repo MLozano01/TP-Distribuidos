@@ -31,6 +31,8 @@ class Filter:
         try:
             data = json.loads(data)
 
+            # logging.info(data)
+
             result = parse_filter_funct(data, self.filter_by, self.file_name)
             
             if result:

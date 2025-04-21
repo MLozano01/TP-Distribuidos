@@ -48,7 +48,6 @@ def config_init(filter_file):
     filter_config.read(filter_file)
 
     try:
-        # config_params["num_filters"] = int(os.getenv('NUM_FILTERS',  filter_config["DEFAULT"]["NUM_FILTERS"]))
         config_params["queue_rcv_name"] = os.getenv('QUEUE_RCV_NAME', filter_config["DEFAULT"]["QUEUE_RCV_NAME"])
         config_params["routing_rcv_key"] = os.getenv('ROUTING_KEY_RCV', filter_config["DEFAULT"]["ROUTING_KEY_RCV"])
         config_params["exchange_rcv"] = os.getenv('EXCHANGE_RCV', filter_config["DEFAULT"]["EXCHANGE_RCV"])

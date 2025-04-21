@@ -13,14 +13,11 @@ class Server:
 
     def run(self):
 
-        # self.test_queue()
-
         while self.running:
             try:
                 conn, addr = self.socket.accept()
                 logging.info(f"Connection accepted from {addr}")
-                # Handle the connection
-
+                
                 client = Client(conn)
                 self.clients.append(client)
                 logging.info(f"Client added")

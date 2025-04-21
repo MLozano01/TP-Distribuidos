@@ -51,20 +51,22 @@ class Client:
       
       type, msg = self.protocol.decode_msg(buffer)
 
-      logging.info(f"type: {type} | msg {msg}")
+      # logging.info(f"type: {type} | msg {msg}")
       if type == FileType.MOVIES:
         self.filter_movies(msg)
+        time.sleep(5)
       elif type == FileType.RATINGS:
         self.filter_ratings(msg)
       elif type == FileType.CREDITS:
         self.filter_credits(msg)
-      # time.sleep(5)
   
 
   def filter_movies(self, movies):
-    logging.info(f"Movies: {movies}")
+    # logging.info(f"Movies: {movies}")
     json_msg = self.protocol.encode_movies_to_json(movies)
     self.movies_queue.publish(json_msg)
+    
+
   
   def filter_ratings(self, ratings):
     pass
