@@ -1,6 +1,6 @@
 
 from protocol.rabbit_protocol import RabbitMQ
-from common.aux import parse_filter_funct
+from common.aux import parse_reduce_funct
 import logging
 import json
 from protocol.protocol import Protocol
@@ -33,14 +33,12 @@ class Reducer:
             protocol = Protocol()
             decoded_msg = protocol.decode_movies_msg(data)
 
+            result = parse_reduce_funct(decoded_msg, self.reduce_by)
 
-            result = parse_reduce_funct(decoded_msg, self.reduce_by, self.file_name)
-
-            
             if result:
                 self.queue_snd.publish(protocol.create_movie_list(result))
             else:
-                logging.info(f"No {self.file_name} matched the reduce criteria.")
+                logging.info(f"No  matched the reduce criteria.")
 
         except json.JSONDecodeError as e:
             logging.error(f"Failed to decode JSON: {e}")

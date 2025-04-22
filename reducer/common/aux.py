@@ -12,31 +12,40 @@ operators = {
     "!=": operator.ne,
 }
 
-def parse_reduce_funct(data_to_filter, filter_by, file_name):
+def _get_filter_args(filter_by):
+    return filter_by.split(",")
 
-    if file_name == "movies" and filter_by.split(",")[0] == "release_date":
-        return filter_movies_by_date(data_to_filter, filter_by, file_name)
+def parse_reduce_funct(data_to_filter, filter_by, result):
+
+    args = _get_filter_args(filter_by)
+
+    if args[0] == "top":
+        return reduce_top(data_to_filter, args, result)
     
-    if file_name == "movies" and filter_by.split("_")[0] == "countries":
-        return filter_movies_by_country(data_to_filter, filter_by, file_name)
+    if args[0] == "max-min":
+        return reduce_max_min(data_to_filter, args, result)
 
 
-def filter_movies_by_date(data_to_filter, filter_by, file_name):
-    result = []
+def reduce_top(data_to_filter, reduce_args, result):
     
+    #TODO: Change the loop depending on the way data comes in
+
     for data in data_to_filter.movies:
-        filter_info = filter_by.split(",")
-        movie_year = getattr(data, filter_info[0]).split("-")[0]
-        op = filter_info[1]
-
-        if op in operators and operators[op](int(movie_year), int(filter_info[2])):
+        if result == [] or len(result) < int(reduce_args[1]):
             result.append(data)
+            continue
+        if result[-1] < data.reduce_args[2]:
+            if len(result) < int(reduce_args[1]):
+                result.append(data)
+            else:
+                result[-1] = data
+
+    result.sort(key=lambda x: getattr(x, reduce_args[0]), reverse=True)
 
     return result
 
 
-def filter_movies_by_country(data_to_filter, filter_by, file_name):
-    result = []
+def reduce_max_min(data_to_filter, filter_by, result):
     
     for data in data_to_filter.movies:
         filter_info = filter_by.split("_")
