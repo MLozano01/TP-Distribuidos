@@ -1,7 +1,6 @@
 from protocol import files_pb2
 from protocol.utils.parsing_proto_utils import *
 from google.protobuf import json_format
-import json
 
 from enum import Enum
 
@@ -283,10 +282,9 @@ class Protocol:
     for key, results in dict_results.items():
       aggr_pb = batch_pb.aggr_row.add()
       aggr_pb.key = key
-      if results.has("sum"):
-        aggr_pb.sum =  results.get("sum")
-      if results.has("count"):
-        aggr_pb.sum =  results.get("count")
-
+      if "sum" in results:
+        aggr_pb.sum =  to_float(results.get("sum"))
+      if "count" in results:
+        aggr_pb.count =  to_int(results.get("count"))
     batch_pb_str = batch_pb.SerializeToString()
     return batch_pb_str
