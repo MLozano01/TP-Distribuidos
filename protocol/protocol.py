@@ -276,3 +276,17 @@ class Protocol:
 
     movies_pb_str = movies_pb.SerializeToString()
     return movies_pb_str
+
+  def create_aggr_batch(self, dict_results):
+    batch_pb = files_pb2.AggregationBatch()
+
+    for key, results in dict_results.items():
+      aggr_pb = batch_pb.aggr_row.add()
+      aggr_pb.key = key
+      if results.has("sum"):
+        aggr_pb.sum =  results.get("sum")
+      if results.has("count"):
+        aggr_pb.sum =  results.get("count")
+
+    batch_pb_str = batch_pb.SerializeToString()
+    return batch_pb_str

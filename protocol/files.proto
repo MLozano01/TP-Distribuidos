@@ -122,4 +122,18 @@ message MoviesCSV {
   repeated MovieCSV movies = 1;
 }
 // [END movies messages]
+
+
+// [START] Aggregators messages
+message Aggregation {
+  string key = 1;
+  optional float sum = 2;
+  optional int32 count = 3; 
+}
+
+message AggregationBatch {
+  repeated Aggregation aggr_row = 1;
+}
+// [END] Aggregators messages
+
 // [END messages]
