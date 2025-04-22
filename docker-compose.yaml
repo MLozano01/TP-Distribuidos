@@ -61,6 +61,7 @@ services:
       - ./filter/filters/filter_2000_movies.ini:/filter_2000_movies.ini
       - ./filter/filters/filter_Arg_Spa_movies.ini:/filter_Arg_Spa_movies.ini
       - ./filter/filters/filter_Arg_movies.ini:/filter_Arg_movies.ini
+      - ./filter/filters/filter_single_country_movies.ini:/filter_single_country_movies.ini
     
 networks:
   tp_network:

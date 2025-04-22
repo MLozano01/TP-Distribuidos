@@ -12,13 +12,13 @@ def main():
         controller.start()
     except KeyboardInterrupt:
         logging.info("Filter stopped by user")
+        controller.stop()
+        logging.info("Filter stopped")
     except Exception as e:
         logging.error(f"Filter error: {e}")
-    finally:
         controller.stop()
         logging.info("Filter stopped")
 
-    
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

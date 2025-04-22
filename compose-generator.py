@@ -32,6 +32,7 @@ def create_yaml_file(client_amount):
     network = create_network()
     rabbit = create_rabbit()
     filter_cont = create_filter()
+    reducer = create_reducer()
     content = f"""
 version: "3.8"
 services:
