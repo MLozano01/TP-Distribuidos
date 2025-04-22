@@ -89,7 +89,7 @@ services:
       - rabbitmq
     volumes:
       - ./aggregator/config.ini:/config.ini
-      - ./aggregator/aggregator/aggr_sent_revenue.ini:/aggr_sent_revenue.ini
+      - ./aggregator/aggregators/aggr_sent_revenue.ini:/aggr_sent_revenue.ini
     
 networks:
   tp_network:

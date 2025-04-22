@@ -24,6 +24,9 @@ def parse_reduce_funct(data_to_filter, filter_by, result):
     
     if args[0] == "max-min":
         return reduce_max_min(data_to_filter, args, result)
+    
+    if args[0] == "avg":
+        return reduce_avg(data_to_filter, args, result)
 
 
 def reduce_top(data_to_filter, reduce_args, result):
@@ -43,6 +46,9 @@ def reduce_top(data_to_filter, reduce_args, result):
     result.sort(key=lambda x: getattr(x, reduce_args[0]), reverse=True)
 
     return result
+
+def reduce_avg(data_to_filter, reduce_args, result):
+    pass
 
 
 def reduce_max_min(data_to_filter, filter_by, result):

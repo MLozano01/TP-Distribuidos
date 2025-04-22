@@ -16,9 +16,11 @@ FILTER_MOVIES_BY_ARG_SPA = "filter_Arg_Spa_movies.ini"
 FILTER_MOVIES_BY_ARG = "filter_Arg_movies.ini"
 FILTER_MOVIES_BY_SINGLE_COUNTRY = "filter_single_country_movies.ini"
 
-REDUCER_COMMANDS_TOP5 = {"top5.ini"}
-REDUCER_COMMANDS_TOP10 = {"top10.ini"}
-REDUCER_COMMANDS_MAX_MIN = {"max-min.ini"}
+REDUCER_COMMANDS_TOP5 = "top5.ini"
+REDUCER_COMMANDS_TOP10 = "top10.ini"
+REDUCER_COMMANDS_MAX_MIN = "max-min.ini"
+REDUCER_COMMANDS_AVERAGE = "average.ini"
+
 AGGR_SENT_BY_REV = "aggr_sent_revenue.ini"
 
 
@@ -155,6 +157,7 @@ def create_reducer():
       - ./reducer/reducers/{REDUCER_COMMANDS_TOP5}:/{REDUCER_COMMANDS_TOP5}
       - ./reducer/reducers/{REDUCER_COMMANDS_MAX_MIN}:/{REDUCER_COMMANDS_MAX_MIN}
       - ./reducer/reducers/{REDUCER_COMMANDS_TOP10}:/{REDUCER_COMMANDS_TOP10}
+      - ./reducer/reducers/{REDUCER_COMMANDS_AVERAGE}:/{REDUCER_COMMANDS_AVERAGE}
     """ 
     return filter_cont
 
