@@ -114,7 +114,8 @@ message MovieCSV {
   bool video = 22;
   float vote_average = 23;
   int32 vote_count = 24;
-
+  optional string sentiment = 100;
+  optional float rate_revenue_budget = 101;
 }
 
 // Batch of movies from file
