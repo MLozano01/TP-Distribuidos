@@ -15,6 +15,7 @@ FILTER_MOVIES_BY_2000 = "filter_2000_movies.ini"
 FILTER_MOVIES_BY_ARG_SPA = "filter_Arg_Spa_movies.ini"
 FILTER_MOVIES_BY_ARG = "filter_Arg_movies.ini"
 
+AGGR_SENT_BY_REV = "aggr_sent_revenue.ini"
 
 
 def docker_yaml_generator(client_amount, transformer_replicas):
@@ -29,6 +30,7 @@ def create_yaml_file(client_amount, transformer_replicas):
     rabbit = create_rabbit()
     filter_cont = create_filter()
     transformer = create_transformer(transformer_replicas)
+    aggregator = create_aggregator()
     content = f"""
 version: "3.8"
 services:
@@ -37,6 +39,7 @@ services:
   {server}
   {filter_cont}
   {transformer}
+  {aggregator}
 networks:
   {network}
 """
@@ -129,6 +132,24 @@ def create_filter():
       - ./filter/filters/{FILTER_MOVIES_BY_ARG}:/{FILTER_MOVIES_BY_ARG}
     """ 
     return filter_cont
+
+def create_aggregator():
+  aggr_cont = f"""
+  aggregator:
+    container_name: aggregator
+    image: aggregator:latest
+    networks:
+      - {NETWORK_NAME}
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./aggregator/{CONFIG_FILE}:/{CONFIG_FILE}
+      - ./aggregator/aggregator/{AGGR_SENT_BY_REV}:/{AGGR_SENT_BY_REV}
+    """ 
+  return aggr_cont
 
 def create_transformer(replicas=1):
     transformer_yaml = f"""

@@ -35,7 +35,7 @@ class Aggregator:
 
 
             result = parse_aggregate_func(decoded_msg, self.key, self.field, self.operations, self.file_name)
-
+            logging.info(f"Result: {result}")
             self.queue_snd.publish(protocol.create_aggr_batch(result))
 
         except Exception as e:

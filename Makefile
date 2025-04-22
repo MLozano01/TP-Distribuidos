@@ -7,6 +7,7 @@ docker-image:
 	docker build -f ./client/Dockerfile -t "client:latest" .
 	docker build -f ./filter/Dockerfile -t "filter:latest" .
 	docker build -f ./transformer/Dockerfile -t "transformer:latest" .
+	docker build -f ./aggregator/Dockerfile -t "aggregator:latest" .
 .PHONY: docker-image
 
 docker-compose-up: docker-image
@@ -21,3 +22,7 @@ docker-compose-down:
 docker-compose-logs:
 	docker compose -f docker-compose.yaml logs -f
 .PHONY: docker-compose-logs
+
+docker-run:
+	docker compose -f docker-compose.yaml up
+.PHONY: docker-run
