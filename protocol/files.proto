@@ -114,7 +114,8 @@ message MovieCSV {
   bool video = 22;
   float vote_average = 23;
   int32 vote_count = 24;
-
+  optional string sentiment = 100;
+  optional float rate_revenue_budget = 101;
 }
 
 // Batch of movies from file
@@ -122,4 +123,18 @@ message MoviesCSV {
   repeated MovieCSV movies = 1;
 }
 // [END movies messages]
+
+
+// [START] Aggregators messages
+message Aggregation {
+  string key = 1;
+  optional float sum = 2;
+  optional int32 count = 3; 
+}
+
+message AggregationBatch {
+  repeated Aggregation aggr_row = 1;
+}
+// [END] Aggregators messages
+
 // [END messages]

@@ -1,2 +1,4 @@
 #!/bin/bash
-python3 compose-generator.py $1
+CLIENT_COUNT=${1:-1}
+TRANSFORMER_REPLICAS=${2:-1}
+python3 compose-generator.py $CLIENT_COUNT $TRANSFORMER_REPLICAS

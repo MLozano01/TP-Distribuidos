@@ -19,20 +19,22 @@ FILTER_MOVIES_BY_SINGLE_COUNTRY = "filter_single_country_movies.ini"
 REDUCER_COMMANDS_TOP5 = {"top5.ini"}
 REDUCER_COMMANDS_TOP10 = {"top10.ini"}
 REDUCER_COMMANDS_MAX_MIN = {"max-min.ini"}
+AGGR_SENT_BY_REV = "aggr_sent_revenue.ini"
 
 
-def docker_yaml_generator(client_amount):
+def docker_yaml_generator(client_amount, transformer_replicas):
 
     with open(FILE_NAME, 'w') as f:
-        f.write(create_yaml_file(client_amount))
+        f.write(create_yaml_file(client_amount, transformer_replicas))
 
-def create_yaml_file(client_amount):
+def create_yaml_file(client_amount, transformer_replicas):
     clients = join_clients(client_amount)
     server = create_server(client_amount)
     network = create_network()
     rabbit = create_rabbit()
     filter_cont = create_filter()
-    reducer = create_reducer()
+    transformer = create_transformer(transformer_replicas)
+    aggregator = create_aggregator()
     content = f"""
 version: "3.8"
 services:
@@ -40,6 +42,8 @@ services:
   {clients}
   {server}
   {filter_cont}
+  {transformer}
+  {aggregator}
 networks:
   {network}
 """
@@ -147,15 +151,84 @@ def create_reducer():
     links:
       - rabbitmq
     volumes:
-      - ./filter/{CONFIG_FILE}:/{CONFIG_FILE}
-      - ./filter/filters/{REDUCER_COMMANDS_TOP5}:/{REDUCER_COMMANDS_TOP5}
-      - ./filter/filters/{REDUCER_COMMANDS_MAX_MIN}:/{REDUCER_COMMANDS_MAX_MIN}
-      - ./filter/filters/{REDUCER_COMMANDS_TOP10}:/{REDUCER_COMMANDS_TOP10}
+      - ./reducer/{CONFIG_FILE}:/{CONFIG_FILE}
+      - ./reducer/reducers/{REDUCER_COMMANDS_TOP5}:/{REDUCER_COMMANDS_TOP5}
+      - ./reducer/reducers/{REDUCER_COMMANDS_MAX_MIN}:/{REDUCER_COMMANDS_MAX_MIN}
+      - ./reducer/reducers/{REDUCER_COMMANDS_TOP10}:/{REDUCER_COMMANDS_TOP10}
     """ 
     return filter_cont
 
-def main(client_amount):
-    docker_yaml_generator(client_amount)
+def create_aggregator():
+  aggr_cont = f"""
+  aggregator:
+    container_name: aggregator
+    image: aggregator:latest
+    networks:
+      - {NETWORK_NAME}
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./aggregator/{CONFIG_FILE}:/{CONFIG_FILE}
+      - ./aggregator/aggregators/{AGGR_SENT_BY_REV}:/{AGGR_SENT_BY_REV}
+    """ 
+  return aggr_cont
+
+def create_transformer(replicas=1):
+    transformer_yaml = f"""
+  transformer:
+    image: transformer:latest
+    networks:
+      - {NETWORK_NAME}
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./transformer/{CONFIG_FILE}:/{CONFIG_FILE}
+    """
+
+    if replicas > 1:
+        transformer_yaml += f"""deploy:
+      replicas: {replicas}
+    """
+    # If replicas is 1, add back the container_name
+    else: # Handles replicas == 1 case
+         lines = transformer_yaml.strip().split('\n')
+         lines.insert(1, f"    container_name: transformer")
+         transformer_yaml = "\n".join(lines) + "\n"
+
+    return transformer_yaml
+
+def main(client_amount, transformer_replicas=1):
+    docker_yaml_generator(client_amount, transformer_replicas)
 
 if __name__ == "__main__":
-    main(client_amount=int(sys.argv[1]))
+    if len(sys.argv) < 2:
+        print("Usage: python compose-generator.py <client_amount> [transformer_replicas]")
+        sys.exit(1)
+
+    try:
+        client_amount = int(sys.argv[1])
+        if client_amount < 1:
+             print("client_amount must be 1 or greater.")
+             sys.exit(1)
+    except ValueError:
+        print("client_amount must be an integer.")
+        sys.exit(1)
+
+    transformer_replicas = 1 # Default
+    if len(sys.argv) > 2:
+        try:
+            transformer_replicas = int(sys.argv[2])
+            if transformer_replicas < 1:
+                print("transformer_replicas must be 1 or greater.")
+                sys.exit(1)
+        except ValueError:
+            print("transformer_replicas must be an integer.")
+            sys.exit(1)
+
+    main(client_amount, transformer_replicas)

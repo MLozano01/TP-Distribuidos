@@ -63,6 +63,34 @@ services:
       - ./filter/filters/filter_Arg_movies.ini:/filter_Arg_movies.ini
       - ./filter/filters/filter_single_country_movies.ini:/filter_single_country_movies.ini
     
+  transformer:
+    container_name: transformer
+    image: transformer:latest
+    networks:
+      - tp_network
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./transformer/config.ini:/config.ini
+
+  
+  aggregator:
+    container_name: aggregator
+    image: aggregator:latest
+    networks:
+      - tp_network
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./aggregator/config.ini:/config.ini
+      - ./aggregator/aggregator/aggr_sent_revenue.ini:/aggr_sent_revenue.ini
+    
 networks:
   tp_network:
     ipam:
