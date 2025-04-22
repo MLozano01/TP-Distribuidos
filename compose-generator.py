@@ -147,7 +147,7 @@ def create_aggregator():
       - rabbitmq
     volumes:
       - ./aggregator/{CONFIG_FILE}:/{CONFIG_FILE}
-      - ./aggregator/aggregator/{AGGR_SENT_BY_REV}:/{AGGR_SENT_BY_REV}
+      - ./aggregator/aggregators/{AGGR_SENT_BY_REV}:/{AGGR_SENT_BY_REV}
     """ 
   return aggr_cont
 

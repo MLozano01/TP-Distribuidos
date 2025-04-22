@@ -1,8 +1,7 @@
 
-from aggregator.common.aux import parse_aggregate_func
+from common.aux import parse_aggregate_func
 from protocol.rabbit_protocol import RabbitMQ
 import logging
-import json
 from protocol.protocol import Protocol
 
 

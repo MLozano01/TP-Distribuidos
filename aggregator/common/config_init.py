@@ -25,7 +25,7 @@ def initialize_config():
     try:
         config_params["logging_level"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"])
         config_params["aggr_num"] = int(os.getenv('AGGR_NUM', config["RABBITMQ"]["AGGR_NUM"]))
-        for i in range(config_params["agg_num"]):
+        for i in range(config_params["aggr_num"]):
             config_params[f"aggr_{i}"] = os.getenv(f'AGGR_{i}', config["RABBITMQ"][f"AGGR_{i}"])
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
@@ -49,7 +49,7 @@ def config_aggregator(aggregator_file):
     
     aggr_config = ConfigParser(os.environ)
     aggr_config.read(aggregator_file)
-
+    logging.info(f"File: {aggregator_file}")
     try:
         config_params["queue_rcv_name"] = os.getenv('QUEUE_RCV_NAME', aggr_config["DEFAULT"]["QUEUE_RCV_NAME"])
         config_params["routing_rcv_key"] = os.getenv('ROUTING_KEY_RCV', aggr_config["DEFAULT"]["ROUTING_KEY_RCV"])

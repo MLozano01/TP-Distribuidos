@@ -1,6 +1,6 @@
 FROM python:3.9.7-slim
 
-COPY filter /
+COPY aggregator /
 COPY protocol /protocol
 COPY utils /utils
 

@@ -11,16 +11,16 @@ def main():
         controller = common.controller.Controller(config)
         controller.start()
     except KeyboardInterrupt:
-        logging.info("Filter stopped by user")
+        logging.info("Aggregator stopped by user")
     except Exception as e:
-        logging.error(f"Filter error: {e}")
+        logging.error(f"Aggregator error: {e}")
     finally:
         controller.stop()
-        logging.info("Filter stopped")
+        logging.info("Aggregator stopped")
 
     
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    logging.info("Starting filter module")
+    logging.info("Starting aggregator module")
     main()

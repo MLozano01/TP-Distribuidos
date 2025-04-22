@@ -1,6 +1,6 @@
 from multiprocessing import Process
 import logging
-from aggregator.common.aggregator import Aggregator
+from common.aggregator import Aggregator
 import common.config_init
 
 
@@ -18,7 +18,7 @@ class Controller:
 
             aggr_path = aggr_config.split(",")[0]
 
-            aggr_config_params = common.config_init.config_aggr(f'/{aggr_path}.ini')
+            aggr_config_params = common.config_init.config_aggregator(f'/{aggr_path}.ini')
 
             try:
                 logging.info(f"Starting aggr {i} with config: {aggr_config_params}")
