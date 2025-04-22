@@ -62,8 +62,8 @@ services:
       - ./filter/filters/filter_Arg_Spa_movies.ini:/filter_Arg_Spa_movies.ini
       - ./filter/filters/filter_Arg_movies.ini:/filter_Arg_movies.ini
     
-  
   transformer:
+    container_name: transformer
     image: transformer:latest
     networks:
       - tp_network
@@ -74,9 +74,41 @@ services:
       - rabbitmq
     volumes:
       - ./transformer/config.ini:/config.ini
-    deploy:
-      replicas: 3
-    
+
+  joiner-ratings:
+    image: joiner:latest
+    networks:
+      - tp_network
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./joiner/config/joiner-ratings.ini:/config.ini
+    container_name: joiner-ratings
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JOINER_REPLICA_ID=0
+      - JOINER_REPLICA_COUNT=1
+
+  joiner-credits:
+    image: joiner:latest
+    networks:
+      - tp_network
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./joiner/config/joiner-credits.ini:/config.ini
+    container_name: joiner-credits
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JOINER_REPLICA_ID=0
+      - JOINER_REPLICA_COUNT=1
+
 networks:
   tp_network:
     ipam:

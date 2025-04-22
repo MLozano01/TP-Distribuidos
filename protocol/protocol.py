@@ -276,3 +276,19 @@ class Protocol:
 
     movies_pb_str = movies_pb.SerializeToString()
     return movies_pb_str
+
+  # Placeholder for creating ActorParticipationsBatch
+  def create_actor_participations_batch(self, participations):
+      """Creates and serializes an ActorParticipationsBatch message."""
+      batch_pb = files_pb2.ActorParticipationsBatch()
+      # participations should be a list of ActorParticipation objects
+      batch_pb.participations.extend(participations)
+      return batch_pb.SerializeToString()
+
+  # Placeholder for decoding ActorParticipationsBatch (if needed)
+  def decode_actor_participations_batch(self, buffer):
+      """Deserializes an ActorParticipationsBatch message."""
+      batch_pb = files_pb2.ActorParticipationsBatch()
+      batch_pb.ParseFromString(buffer)
+      return batch_pb
+

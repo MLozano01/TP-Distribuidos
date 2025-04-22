@@ -1,4 +1,5 @@
 import sys
+import os
 
 FILE_NAME = "docker-compose.yaml"
 
@@ -15,20 +16,31 @@ FILTER_MOVIES_BY_2000 = "filter_2000_movies.ini"
 FILTER_MOVIES_BY_ARG_SPA = "filter_Arg_Spa_movies.ini"
 FILTER_MOVIES_BY_ARG = "filter_Arg_movies.ini"
 
+JOINER_RATINGS_CONFIG_SOURCE = "./joiner/config/joiner-ratings.ini"
+JOINER_CREDITS_CONFIG_SOURCE = "./joiner/config/joiner-credits.ini"
+CONFIG_FILE_TARGET = "/config.ini" # Target path inside container
 
-
-def docker_yaml_generator(client_amount, transformer_replicas):
+def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas):
+    # Check for joiner config files existence
+    required_joiner_configs = [JOINER_RATINGS_CONFIG_SOURCE, JOINER_CREDITS_CONFIG_SOURCE]
+    for config_path in required_joiner_configs:
+        if not os.path.exists(config_path):
+            print(f"Error: Required joiner configuration file not found: {config_path}")
+            sys.exit(1)
 
     with open(FILE_NAME, 'w') as f:
-        f.write(create_yaml_file(client_amount, transformer_replicas))
+        f.write(create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas))
 
-def create_yaml_file(client_amount, transformer_replicas):
+
+def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas):
     clients = join_clients(client_amount)
     server = create_server(client_amount)
     network = create_network()
     rabbit = create_rabbit()
     filter_cont = create_filter()
     transformer = create_transformer(transformer_replicas)
+    joiner_ratings = create_joiner("joiner-ratings", joiner_ratings_replicas, JOINER_RATINGS_CONFIG_SOURCE)
+    joiner_credits = create_joiner("joiner-credits", joiner_credits_replicas, JOINER_CREDITS_CONFIG_SOURCE)
     content = f"""
 version: "3.8"
 services:
@@ -37,6 +49,8 @@ services:
   {server}
   {filter_cont}
   {transformer}
+  {joiner_ratings}
+  {joiner_credits}
 networks:
   {network}
 """
@@ -157,12 +171,50 @@ def create_transformer(replicas=1):
 
     return transformer_yaml
 
-def main(client_amount, transformer_replicas=1):
-    docker_yaml_generator(client_amount, transformer_replicas)
+def create_joiner(service_name, replicas, config_source_path):
+    """Creates a joiner service definition."""
+    # Base YAML definition
+    joiner_yaml_base = f"""
+  {service_name}:
+    image: joiner:latest
+    networks:
+      - {NETWORK_NAME}
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - {config_source_path}:{CONFIG_FILE_TARGET}
+    """
 
-if __name__ == "__main__":
+    if replicas > 1:
+        # Add deploy section and environment for multiple replicas
+        # Build environment string carefully to avoid f-string/YAML issues
+        # Escaping {{ and }} for docker compose templating
+        env_block = (
+            "\n    environment:" +
+            "\n      - PYTHONUNBUFFERED=1" +
+            "\n      - JOINER_REPLICA_ID={{ '{{' }}.Task.Slot{{ '}}' }}" + # 1-based ID
+            f"\n     - JOINER_REPLICA_COUNT={replicas}"
+        )
+        joiner_yaml = joiner_yaml_base.strip() + f"\n    deploy:\n      mode: replicated\n      replicas: {replicas}" + env_block + "\n"
+
+    else: # Handle replicas == 1 case
+        # Add container_name and specific environment for single replica
+        joiner_yaml = joiner_yaml_base.strip()
+        joiner_yaml += f"\n    container_name: {service_name}"
+        joiner_yaml += f"\n    environment:"
+        joiner_yaml += f"\n      - PYTHONUNBUFFERED=1"
+        joiner_yaml += f"\n      - JOINER_REPLICA_ID=0" # Set ID=0 for single replica
+        joiner_yaml += f"\n      - JOINER_REPLICA_COUNT=1"
+        joiner_yaml += "\n"
+
+    return joiner_yaml
+
+def main():
     if len(sys.argv) < 2:
-        print("Usage: python compose-generator.py <client_amount> [transformer_replicas]")
+        print("Usage: python compose-generator.py <client_amount> [transformer_replicas] [joiner_ratings_replicas] [joiner_credits_replicas]")
         sys.exit(1)
 
     try:
@@ -185,4 +237,29 @@ if __name__ == "__main__":
             print("transformer_replicas must be an integer.")
             sys.exit(1)
 
-    main(client_amount, transformer_replicas)
+    joiner_ratings_replicas = 1 # Default for ratings joiner
+    if len(sys.argv) > 3:
+        try:
+            joiner_ratings_replicas = int(sys.argv[3])
+            if joiner_ratings_replicas < 1:
+                print("joiner_ratings_replicas must be 1 or greater.")
+                sys.exit(1)
+        except ValueError:
+            print("joiner_ratings_replicas must be an integer.")
+            sys.exit(1)
+
+    joiner_credits_replicas = 1 # Default for credits joiner
+    if len(sys.argv) > 4: # Check for credits joiner replicas argument
+        try:
+            joiner_credits_replicas = int(sys.argv[4])
+            if joiner_credits_replicas < 1:
+                print("joiner_credits_replicas must be 1 or greater.")
+                sys.exit(1)
+        except ValueError:
+            print("joiner_credits_replicas must be an integer.")
+            sys.exit(1)
+
+    docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas)
+
+if __name__ == "__main__":
+    main()

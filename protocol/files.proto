@@ -116,6 +116,9 @@ message MovieCSV {
   int32 vote_count = 24;
   optional string sentiment = 100;
   optional float rate_revenue_budget = 101;
+
+  // Field added by ratings-joiner
+  optional float average_rating = 102;
 }
 
 // Batch of movies from file
@@ -123,4 +126,19 @@ message MoviesCSV {
   repeated MovieCSV movies = 1;
 }
 // [END movies messages]
+
+// --- Actor Participation Message Definitions (Output of Credits Joiner) ---
+
+message ActorParticipation {
+    int32 actor_id = 1;      // The unique ID of the actor (from Cast.id)
+    string actor_name = 2;   // The name of the actor (from Cast.name)
+    int32 movie_id = 3;      // The ID of the movie they participated in (from CreditCSV.id)
+}
+
+message ActorParticipationsBatch {
+    repeated ActorParticipation participations = 1;
+}
+
+// --- End Actor Participation Message Definitions ---
+
 // [END messages]
