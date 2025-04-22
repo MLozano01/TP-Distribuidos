@@ -45,6 +45,9 @@ class Joiner:
     def _settle_connections(self):
         """Instantiate and setup RabbitMQ consumers and producer using new classes."""
         host = self.config['rabbit_host']
+        # Calculate positive, 1-based binding key for consistent hash
+        # --- Using fixed weight "1" for even distribution --- 
+        consistent_hash_binding_key = "1" # Use weight "1" for all replicas
         try:
             # --- Consumers ---
             # Movies Consumer (Consistent Hash Queue)
@@ -53,7 +56,7 @@ class Joiner:
                 exchange=self.config['exchange_movies'],
                 exchange_type='x-consistent-hash',
                 queue_name=self.config['queue_movies_name'],
-                routing_key=str(self.replica_id) # Binding key for consistent hash
+                routing_key=consistent_hash_binding_key # Use fixed weight "1"
                 # durable=True by default
             )
             # Other Data Consumer (Consistent Hash Queue)
@@ -62,7 +65,7 @@ class Joiner:
                 exchange=self.config['exchange_other'],
                 exchange_type='x-consistent-hash',
                 queue_name=self.config['queue_other_name'],
-                routing_key=str(self.replica_id)
+                routing_key=consistent_hash_binding_key # Use fixed weight "1"
                 # durable=True by default
             )
             # Control Consumer (Fanout Queue)
