@@ -1,0 +1,4 @@
+pika
+transformers[torch]
+huggingface_hub[hf_xet]
+protobuf
