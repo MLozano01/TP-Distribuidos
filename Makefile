@@ -1,5 +1,16 @@
 default: build
 
+# ej de uso: make docker-image-filter
+docker-image-%:
+	@echo "Building Docker image : $*"
+	docker build -f "./$*/Dockerfile" -t "$*:latest" .
+
+.PHONY: docker-image-%
+
+docker-run:
+	docker compose -f docker-compose.yaml up
+.PHONY: docker-run
+
 all:
 
 docker-image:
@@ -23,6 +34,3 @@ docker-compose-logs:
 	docker compose -f docker-compose.yaml logs -f
 .PHONY: docker-compose-logs
 
-docker-run:
-	docker compose -f docker-compose.yaml up
-.PHONY: docker-run
