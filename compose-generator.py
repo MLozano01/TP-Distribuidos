@@ -14,7 +14,11 @@ CONFIG_FILE = "config.ini"
 FILTER_MOVIES_BY_2000 = "filter_2000_movies.ini"
 FILTER_MOVIES_BY_ARG_SPA = "filter_Arg_Spa_movies.ini"
 FILTER_MOVIES_BY_ARG = "filter_Arg_movies.ini"
+FILTER_MOVIES_BY_SINGLE_COUNTRY = "filter_single_country_movies.ini"
 
+REDUCER_COMMANDS_TOP5 = {"top5.ini"}
+REDUCER_COMMANDS_TOP10 = {"top10.ini"}
+REDUCER_COMMANDS_MAX_MIN = {"max-min.ini"}
 
 
 def docker_yaml_generator(client_amount):
@@ -125,6 +129,27 @@ def create_filter():
       - ./filter/filters/{FILTER_MOVIES_BY_2000}:/{FILTER_MOVIES_BY_2000}
       - ./filter/filters/{FILTER_MOVIES_BY_ARG_SPA}:/{FILTER_MOVIES_BY_ARG_SPA}
       - ./filter/filters/{FILTER_MOVIES_BY_ARG}:/{FILTER_MOVIES_BY_ARG}
+      - ./filter/filters/{FILTER_MOVIES_BY_SINGLE_COUNTRY}:/{FILTER_MOVIES_BY_SINGLE_COUNTRY}
+    """ 
+    return filter_cont
+
+def create_reducer():
+    filter_cont = f"""
+  filter:
+    container_name: filter
+    image: filter:latest
+    networks:
+      - {NETWORK_NAME}
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/{CONFIG_FILE}:/{CONFIG_FILE}
+      - ./filter/filters/{REDUCER_COMMANDS_TOP5}:/{REDUCER_COMMANDS_TOP5}
+      - ./filter/filters/{REDUCER_COMMANDS_MAX_MIN}:/{REDUCER_COMMANDS_MAX_MIN}
+      - ./filter/filters/{REDUCER_COMMANDS_TOP10}:/{REDUCER_COMMANDS_TOP10}
     """ 
     return filter_cont
 

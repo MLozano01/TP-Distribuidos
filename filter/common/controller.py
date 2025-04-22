@@ -40,6 +40,5 @@ class Controller:
     def stop(self):
         for filter in self.all_filters:
             if filter.is_alive():
-                # filter.end_filter()
-                filter.join()
                 filter.terminate()
+                filter.join()
