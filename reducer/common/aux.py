@@ -37,16 +37,9 @@ def parse_final_result(reduce_by, partial_results):
 
 def reduce_top(data_to_reduce, reduce_args, result):
 
-    logging.info(f"DATA TO REDUCE {data_to_reduce}" )
-
     result.setdefault(reduce_args[0], [])   
 
-    logging.info(f"Result: {result}")
-    logging.info(f"Reduce args: {result[reduce_args[0]]}")
-    
     for data in data_to_reduce.aggr_row:
-        logging.info(f"Data: {data}")
-
         if result[reduce_args[0]] == [] or len(result[reduce_args[0]]) < int(reduce_args[1]):
             result[reduce_args[0]].append(data)
             continue
@@ -55,7 +48,7 @@ def reduce_top(data_to_reduce, reduce_args, result):
                 result[reduce_args[0]][-1] = data
             result.append(data)
 
-    result[reduce_args[0]].sort(key=lambda x: getattr(x, reduce_args[0]), reverse=True)
+    result[reduce_args[0]].sort(key=lambda x: getattr(x, reduce_args[2]), reverse=True)
 
     return result
 
@@ -68,8 +61,6 @@ def reduce_avg(data_to_reduce, reduce_args, result):
 
         result[attribute.key]["sum"] += attribute.sum
         result[attribute.key]["count"] += attribute.count
-
-    # logging.info(f"Result: {result}")
 
     return result
 
