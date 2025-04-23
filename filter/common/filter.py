@@ -2,87 +2,47 @@ from protocol.rabbit_protocol import RabbitMQ
 from common.aux import parse_filter_funct
 import logging
 import json
-from protocol.protocol import Protocol
+from protocol.protocol import Protocol, MOVIES_FILE_CODE, FileType
+from protocol import files_pb2
 
 
 class Filter:
     def __init__(self, **kwargs):
-        self.queue_rcv = None
-        self.queue_snd_ratings = None # Sender for ratings joiners
-        self.queue_snd_credits = None # Sender for credits joiners
-        self.queue_snd_single = None  # Sender for non-sharded case
+        self.protocol = Protocol()
+        self.queue_rcv = None # For receiving movies data + finished signal
+        self.queue_snd_movies_to_ratings_joiner = None
+        self.queue_snd_movies_to_credits_joiner = None
+        self.queue_snd_movies = None  # For publishing movies data
+        self.finished_filter_arg_step_publisher = None # for notifying joiners
 
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-        # Ensure publish_by_movie_id attribute exists, default to False if somehow missing
-        if not hasattr(self, 'publish_by_movie_id'):
-            logging.warning("'publish_by_movie_id' not found in config, defaulting to False.")
-            self.publish_by_movie_id = False
+        # Ensure publish_to_joiners attribute exists, default to False if somehow missing
+        if not hasattr(self, 'publish_to_joiners'):
+            logging.warning("'publish_to_joiners' not found in config, defaulting to False.")
+            self.publish_to_joiners = False
 
         self.is_alive = True
 
     def _settle_queues(self):
-        host = getattr(self, 'rabbit_host', 'rabbitmq') # Use getattr with default
+        self.queue_rcv = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type)
 
-        # Initialize Receiver queue (check attributes exist)
-        try:
-            self.queue_rcv = RabbitMQ(
-                self.exchange_rcv,
-                self.queue_rcv_name,
-                self.routing_rcv_key,
-                self.exc_rcv_type
-            )
-            logging.info("Initialized receiver queue.")
-        except AttributeError as e:
-            logging.error(f"Missing receiver configuration attribute: {e}")
-        except Exception as e:
-            logging.error(f"Error initializing receiver queue: {e}")
+        # Setup DATA sender(s) based on publish_to_joiners flag
+        if self.publish_to_joiners:
+            self.queue_snd_movies_to_ratings_joiner = RabbitMQ(self.exchange_snd_ratings, None, None, self.exc_snd_type_ratings)
+            logging.info(f"Initialized ratings sender: exchange={self.queue_snd_movies_to_ratings_joiner.exchange}, type={self.queue_snd_movies_to_ratings_joiner.exc_type}")
 
-        # Setup sender(s) based on publish_by_movie_id flag
-        if self.publish_by_movie_id:
-            # Initialize sender for RATINGS joiners
-            try:
-                self.queue_snd_ratings = RabbitMQ(
-                    self.exchange_snd_ratings,
-                    None, # Queue name not needed for publisher
-                    None, # Default routing key not needed for publisher when overridden
-                    self.exc_snd_type_ratings
-                )
-                logging.info(f"Initialized ratings sender: exchange={self.queue_snd_ratings.exchange}, type={self.queue_snd_ratings.exc_type}")
-            except AttributeError as e:
-                 logging.error(f"Missing config attribute for ratings sender: {e}")
-            except Exception as e:
-                 logging.error(f"Error initializing ratings sender: {e}")
+            self.queue_snd_movies_to_credits_joiner = RabbitMQ(self.exchange_snd_credits, None, None, self.exc_snd_type_credits)
+            logging.info(f"Initialized credits sender: exchange={self.queue_snd_movies_to_credits_joiner.exchange}, type={self.queue_snd_movies_to_credits_joiner.exc_type}")
 
-            # Initialize sender for CREDITS joiners
-            try:
-                self.queue_snd_credits = RabbitMQ(
-                    self.exchange_snd_credits,
-                    None,
-                    None,
-                    self.exc_snd_type_credits
-                )
-                logging.info(f"Initialized credits sender: exchange={self.queue_snd_credits.exchange}, type={self.queue_snd_credits.exc_type}")
-            except AttributeError as e:
-                 logging.error(f"Missing config attribute for credits sender: {e}")
-            except Exception as e:
-                 logging.error(f"Error initializing credits sender: {e}")
+            self.finished_filter_arg_step_publisher = RabbitMQ("filter_arg_step_finished", None, "", "fanout")
+
         else:
-            # Setup single sender if not publishing by movie id
-            try:
-                 self.queue_snd_single = RabbitMQ(
-                     self.exchange_snd,
-                     self.queue_snd_name,
-                     self.routing_snd_key,
-                     self.exc_snd_type
-                 )
-                 logging.info(f"Initialized single sender: exchange={self.queue_snd_single.exchange}, type={self.queue_snd_single.exc_type}, key={self.queue_snd_single.key}")
-            except AttributeError as e:
-                 logging.error(f"Missing config attribute for single sender: {e}")
-            except Exception as e:
-                 logging.error(f"Error initializing single sender: {e}")
+            self.queue_snd_movies = RabbitMQ(self.exchange_snd, self.queue_snd_name, self.routing_snd_key, self.exc_snd_type)
+            logging.info(f"Initialized single sender: exchange={self.queue_snd_movies.exchange}, type={self.queue_snd_movies.exc_type}, key={self.queue_snd_movies.key}")
         
+
     def run(self):
         """Start the filter to consume messages from the queue."""
         self._settle_queues()
@@ -94,18 +54,44 @@ class Filter:
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
         logging.info(f"Received message, with routing key: {method.routing_key}")
-        self.filter(body)
+        decoded_msg = self.protocol.decode_movies_msg(body)
+            
+        if decoded_msg.finished:
+            logging.info("Received MOVIES finished signal from server on data channel.")
+            self._publish_movie_finished_signal()
+            return
+        self.filter(decoded_msg)
+
+    def filter(self, decoded_msg):
+        try:
+            result = parse_filter_funct(decoded_msg, self.filter_by, self.file_name)
+            
+            if result:
+                if self.publish_to_joiners:
+                    self._publish_individually_by_movie_id(result, self.protocol)
+                else:
+                    if hasattr(self, 'queue_snd_movies') and self.queue_snd_movies:
+                            logging.info(f"Publishing batch of {len(result)} filtered '{self.file_name}' messages with routing key: '{self.queue_snd_movies.key}' to exchange '{self.queue_snd_movies.exchange}' ({self.queue_snd_movies.exc_type}).")
+                            self.queue_snd_movies.publish(self.protocol.create_movie_list(result))
+                    else:
+                            logging.error("Single sender queue not initialized for non-sharded publish.")
+            else:
+                logging.info(f"No {self.file_name} matched the filter criteria.")
+
+        except Exception as e:
+            logging.error(f"Error processing message: {e}")
+            return
 
     def _publish_individually_by_movie_id(self, result_list, protocol):
         """Helper function to publish filtered movies individually to BOTH exchanges."""
-        # Check if both senders were initialized successfully
-        if not hasattr(self, 'queue_snd_ratings') or not self.queue_snd_ratings or \
-           not hasattr(self, 'queue_snd_credits') or not self.queue_snd_credits:
-             logging.error("Cannot publish by movie_id: One or both sender queues are not initialized.")
+        # Check if both senders were initialized successfully using correct attribute names
+        if not hasattr(self, 'queue_snd_movies_to_ratings_joiner') or not self.queue_snd_movies_to_ratings_joiner or \
+           not hasattr(self, 'queue_snd_movies_to_credits_joiner') or not self.queue_snd_movies_to_credits_joiner:
+             logging.error("Cannot publish by movie_id: One or both sender queues (ratings/credits joiner) are not initialized.")
              return
 
-        exchange_ratings = self.queue_snd_ratings.exchange
-        exchange_credits = self.queue_snd_credits.exchange
+        exchange_ratings = self.queue_snd_movies_to_ratings_joiner.exchange
+        exchange_credits = self.queue_snd_movies_to_credits_joiner.exchange
         logging.info(f"Publishing {len(result_list)} filtered '{self.file_name}' messages individually by movie_id to exchanges '{exchange_ratings}' and '{exchange_credits}'.")
 
         published_count = 0
@@ -123,14 +109,14 @@ class Filter:
 
                 # Publish to RATINGS joiner exchange
                 try:
-                    self.queue_snd_ratings.publish(single_movie_batch_bytes, routing_key=pub_routing_key)
+                    self.queue_snd_movies_to_ratings_joiner.publish(single_movie_batch_bytes, routing_key=pub_routing_key)
                     published_to_ratings = True
                 except Exception as e_pub_r:
                      logging.error(f"Failed to publish movie ID {movie.id} to RATINGS exchange '{exchange_ratings}': {e_pub_r}")
 
                 # Publish to CREDITS joiner exchange
                 try:
-                     self.queue_snd_credits.publish(single_movie_batch_bytes, routing_key=pub_routing_key)
+                     self.queue_snd_movies_to_credits_joiner.publish(single_movie_batch_bytes, routing_key=pub_routing_key)
                      published_to_credits = True
                 except Exception as e_pub_c:
                      logging.error(f"Failed to publish movie ID {movie.id} to CREDITS exchange '{exchange_credits}': {e_pub_c}")
@@ -143,31 +129,17 @@ class Filter:
 
         logging.info(f"Finished publishing {published_count}/{len(result_list)} messages individually to both exchanges.")
 
-    def filter(self, data):
-        try:
-            protocol = Protocol()
-            decoded_msg = protocol.decode_movies_msg(data)
-            result = parse_filter_funct(decoded_msg, self.filter_by, self.file_name)
-            
-            if result:
-                if self.publish_by_movie_id:
-                    self._publish_individually_by_movie_id(result, protocol)
-                else:
-                    # Publish batch to single destination using default key
-                    if hasattr(self, 'queue_snd_single') and self.queue_snd_single:
-                         logging.info(f"Publishing batch of {len(result)} filtered '{self.file_name}' messages with routing key: '{self.queue_snd_single.key}' to exchange '{self.queue_snd_single.exchange}' ({self.queue_snd_single.exc_type}).")
-                         self.queue_snd_single.publish(protocol.create_movie_list(result)) # Use default key
-                    else:
-                         logging.error("Single sender queue not initialized for non-sharded publish.")
-            else:
-                logging.info(f"No {self.file_name} matched the filter criteria.")
 
-        except json.JSONDecodeError as e:
-            logging.error(f"Failed to decode JSON: {e}")
-            return
-        except Exception as e:
-            logging.error(f"Error processing message: {e}")
-            return
+    def _publish_movie_finished_signal(self):
+        """Publishes the movie finished signal. If its to joiners it publishis to a specific fanout exchange, otherwise it publishes to the default key of the single sender queue."""
+        if self.publish_to_joiners:
+            self.finished_filter_arg_step_publisher.publish(self.protocol.get_finished_message(FileType.MOVIES))
+            logging.info(f"Published movie finished signal to {self.finished_filter_arg_step_publisher.exchange}")
+        else:
+            msg = files_pb2.MoviesCSV()
+            msg.finished = True
+            self.queue_snd_movies.publish(msg.SerializeToString())
+            logging.info(f"Published movie finished signal to {self.queue_snd_movies.exchange}")
 
     def end_filter(self):
         """End the filter and close the queue."""
@@ -175,18 +147,22 @@ class Filter:
             try: self.queue_rcv.close_channel()
             except Exception as e: logging.error(f"Error closing receiver channel: {e}")
 
-        # Close all potential sender channels safely
-        if hasattr(self, 'queue_snd_ratings') and self.queue_snd_ratings:
-            try: self.queue_snd_ratings.close_channel()
+        if hasattr(self, 'queue_snd_ratings') and self.queue_snd_movies_to_ratings_joiner:
+            try: self.queue_snd_movies_to_ratings_joiner.close_channel()
             except Exception as e: logging.error(f"Error closing ratings sender channel: {e}")
 
-        if hasattr(self, 'queue_snd_credits') and self.queue_snd_credits:
-            try: self.queue_snd_credits.close_channel()
+        if hasattr(self, 'queue_snd_credits') and self.queue_snd_movies_to_credits_joiner:
+            try: self.queue_snd_movies_to_credits_joiner.close_channel()
             except Exception as e: logging.error(f"Error closing credits sender channel: {e}")
 
         if hasattr(self, 'queue_snd_single') and self.queue_snd_single:
              try: self.queue_snd_single.close_channel()
              except Exception as e: logging.error(f"Error closing single sender channel: {e}")
+
+        # Close control consumer and publisher
+        if self.movies_control_publisher:
+            try: self.movies_control_publisher.close_channel()
+            except Exception as e: logging.error(f"Error closing movie control publisher channel: {e}")
 
         self.is_alive = False
         logging.info("Filter Stopped")
