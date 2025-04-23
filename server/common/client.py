@@ -54,49 +54,53 @@ class Client:
       
       type, msg = self.protocol.decode_msg(buffer)
 
-      # Check for finished flag
       if msg.finished:
-          # Send control signal code for Ratings/Credits via Control Publisher
-          if type == FileType.RATINGS or type == FileType.CREDITS:
-              logging.info(f"Received finished signal for type {type.name}. Publishing type code to control exchange...")
-              type_code = None
-              if type == FileType.RATINGS:
-                  type_code = RATINGS_FILE_CODE
-              elif type == FileType.CREDITS:
-                  type_code = CREDITS_FILE_CODE
-
-              if type_code is not None and self.file_finished_server_step_publisher:
-                  try:
-                      self.file_finished_server_step_publisher.publish(self.protocol.create_finished_message_for_joiners(type))
-                      logging.info(f"Published finish signal message for {type.name} to {self.file_finished_server_step_publisher.exchange}")
-                  except Exception as e_pub:
-                      logging.error(f"Failed to publish finish signal message for {type.name} to control exchange: {e_pub}")
-              elif not self.file_finished_server_step_publisher:
-                  logging.error(f"Control publisher not initialized. Cannot send finish signal for {type.name}.")
-              else:
-                  logging.warning(f"Could not determine type code for finished signal: {type.name}")
-          # Send full original Movies finished message via Movie Data Queue
-          elif type == FileType.MOVIES:
-              logging.info(f"Received finished signal for type {type.name}. Forwarding full message to data exchange...")
-              try:
-                  # Publish the original raw buffer (includes code/len/payload)
-                  self.movies_queue.publish(msg.SerializeToString())
-                  logging.info(f"Forwarded full MOVIES finished message to {self.movies_queue.exchange}")
-              except Exception as e_pub:
-                  logging.error(f"Failed to forward full MOVIES finished message: {e_pub}")
-          else:
-               logging.warning(f"Received finished signal for unhandled type: {type.name}")
-      
-      # If not finished, process data
+          self._handle_finished_message(type, msg)
       else:
-          if type == FileType.MOVIES:
-              self.filter_movies(msg)
-              time.sleep(1)
-          elif type == FileType.RATINGS:
-              self.filter_ratings(msg)
+          self._handle_data_message(type, msg)
+
+  def _handle_finished_message(self, type, msg):
+      """Handles received messages where the finished flag is set."""
+      # Send control signal code for Ratings/Credits via Control Publisher
+      if type == FileType.RATINGS or type == FileType.CREDITS:
+          logging.info(f"Received finished signal for type {type.name}. Publishing type code to control exchange...")
+          type_code = None
+          if type == FileType.RATINGS:
+              type_code = RATINGS_FILE_CODE
           elif type == FileType.CREDITS:
-              self.filter_credits(msg)
-  
+              type_code = CREDITS_FILE_CODE
+
+          if type_code is not None and self.file_finished_server_step_publisher:
+              try:
+                  self.file_finished_server_step_publisher.publish(self.protocol.create_finished_message_for_joiners(type))
+                  logging.info(f"Published finish signal message for {type.name} to {self.file_finished_server_step_publisher.exchange}")
+              except Exception as e_pub:
+                  logging.error(f"Failed to publish finish signal message for {type.name} to control exchange: {e_pub}")
+          elif not self.file_finished_server_step_publisher:
+              logging.error(f"Control publisher not initialized. Cannot send finish signal for {type.name}.")
+          else:
+              logging.warning(f"Could not determine type code for finished signal: {type.name}")
+      # Send full original Movies finished message via Movie Data Queue
+      elif type == FileType.MOVIES:
+          logging.info(f"Received finished signal for type {type.name}. Forwarding full message to data exchange...")
+          try:
+              # Publish ONLY the serialized payload as Filter expects this
+              self.movies_queue.publish(msg.SerializeToString())
+              logging.info(f"Forwarded full MOVIES finished message to {self.movies_queue.exchange}")
+          except Exception as e_pub:
+              logging.error(f"Failed to forward full MOVIES finished message: {e_pub}")
+      else:
+           logging.warning(f"Received finished signal for unhandled type: {type.name}")
+
+  def _handle_data_message(self, type, msg):
+      """Handles received messages containing data (finished flag is false)."""
+      if type == FileType.MOVIES:
+          self.filter_movies(msg)
+          time.sleep(1)
+      elif type == FileType.RATINGS:
+          self.filter_ratings(msg)
+      elif type == FileType.CREDITS:
+          self.filter_credits(msg)
 
   def filter_movies(self, movies_csv):
     movies_pb = files_pb2.MoviesCSV()
