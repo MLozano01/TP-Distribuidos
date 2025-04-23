@@ -44,7 +44,7 @@ class Client:
           self.send_batch(False, type)
       self.send_batch(True, type)
       # Send the final "finished" message
-      finished_message = self.protocol.get_finished_message(type)
+      finished_message = self.protocol.create_finished_message_for_joiners(type)
       if finished_message:
           logging.info(f"Sending finished message for type {type.name}")
           self.client_socket.sendall(finished_message)

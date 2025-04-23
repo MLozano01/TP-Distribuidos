@@ -105,7 +105,6 @@ class RabbitMQConsumer(RabbitMQBase):
         elif self.requested_queue_name is None:
             self.exclusive = True
             self.auto_delete = True
-            self.durable = False
 
         self._setup_consumer()
 

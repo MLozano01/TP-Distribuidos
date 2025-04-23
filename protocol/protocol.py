@@ -62,6 +62,32 @@ class Protocol:
 
     return message
 
+  def create_finished_message_for_joiners(self, type):
+      """Creates and serializes a 'finished' message for the given type."""
+      msg = None
+      if type == FileType.MOVIES:
+          msg = files_pb2.MoviesCSV()
+          msg.finished = True
+      elif type == FileType.RATINGS:
+          msg = files_pb2.RatingsCSV()
+          msg.finished = True
+      elif type == FileType.CREDITS:
+          msg = files_pb2.CreditsCSV()
+          msg.finished = True
+      else:
+          return bytearray() # Unknown type
+
+      serialized_msg = msg.SerializeToString()
+      len_msg = len(serialized_msg)
+
+      message = bytearray()
+      code = self.__type_codes.get(type)
+      message.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
+      message.extend(len_msg.to_bytes(INT_LENGTH, byteorder='big'))
+      message.extend(serialized_msg)
+
+      return message
+
   def add_to_batch(self, type, data):
     is_ready = False
     msg_data = self.update_msg(type, data)
