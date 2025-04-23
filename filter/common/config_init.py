@@ -57,18 +57,18 @@ def config_filter(filter_file):
         config_params["file_name"] = os.getenv('FILE', filter_config["DEFAULT"]["FILE"])
         config_params[f"filter_by"] = os.getenv("FILTER", filter_config["DEFAULT"]["FILTER"])
 
-        # --- Read and convert PUBLISH_BY_MOVIE_ID first --- 
-        publish_by_id_str = os.getenv('PUBLISH_BY_MOVIE_ID', filter_config["DEFAULT"]["PUBLISH_BY_MOVIE_ID"]).strip().lower()
+        # --- Read and convert PUBLISH_TO_JOINERS first --- 
+        publish_by_id_str = os.getenv('PUBLISH_TO_JOINERS', filter_config["DEFAULT"]["PUBLISH_TO_JOINERS"]).strip().lower()
         if publish_by_id_str == 'true':
-            config_params["publish_by_movie_id"] = True
+            config_params["publish_to_joiners"] = True
         elif publish_by_id_str == 'false':
-            config_params["publish_by_movie_id"] = False
+            config_params["publish_to_joiners"] = False
         else:
-            raise ValueError(f"Invalid boolean value for PUBLISH_BY_MOVIE_ID: {publish_by_id_str}")
+            raise ValueError(f"Invalid boolean value for PUBLISH_TO_JOINERS: {publish_by_id_str}")
         # ----------------------------------------------
 
         # --- Conditionally read sender keys --- 
-        if config_params["publish_by_movie_id"]:
+        if config_params["publish_to_joiners"]:
             # Read dual sender keys (required for this mode)
             config_params["exchange_snd_ratings"] = os.getenv('EXCHANGE_SND_RATINGS', filter_config["DEFAULT"]["EXCHANGE_SND_RATINGS"])
             config_params["exc_snd_type_ratings"] = os.getenv('TYPE_SND_RATINGS', filter_config["DEFAULT"]["TYPE_SND_RATINGS"])
