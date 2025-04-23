@@ -67,4 +67,4 @@ class Client:
         return
       
       msg = protocol.decode_result(buffer)
-      logging.info(f"RESULT: {msg}")
+      # logging.info(f"RESULT: {msg}")

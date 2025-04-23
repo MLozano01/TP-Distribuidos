@@ -141,7 +141,7 @@ class Client:
   def result_controller_func(self, ch, method, properties, body):
     try:
       # data = json.loads(body)
-      logging.info("got result: {body}")
+      # logging.info("got result: {body}")
       msg = self.protocol.create_result(body)
       self.socket.sendall(msg)
     except json.JSONDecodeError as e:

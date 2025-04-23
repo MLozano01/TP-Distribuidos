@@ -110,7 +110,7 @@ class Transformer:
 
         try:
             outgoing_movies_msg = self.protocol.create_movie_list(processed_movies)
-            logging.info(f"Sending {len(processed_movies)} processed movies")
+            #logging.info(f"Sending {len(processed_movies)} processed movies")
             self.queue_snd.publish(outgoing_movies_msg)
             logging.info(f"Successfully processed and sent {len(processed_movies)} movies matching criteria.")
         except Exception as e:
@@ -126,7 +126,7 @@ class Transformer:
                  logging.warning("Received empty or invalid Protobuf movies batch structure. Skipping.")
                  return
 
-            logging.info(f"Processing batch with {len(incoming_movies_msg.movies)} movies (from Protobuf list).")
+            # logging.info(f"Processing batch with {len(incoming_movies_msg.movies)} movies (from Protobuf list).")
 
             processed_movies_list = []
             for incoming_movie in incoming_movies_msg.movies:
