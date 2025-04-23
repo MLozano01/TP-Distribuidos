@@ -48,27 +48,11 @@ def reduce_top(data_to_filter, reduce_args, result):
     return result
 
 def reduce_avg(data_to_filter, reduce_args, result):
+
+    # {'POSITIVE': {'sum': 4.336928069591522, 'count': 2}}
+
     pass
 
 
 def reduce_max_min(data_to_filter, filter_by, result):
-    
-    for data in data_to_filter.movies:
-        filter_info = filter_by.split("_")
-
-        amount_to_check = int(filter_info[3])
-
-        if len(data.countries) != amount_to_check:
-            continue
-        
-        op = filter_info[2]
-        countries_to_check = []
-
-        for country in data.countries:
-            if country.name not in countries_to_check:
-                countries_to_check.append(country)
-
-        if op in operators and operators[op](set(countries_to_check), set(filter_info[4:])):
-            result.append(data)
-
-    return result
+    pass

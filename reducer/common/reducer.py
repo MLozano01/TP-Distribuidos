@@ -26,14 +26,17 @@ class Reducer:
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
         logging.info(f"Received message, with routing key: {method.routing_key}")
-        self.reduce(body)
+        self.reducer(body)
 
-    def reduce(self, data):
+    def reducer(self, data):
         try:
             protocol = Protocol()
-            decoded_msg = protocol.decode_movies_msg(data)
 
-            result = parse_reduce_funct(decoded_msg, self.reduce_by)
+            decoded_msg = protocol.decode_aggr_batch(data)
+
+            logging.info(f"Decoded message: {decoded_msg}")
+
+            result = parse_reduce_funct(protocol.decode_aggr_batch(data), self.reduce_by)
 
             if result:
                 self.queue_snd.publish(protocol.create_movie_list(result))

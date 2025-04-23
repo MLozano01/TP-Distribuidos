@@ -19,6 +19,7 @@ docker-image:
 	docker build -f ./filter/Dockerfile -t "filter:latest" .
 	docker build -f ./transformer/Dockerfile -t "transformer:latest" .
 	docker build -f ./aggregator/Dockerfile -t "aggregator:latest" .
+	docker build -f ./reducer/Dockerfile -t "reducer:latest" .
 .PHONY: docker-image
 
 docker-compose-up: docker-image

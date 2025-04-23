@@ -24,9 +24,9 @@ def initialize_config():
 
     try:
         config_params["logging_level"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"])
-        config_params["filter_num"] = int(os.getenv('FILTER_NUM', config["DEFAULT"]["FILTER_NUM"]))
-        for i in range(config_params["filter_num"]):
-            config_params[f"filter_{i}"] = os.getenv(f'FILTER_{i}', config["DEFAULT"][f"FILTER_{i}"])
+        config_params["reducer_num"] = int(os.getenv('REDUCER_NUM', config["DEFAULT"]["REDUCER_NUM"]))
+        for i in range(config_params["reducer_num"]):
+            config_params[f"reducer_{i}"] = os.getenv(f'REDUCER_{i}', config["DEFAULT"][f"REDUCER_{i}"])
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
     except ValueError as e:
@@ -34,7 +34,7 @@ def initialize_config():
 
     return config_params
 
-def config_filter(filter_file):
+def config_reducer(filter_file):
     """ Parse env variables or config file to find program config params
 
     Function that search and parse program configuration parameters in the
@@ -47,22 +47,20 @@ def config_filter(filter_file):
     config_params = {}
 
     
-    filter_config = ConfigParser(os.environ)
-    filter_config.read(filter_file)
+    reducer_config = ConfigParser(os.environ)
+    reducer_config.read(filter_file)
 
     try:
-        config_params["queue_rcv_name"] = os.getenv('QUEUE_RCV_NAME', filter_config["DEFAULT"]["QUEUE_RCV_NAME"])
-        config_params["routing_rcv_key"] = os.getenv('ROUTING_KEY_RCV', filter_config["DEFAULT"]["ROUTING_KEY_RCV"])
-        config_params["exchange_rcv"] = os.getenv('EXCHANGE_RCV', filter_config["DEFAULT"]["EXCHANGE_RCV"])
-        config_params["exc_rcv_type"] = os.getenv('TYPE_RCV', filter_config["DEFAULT"]["TYPE_RCV"]) 
-        config_params["queue_snd_name"] = os.getenv('QUEUE_SND_NAME', filter_config["DEFAULT"]["QUEUE_SND_NAME"])
-        config_params["routing_snd_key"] = os.getenv('ROUTING_KEY_SND', filter_config["DEFAULT"]["ROUTING_KEY_SND"])
-        config_params["exchange_snd"] = os.getenv('EXCHANGE_SND', filter_config["DEFAULT"]["EXCHANGE_SND"])
-        config_params["exc_snd_type"] = os.getenv('TYPE_SND', filter_config["DEFAULT"]["TYPE_SND"])
+        config_params["queue_rcv_name"] = os.getenv('QUEUE_RCV_NAME', reducer_config["DEFAULT"]["QUEUE_RCV_NAME"])
+        config_params["routing_rcv_key"] = os.getenv('ROUTING_KEY_RCV', reducer_config["DEFAULT"]["ROUTING_KEY_RCV"])
+        config_params["exchange_rcv"] = os.getenv('EXCHANGE_RCV', reducer_config["DEFAULT"]["EXCHANGE_RCV"])
+        config_params["exc_rcv_type"] = os.getenv('TYPE_RCV', reducer_config["DEFAULT"]["TYPE_RCV"]) 
+        config_params["queue_snd_name"] = os.getenv('QUEUE_SND_NAME', reducer_config["DEFAULT"]["QUEUE_SND_NAME"])
+        config_params["routing_snd_key"] = os.getenv('ROUTING_KEY_SND', reducer_config["DEFAULT"]["ROUTING_KEY_SND"])
+        config_params["exchange_snd"] = os.getenv('EXCHANGE_SND', reducer_config["DEFAULT"]["EXCHANGE_SND"])
+        config_params["exc_snd_type"] = os.getenv('TYPE_SND', reducer_config["DEFAULT"]["TYPE_SND"])
 
-        config_params["file_name"] = os.getenv('FILE', filter_config["DEFAULT"]["FILE"])
-
-        config_params[f"filter_by"] = os.getenv("FILTER", filter_config["DEFAULT"]["FILTER"])
+        config_params[f"reduce_by"] = os.getenv("REDUCER", reducer_config["DEFAULT"]["REDUCER"])
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
     except ValueError as e:

@@ -2,7 +2,7 @@ from multiprocessing import Process
 import logging
 import common.config_init
 from utils.utils import config_logger
-from reducer.common.reducer import Reducer
+from common.reducer import Reducer
 
 
 class Controller:

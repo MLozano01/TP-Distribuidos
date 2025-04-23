@@ -288,3 +288,8 @@ class Protocol:
         aggr_pb.count =  to_int(results.get("count"))
     batch_pb_str = batch_pb.SerializeToString()
     return batch_pb_str
+
+  def decode_aggr_batch(self, buffer):
+    aggr = files_pb2.AggregationBatch()
+    aggr.ParseFromString(buffer)
+    return aggr

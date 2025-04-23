@@ -11,16 +11,14 @@ def main():
         controller = common.controller.Controller(config)
         controller.start()
     except KeyboardInterrupt:
-        logging.info("Filter stopped by user")
-    except Exception as e:
-        logging.error(f"Filter error: {e}")
-    finally:
+        logging.info("Reducer stopped by user")
         controller.stop()
-        logging.info("Filter stopped")
-
+    except Exception as e:
+        logging.error(f"Reducer error: {e}")
+        controller.stop()
     
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    logging.info("Starting filter module")
+    logging.info("Starting Reducer Mdule")
     main()

@@ -37,6 +37,7 @@ def create_yaml_file(client_amount, transformer_replicas):
     filter_cont = create_filter()
     transformer = create_transformer(transformer_replicas)
     aggregator = create_aggregator()
+    reducer = create_reducer()
     content = f"""
 version: "3.8"
 services:
@@ -46,6 +47,7 @@ services:
   {filter_cont}
   {transformer}
   {aggregator}
+  {reducer}
 networks:
   {network}
 """
@@ -141,10 +143,10 @@ def create_filter():
     return filter_cont
 
 def create_reducer():
-    filter_cont = f"""
-  filter:
-    container_name: filter
-    image: filter:latest
+    reducer_cont = f"""
+  reducer:
+    container_name: reducer
+    image: reducer:latest
     networks:
       - {NETWORK_NAME}
     depends_on:
@@ -154,12 +156,9 @@ def create_reducer():
       - rabbitmq
     volumes:
       - ./reducer/{CONFIG_FILE}:/{CONFIG_FILE}
-      - ./reducer/reducers/{REDUCER_COMMANDS_TOP5}:/{REDUCER_COMMANDS_TOP5}
-      - ./reducer/reducers/{REDUCER_COMMANDS_MAX_MIN}:/{REDUCER_COMMANDS_MAX_MIN}
-      - ./reducer/reducers/{REDUCER_COMMANDS_TOP10}:/{REDUCER_COMMANDS_TOP10}
       - ./reducer/reducers/{REDUCER_COMMANDS_AVERAGE}:/{REDUCER_COMMANDS_AVERAGE}
     """ 
-    return filter_cont
+    return reducer_cont
 
 def create_aggregator():
   aggr_cont = f"""
