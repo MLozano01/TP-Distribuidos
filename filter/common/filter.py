@@ -33,9 +33,7 @@ class Filter:
             protocol = Protocol()
             decoded_msg = protocol.decode_movies_msg(data)
 
-
             result = parse_filter_funct(decoded_msg, self.filter_by, self.file_name)
-
             
             if result:
                 self.queue_snd.publish(protocol.create_movie_list(result))

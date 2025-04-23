@@ -20,8 +20,6 @@ def parse_filter_funct(data_to_filter, filter_by, file_name):
 
     args = _get_filter_args(filter_by)
 
-    logging.info(f"Filter args: {args}")
-
     if file_name == "movies" and args[0] == "release_date":
         return filter_movies_by_date(data_to_filter, args)
     
@@ -49,20 +47,13 @@ def filter_movies_by_country(data_to_filter, filter_args):
     
     for data in data_to_filter.movies:
 
-        amount_to_check = int(filter_args[2])
-
-        if len(data.countries) != amount_to_check:
-            continue
-        
-        op = filter_args[1]
         countries_to_check = []
-
         for country in data.countries:
             if country.name not in countries_to_check:
-                countries_to_check.append(country)
+                countries_to_check.append(country.name)
 
-        if op in operators and operators[op](set(countries_to_check), set(filter_args[3:])):
-            result.append(data)
+        if set(filter_args[3:]).issubset(set(countries_to_check)):
+            result.append(data)            
 
     return result
 
