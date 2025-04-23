@@ -43,6 +43,13 @@ class Client:
         if ready_to_send:
           self.send_batch(False, type)
       self.send_batch(True, type)
+      # Send the final "finished" message
+      finished_message = self.protocol.create_finished_message_for_joiners(type)
+      if finished_message:
+          logging.info(f"Sending finished message for type {type.name}")
+          self.client_socket.sendall(finished_message)
+      else:
+          logging.warning(f"Could not generate finished message for type {type.name}")
   
   def send_batch(self, last_send, type):
     message = self.protocol.get_batch_msg(last_send, type)
@@ -67,4 +74,4 @@ class Client:
         return
       
       msg = protocol.decode_result(buffer)
-      logging.info(f"RESULT: {msg}")
+      # logging.info(f"RESULT: {msg}")
