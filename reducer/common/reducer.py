@@ -13,6 +13,7 @@ class Reducer:
         for key, value in kwargs.items():
             setattr(self, key, value)
         self.is_alive = True
+        self.partial_result = {}
 
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type)
@@ -32,14 +33,16 @@ class Reducer:
         try:
             protocol = Protocol()
 
-            decoded_msg = protocol.decode_aggr_batch(data)
+            self.partial_result = parse_reduce_funct(protocol.decode_aggr_batch(data), self.reduce_by, self.partial_result)
 
-            logging.info(f"Decoded message: {decoded_msg}")
+            logging.info(f"Partial result: {self.partial_result}")
 
-            result = parse_reduce_funct(protocol.decode_aggr_batch(data), self.reduce_by)
+            smth = parse_reduce_funct("", "calc_avg", self.partial_result)
 
-            if result:
-                self.queue_snd.publish(protocol.create_movie_list(result))
+            logging.info(f"Partial result: {smth}")
+
+            if self.result:
+                self.queue_snd.publish(protocol.create_movie_list(self.result))
             else:
                 logging.info(f"No  matched the reduce criteria.")
 

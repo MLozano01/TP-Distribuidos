@@ -27,6 +27,10 @@ def parse_reduce_funct(data_to_filter, filter_by, result):
     
     if args[0] == "avg":
         return reduce_avg(data_to_filter, args, result)
+    
+    if args[0] == "calc_avg":
+        return calculate_avg(result)
+
 
 
 def reduce_top(data_to_filter, reduce_args, result):
@@ -49,10 +53,28 @@ def reduce_top(data_to_filter, reduce_args, result):
 
 def reduce_avg(data_to_filter, reduce_args, result):
 
-    # {'POSITIVE': {'sum': 4.336928069591522, 'count': 2}}
 
-    pass
+    for attribute in data_to_filter.aggr_row:
+        result.setdefault(attribute.key, {})
+        result[attribute.key].setdefault("sum", 0)
+        result[attribute.key].setdefault("count", 0)
+        logging.info(f"Attribute: {attribute.key}")
+        result[attribute.key]["sum"] += attribute.value
+        result[attribute.key]["count"] += 1
 
+    return result
+
+def calculate_avg(partial_result):
+    result = {}
+
+    for key, value in partial_result.items():
+        result.setdefault(key, 0)
+        if value["count"] > 0:
+            result[key] = value["sum"] / value["count"]
+        else:
+            result[key]= 0
+    
+    return result
 
 def reduce_max_min(data_to_filter, filter_by, result):
     pass
