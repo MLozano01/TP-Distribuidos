@@ -15,6 +15,7 @@ message RatingCSV {
 // Batch of ratings from file
 message RatingsCSV {
   repeated RatingCSV ratings = 1;
+  optional bool finished = 2;
 }
 // [END ratings messages]
 
@@ -51,6 +52,7 @@ message CreditCSV {
 // Batch of credits from file
 message CreditsCSV {
   repeated CreditCSV credits = 1;
+  optional bool finished = 2;
 }
 // [END credits messages]
 
@@ -122,6 +124,7 @@ message MovieCSV {
 // Batch of movies from file
 message MoviesCSV {
   repeated MovieCSV movies = 1;
+  optional bool finished = 2;
 }
 // [END movies messages]
 
