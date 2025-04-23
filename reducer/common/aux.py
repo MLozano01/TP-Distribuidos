@@ -58,9 +58,11 @@ def reduce_avg(data_to_filter, reduce_args, result):
         result.setdefault(attribute.key, {})
         result[attribute.key].setdefault("sum", 0)
         result[attribute.key].setdefault("count", 0)
-        logging.info(f"Attribute: {attribute.key}")
-        result[attribute.key]["sum"] += attribute.value
-        result[attribute.key]["count"] += 1
+
+        result[attribute.key]["sum"] += attribute.sum
+        result[attribute.key]["count"] += attribute.count
+
+    # logging.info(f"Result: {result}")
 
     return result
 

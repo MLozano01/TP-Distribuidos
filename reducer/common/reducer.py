@@ -39,10 +39,10 @@ class Reducer:
 
             smth = parse_reduce_funct("", "calc_avg", self.partial_result)
 
-            logging.info(f"Partial result: {smth}")
+            logging.info(f"Partial Average: {smth}")
 
-            if self.result:
-                self.queue_snd.publish(protocol.create_movie_list(self.result))
+            if smth:
+                self.queue_snd.publish(protocol.create_movie_list(smth))
             else:
                 logging.info(f"No  matched the reduce criteria.")
 
