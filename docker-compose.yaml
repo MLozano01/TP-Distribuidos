@@ -90,6 +90,7 @@ services:
     volumes:
       - ./aggregator/config.ini:/config.ini
       - ./aggregator/aggregators/aggr_sent_revenue.ini:/aggr_sent_revenue.ini
+      - ./aggregator/aggregators/aggr_country_budget.ini:/aggr_country_budget.ini
     
   
   reducer:
@@ -105,6 +106,7 @@ services:
     volumes:
       - ./reducer/config.ini:/config.ini
       - ./reducer/reducers/average.ini:/average.ini
+      - ./reducer/reducers/top5.ini:/top5.ini
     
 networks:
   tp_network:

@@ -22,6 +22,7 @@ REDUCER_COMMANDS_MAX_MIN = "max-min.ini"
 REDUCER_COMMANDS_AVERAGE = "average.ini"
 
 AGGR_SENT_BY_REV = "aggr_sent_revenue.ini"
+AGGR_COUNTRY_BUDGET = "aggr_country_budget.ini"
 
 
 def docker_yaml_generator(client_amount, transformer_replicas):
@@ -157,6 +158,7 @@ def create_reducer():
     volumes:
       - ./reducer/{CONFIG_FILE}:/{CONFIG_FILE}
       - ./reducer/reducers/{REDUCER_COMMANDS_AVERAGE}:/{REDUCER_COMMANDS_AVERAGE}
+      - ./reducer/reducers/{REDUCER_COMMANDS_TOP5}:/{REDUCER_COMMANDS_TOP5}
     """ 
     return reducer_cont
 
@@ -175,6 +177,7 @@ def create_aggregator():
     volumes:
       - ./aggregator/{CONFIG_FILE}:/{CONFIG_FILE}
       - ./aggregator/aggregators/{AGGR_SENT_BY_REV}:/{AGGR_SENT_BY_REV}
+      - ./aggregator/aggregators/{AGGR_COUNTRY_BUDGET}:/{AGGR_COUNTRY_BUDGET}
     """ 
   return aggr_cont
 

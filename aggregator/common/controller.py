@@ -12,6 +12,8 @@ class Controller:
     def start(self):
         logging.info("Starting aggrs")
 
+        logging.info(f"Starting {self.config['aggr_num']} aggregators")
+
         for i in range(self.config["aggr_num"]):
 
             aggr_config = self.config[f"aggr_{i}"]
@@ -21,8 +23,6 @@ class Controller:
             aggr_config_params = common.config_init.config_aggregator(f'/{aggr_path}.ini')
 
             try:
-                logging.info(f"Starting aggr {i} with config: {aggr_config_params}")
-
                 aggr_instance = Aggregator(**aggr_config_params)
 
                 new_aggr = Process(target=aggr_instance.run, args=())
@@ -37,9 +37,10 @@ class Controller:
             except Exception as e:
                 logging.error(f"Aggr error: {e}")
                 self.stop()
-            finally:
-                for aggr in self.all_aggregators:
-                    aggr.join()
+            # finally:
+
+        for aggr in self.all_aggregators:
+            aggr.join()
     
     def stop(self):
         for aggr in self.all_aggregators:
