@@ -95,12 +95,12 @@ class Client:
   def _handle_data_message(self, type, msg):
       """Handles received messages containing data (finished flag is false)."""
       if type == FileType.MOVIES:
-          self.filter_movies(msg)
-          time.sleep(1)
+        self.filter_movies(msg)
+        time.sleep(1)
       elif type == FileType.RATINGS:
-          self.filter_ratings(msg)
+        self.filter_ratings(msg)
       elif type == FileType.CREDITS:
-          self.filter_credits(msg)
+        self.filter_credits(msg)
 
   def filter_movies(self, movies_csv):
     movies_pb = files_pb2.MoviesCSV()
