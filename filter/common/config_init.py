@@ -59,6 +59,7 @@ def config_filter(filter_file):
         config_params["routing_snd_key"] = os.getenv('ROUTING_KEY_SND', filter_config["DEFAULT"]["ROUTING_KEY_SND"])
         config_params["exchange_snd"] = os.getenv('EXCHANGE_SND', filter_config["DEFAULT"]["EXCHANGE_SND"])
         config_params["exc_snd_type"] = os.getenv('TYPE_SND', filter_config["DEFAULT"]["TYPE_SND"])
+        config_params["publish_by_movie_id"] = os.getenv('PUBLISH_BY_MOVIE_ID', filter_config["DEFAULT"]["PUBLISH_BY_MOVIE_ID"])
 
         config_params["file_name"] = os.getenv('FILE', filter_config["DEFAULT"]["FILE"])
 

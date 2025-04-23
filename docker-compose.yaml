@@ -10,7 +10,8 @@ services:
       - 5672:5672
     networks:
       - tp_network
-    
+    volumes:
+     - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
   
   client1:
     container_name: client1

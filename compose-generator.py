@@ -121,6 +121,8 @@ def create_rabbit():
       - 5672:5672
     networks:
       - {NETWORK_NAME}
+    volumes:
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
     """
     return rabbit
 

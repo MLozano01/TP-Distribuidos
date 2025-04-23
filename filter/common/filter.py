@@ -51,6 +51,7 @@ class Filter:
         try:
             protocol = Protocol()
             decoded_msg = protocol.decode_movies_msg(data)
+
             result = parse_filter_funct(decoded_msg, self.filter_by, self.file_name)
             
             if result:
