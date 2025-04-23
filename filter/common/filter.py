@@ -11,10 +11,10 @@ class Filter:
         self.queue_snd_ratings = None # Sender for ratings joiners
         self.queue_snd_credits = None # Sender for credits joiners
         self.queue_snd_single = None  # Sender for non-sharded case
-        
+
         for key, value in kwargs.items():
             setattr(self, key, value)
-            
+
         # Ensure publish_by_movie_id attribute exists, default to False if somehow missing
         if not hasattr(self, 'publish_by_movie_id'):
             logging.warning("'publish_by_movie_id' not found in config, defaulting to False.")
@@ -24,13 +24,13 @@ class Filter:
 
     def _settle_queues(self):
         host = getattr(self, 'rabbit_host', 'rabbitmq') # Use getattr with default
-        
+
         # Initialize Receiver queue (check attributes exist)
         try:
             self.queue_rcv = RabbitMQ(
-                self.exchange_rcv, 
-                self.queue_rcv_name, 
-                self.routing_rcv_key, 
+                self.exchange_rcv,
+                self.queue_rcv_name,
+                self.routing_rcv_key,
                 self.exc_rcv_type
             )
             logging.info("Initialized receiver queue.")
@@ -54,13 +54,13 @@ class Filter:
                  logging.error(f"Missing config attribute for ratings sender: {e}")
             except Exception as e:
                  logging.error(f"Error initializing ratings sender: {e}")
-                 
+
             # Initialize sender for CREDITS joiners
             try:
                 self.queue_snd_credits = RabbitMQ(
-                    self.exchange_snd_credits, 
-                    None, 
-                    None, 
+                    self.exchange_snd_credits,
+                    None,
+                    None,
                     self.exc_snd_type_credits
                 )
                 logging.info(f"Initialized credits sender: exchange={self.queue_snd_credits.exchange}, type={self.queue_snd_credits.exc_type}")
@@ -100,14 +100,14 @@ class Filter:
         """Helper function to publish filtered movies individually to BOTH exchanges."""
         # Check if both senders were initialized successfully
         if not hasattr(self, 'queue_snd_ratings') or not self.queue_snd_ratings or \
-           not hasattr(self, 'queue_snd_credits') or not self.queue_snd_credits: 
+           not hasattr(self, 'queue_snd_credits') or not self.queue_snd_credits:
              logging.error("Cannot publish by movie_id: One or both sender queues are not initialized.")
              return
-             
+
         exchange_ratings = self.queue_snd_ratings.exchange
         exchange_credits = self.queue_snd_credits.exchange
         logging.info(f"Publishing {len(result_list)} filtered '{self.file_name}' messages individually by movie_id to exchanges '{exchange_ratings}' and '{exchange_credits}'.")
-        
+
         published_count = 0
         for movie in result_list:
             try:
@@ -117,30 +117,30 @@ class Filter:
 
                 single_movie_batch_bytes = protocol.create_movie_list([movie])
                 pub_routing_key = str(movie.id) # Explicit routing key
-                
+
                 published_to_ratings = False
                 published_to_credits = False
-                
+
                 # Publish to RATINGS joiner exchange
                 try:
                     self.queue_snd_ratings.publish(single_movie_batch_bytes, routing_key=pub_routing_key)
                     published_to_ratings = True
                 except Exception as e_pub_r:
                      logging.error(f"Failed to publish movie ID {movie.id} to RATINGS exchange '{exchange_ratings}': {e_pub_r}")
-                     
+
                 # Publish to CREDITS joiner exchange
                 try:
                      self.queue_snd_credits.publish(single_movie_batch_bytes, routing_key=pub_routing_key)
                      published_to_credits = True
                 except Exception as e_pub_c:
                      logging.error(f"Failed to publish movie ID {movie.id} to CREDITS exchange '{exchange_credits}': {e_pub_c}")
-                
+
                 if published_to_ratings and published_to_credits:
                     published_count += 1 # Count only if sent to both
-                    
+
             except Exception as e_inner:
                 logging.error(f"Error processing movie ID {movie.id} before publishing: {e_inner}", exc_info=True)
-                
+
         logging.info(f"Finished publishing {published_count}/{len(result_list)} messages individually to both exchanges.")
 
     def filter(self, data):
@@ -156,38 +156,37 @@ class Filter:
                     # Publish batch to single destination using default key
                     if hasattr(self, 'queue_snd_single') and self.queue_snd_single:
                          logging.info(f"Publishing batch of {len(result)} filtered '{self.file_name}' messages with routing key: '{self.queue_snd_single.key}' to exchange '{self.queue_snd_single.exchange}' ({self.queue_snd_single.exc_type}).")
-                         batch_bytes = protocol.create_movie_list(result)
-                         self.queue_snd_single.publish(batch_bytes) # Use default key
+                         self.queue_snd_single.publish(protocol.create_movie_list(result)) # Use default key
                     else:
                          logging.error("Single sender queue not initialized for non-sharded publish.")
             else:
                 logging.info(f"No {self.file_name} matched the filter criteria.")
 
         except json.JSONDecodeError as e:
-             logging.error(f"Failed to decode JSON: {e}")
-             return
+            logging.error(f"Failed to decode JSON: {e}")
+            return
         except Exception as e:
-             logging.error(f"Error processing message: {e}")
-             return
+            logging.error(f"Error processing message: {e}")
+            return
 
     def end_filter(self):
         """End the filter and close the queue."""
         if self.queue_rcv:
             try: self.queue_rcv.close_channel()
             except Exception as e: logging.error(f"Error closing receiver channel: {e}")
-            
+
         # Close all potential sender channels safely
         if hasattr(self, 'queue_snd_ratings') and self.queue_snd_ratings:
             try: self.queue_snd_ratings.close_channel()
             except Exception as e: logging.error(f"Error closing ratings sender channel: {e}")
-                
+
         if hasattr(self, 'queue_snd_credits') and self.queue_snd_credits:
             try: self.queue_snd_credits.close_channel()
             except Exception as e: logging.error(f"Error closing credits sender channel: {e}")
-                
+
         if hasattr(self, 'queue_snd_single') and self.queue_snd_single:
              try: self.queue_snd_single.close_channel()
              except Exception as e: logging.error(f"Error closing single sender channel: {e}")
-             
+
         self.is_alive = False
         logging.info("Filter Stopped")

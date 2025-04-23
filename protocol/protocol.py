@@ -1,7 +1,6 @@
 from protocol import files_pb2
 from protocol.utils.parsing_proto_utils import *
 from google.protobuf import json_format
-import json
 
 from enum import Enum
 
@@ -277,7 +276,24 @@ class Protocol:
     movies_pb_str = movies_pb.SerializeToString()
     return movies_pb_str
 
-  # Placeholder for creating ActorParticipationsBatch
+  def create_aggr_batch(self, dict_results):
+    batch_pb = files_pb2.AggregationBatch()
+
+    for key, results in dict_results.items():
+      aggr_pb = batch_pb.aggr_row.add()
+      aggr_pb.key = key
+      if "sum" in results:
+        aggr_pb.sum =  to_float(results.get("sum"))
+      if "count" in results:
+        aggr_pb.count =  to_int(results.get("count"))
+    batch_pb_str = batch_pb.SerializeToString()
+    return batch_pb_str
+
+  def decode_aggr_batch(self, buffer):
+    aggr = files_pb2.AggregationBatch()
+    aggr.ParseFromString(buffer)
+    return aggr
+
   def create_actor_participations_batch(self, participations):
       """Creates and serializes an ActorParticipationsBatch message."""
       batch_pb = files_pb2.ActorParticipationsBatch()
@@ -285,7 +301,6 @@ class Protocol:
       batch_pb.participations.extend(participations)
       return batch_pb.SerializeToString()
 
-  # Placeholder for decoding ActorParticipationsBatch (if needed)
   def decode_actor_participations_batch(self, buffer):
       """Deserializes an ActorParticipationsBatch message."""
       batch_pb = files_pb2.ActorParticipationsBatch()

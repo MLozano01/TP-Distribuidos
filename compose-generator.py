@@ -15,6 +15,14 @@ CONFIG_FILE = "config.ini"
 FILTER_MOVIES_BY_2000 = "filter_2000_movies.ini"
 FILTER_MOVIES_BY_ARG_SPA = "filter_Arg_Spa_movies.ini"
 FILTER_MOVIES_BY_ARG = "filter_Arg_movies.ini"
+FILTER_MOVIES_BY_SINGLE_COUNTRY = "filter_single_country_movies.ini"
+
+REDUCER_COMMANDS_TOP5 = "top5.ini"
+REDUCER_COMMANDS_TOP10 = "top10.ini"
+REDUCER_COMMANDS_MAX_MIN = "max-min.ini"
+REDUCER_COMMANDS_AVERAGE = "average.ini"
+
+AGGR_SENT_BY_REV = "aggr_sent_revenue.ini"
 
 JOINER_RATINGS_CONFIG_SOURCE = "./joiner/config/joiner-ratings.ini"
 JOINER_CREDITS_CONFIG_SOURCE = "./joiner/config/joiner-credits.ini"
@@ -39,6 +47,8 @@ def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replica
     rabbit = create_rabbit()
     filter_cont = create_filter()
     transformer = create_transformer(transformer_replicas)
+    aggregator = create_aggregator()
+    reducer = create_reducer()
     joiner_ratings = create_joiner("joiner-ratings", joiner_ratings_replicas, JOINER_RATINGS_CONFIG_SOURCE)
     joiner_credits = create_joiner("joiner-credits", joiner_credits_replicas, JOINER_CREDITS_CONFIG_SOURCE)
     content = f"""
@@ -49,6 +59,8 @@ services:
   {server}
   {filter_cont}
   {transformer}
+  {aggregator}
+  {reducer}
   {joiner_ratings}
   {joiner_credits}
 networks:
@@ -143,8 +155,45 @@ def create_filter():
       - ./filter/filters/{FILTER_MOVIES_BY_2000}:/{FILTER_MOVIES_BY_2000}
       - ./filter/filters/{FILTER_MOVIES_BY_ARG_SPA}:/{FILTER_MOVIES_BY_ARG_SPA}
       - ./filter/filters/{FILTER_MOVIES_BY_ARG}:/{FILTER_MOVIES_BY_ARG}
-    """ 
+      - ./filter/filters/{FILTER_MOVIES_BY_SINGLE_COUNTRY}:/{FILTER_MOVIES_BY_SINGLE_COUNTRY}
+    """
     return filter_cont
+
+def create_reducer():
+    reducer_cont = f"""
+  reducer:
+    container_name: reducer
+    image: reducer:latest
+    networks:
+      - {NETWORK_NAME}
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./reducer/{CONFIG_FILE}:/{CONFIG_FILE}
+      - ./reducer/reducers/{REDUCER_COMMANDS_AVERAGE}:/{REDUCER_COMMANDS_AVERAGE}
+    """
+    return reducer_cont
+
+def create_aggregator():
+  aggr_cont = f"""
+  aggregator:
+    container_name: aggregator
+    image: aggregator:latest
+    networks:
+      - {NETWORK_NAME}
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./aggregator/{CONFIG_FILE}:/{CONFIG_FILE}
+      - ./aggregator/aggregators/{AGGR_SENT_BY_REV}:/{AGGR_SENT_BY_REV}
+    """
+  return aggr_cont
 
 def create_transformer(replicas=1):
     transformer_yaml = f"""
