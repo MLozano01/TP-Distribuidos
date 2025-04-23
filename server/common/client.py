@@ -1,4 +1,3 @@
-
 from multiprocessing import Process
 import socket
 import logging
@@ -102,19 +101,20 @@ class Client:
     self.movies_queue.publish(movies_pb.SerializeToString())
   
   def filter_ratings(self, ratings_csv):
-    ratings_pb = files_pb2.RatingsCSV()
     for rating in ratings_csv.ratings:
       if not rating.movieId or rating.movieId < 0 or not rating.rating or rating.rating < 0:
         continue
+      
+      ratings_pb = files_pb2.RatingsCSV()
       rating_pb = ratings_pb.ratings.add()
+      rating_pb.userId = rating.userId
       rating_pb.movieId = rating.movieId
       rating_pb.rating = rating.rating
-    if not len(ratings_pb.ratings):
-      return
-    self.ratings_queue.publish(ratings_pb.SerializeToString())
+      rating_pb.timestamp = rating.timestamp
+
+      self.ratings_queue.publish(ratings_pb.SerializeToString(), routing_key=str(rating.movieId))
 
   def filter_credits(self, credits_csv):
-    credits_pb = files_pb2.CreditsCSV()
     for credit in credits_csv.credits:
       if not credit.id or credit.id < 0 or not len(credit.cast):
         continue
@@ -124,14 +124,16 @@ class Client:
       if not len(names):
         continue
 
+      credits_pb = files_pb2.CreditsCSV()
       credit_pb = credits_pb.credits.add()
+      credit_pb.id = credit.id
+      
       for name in names:
         cast_pb = credit_pb.cast.add()
         cast_pb.name = name
-
-    if not len(credits_pb.credits):
-      return
-    self.credits_queue.publish(credits_pb.SerializeToString())
+      
+      # Publish the single-entry CreditsCSV message
+      self.credits_queue.publish(credits_pb.SerializeToString(), routing_key=str(credit.id))
 
 
   def return_results(self, conn: socket.socket):

@@ -136,7 +136,6 @@ class Joiner:
 
     def _process_movie_message(self, ch, method, properties, body):
         """Callback for processing movie messages."""
-        logging.info("!!! _process_movie_message CALLED !!!") # Added explicit log
         if self._stop_event.is_set(): return
         try:
             movies_msg = self.protocol.decode_movies_msg(body)
@@ -144,10 +143,10 @@ class Joiner:
                 logging.warning("Received empty or invalid movie batch.")
                 return
 
-            with self._lock: # Acquire lock to modify shared buffer
+            with self._lock:
                 for movie in movies_msg.movies:
                     self.movies_buffer[movie.id] = movie
-                    logging.debug(f"Buffered movie ID {movie.id}")
+                    logging.info(f"Buffered movie ID {movie.id}")
 
         except Exception as e:
             logging.error(f"Error processing movie message: {e}", exc_info=True)
@@ -189,7 +188,6 @@ class Joiner:
                          logging.warning(f"Could not extract movie ID using field '{movie_id_field}' from {self.other_data_type} item.")
                          continue
 
-                    # --- Modification Start: Handle Ratings Incrementally ---
                     if is_ratings:
                         # Get current sum and count, default to (0.0, 0)
                         current_sum, current_count = self.other_buffer.get(movie_id, (0.0, 0))
@@ -198,7 +196,7 @@ class Joiner:
                         new_count = current_count + 1
                         # Store the updated tuple
                         self.other_buffer[movie_id] = (new_sum, new_count)
-                        logging.debug(f"Updated rating stats for movie ID {movie_id}: Sum={new_sum}, Count={new_count}")
+                        logging.info(f"Buffered movie ID {movie_id} with sum: {new_sum} and count: {new_count}")
                     # --- Modification End ---
                     else: # Handle Credits (buffering the object)
                         if movie_id not in self.other_buffer:
