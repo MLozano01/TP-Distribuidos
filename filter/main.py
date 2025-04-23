@@ -17,7 +17,6 @@ def main():
     finally:
         controller.stop()
         logging.info("Filter stopped")
-
     
 
 if __name__ == "__main__":

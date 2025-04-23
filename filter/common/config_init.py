@@ -45,28 +45,57 @@ def config_filter(filter_file):
     with config parameters
     """
     config_params = {}
-
-    
     filter_config = ConfigParser(os.environ)
     filter_config.read(filter_file)
 
     try:
+        # --- Read common and receiver keys --- 
         config_params["queue_rcv_name"] = os.getenv('QUEUE_RCV_NAME', filter_config["DEFAULT"]["QUEUE_RCV_NAME"])
         config_params["routing_rcv_key"] = os.getenv('ROUTING_KEY_RCV', filter_config["DEFAULT"]["ROUTING_KEY_RCV"])
         config_params["exchange_rcv"] = os.getenv('EXCHANGE_RCV', filter_config["DEFAULT"]["EXCHANGE_RCV"])
-        config_params["exc_rcv_type"] = os.getenv('TYPE_RCV', filter_config["DEFAULT"]["TYPE_RCV"]) 
-        config_params["queue_snd_name"] = os.getenv('QUEUE_SND_NAME', filter_config["DEFAULT"]["QUEUE_SND_NAME"])
-        config_params["routing_snd_key"] = os.getenv('ROUTING_KEY_SND', filter_config["DEFAULT"]["ROUTING_KEY_SND"])
-        config_params["exchange_snd"] = os.getenv('EXCHANGE_SND', filter_config["DEFAULT"]["EXCHANGE_SND"])
-        config_params["exc_snd_type"] = os.getenv('TYPE_SND', filter_config["DEFAULT"]["TYPE_SND"])
-        config_params["publish_by_movie_id"] = os.getenv('PUBLISH_BY_MOVIE_ID', filter_config["DEFAULT"]["PUBLISH_BY_MOVIE_ID"])
-
+        config_params["exc_rcv_type"] = os.getenv('TYPE_RCV', filter_config["DEFAULT"]["TYPE_RCV"])
         config_params["file_name"] = os.getenv('FILE', filter_config["DEFAULT"]["FILE"])
-
         config_params[f"filter_by"] = os.getenv("FILTER", filter_config["DEFAULT"]["FILTER"])
+
+        # --- Read and convert PUBLISH_BY_MOVIE_ID first --- 
+        publish_by_id_str = os.getenv('PUBLISH_BY_MOVIE_ID', filter_config["DEFAULT"]["PUBLISH_BY_MOVIE_ID"]).strip().lower()
+        if publish_by_id_str == 'true':
+            config_params["publish_by_movie_id"] = True
+        elif publish_by_id_str == 'false':
+            config_params["publish_by_movie_id"] = False
+        else:
+            raise ValueError(f"Invalid boolean value for PUBLISH_BY_MOVIE_ID: {publish_by_id_str}")
+        # ----------------------------------------------
+
+        # --- Conditionally read sender keys --- 
+        if config_params["publish_by_movie_id"]:
+            # Read dual sender keys (required for this mode)
+            config_params["exchange_snd_ratings"] = os.getenv('EXCHANGE_SND_RATINGS', filter_config["DEFAULT"]["EXCHANGE_SND_RATINGS"])
+            config_params["exc_snd_type_ratings"] = os.getenv('TYPE_SND_RATINGS', filter_config["DEFAULT"]["TYPE_SND_RATINGS"])
+            config_params["exchange_snd_credits"] = os.getenv('EXCHANGE_SND_CREDITS', filter_config["DEFAULT"]["EXCHANGE_SND_CREDITS"])
+            config_params["exc_snd_type_credits"] = os.getenv('TYPE_SND_CREDITS', filter_config["DEFAULT"]["TYPE_SND_CREDITS"])
+            # Read old keys too, but don't error if missing (provide defaults)
+            config_params["queue_snd_name"] = os.getenv('QUEUE_SND_NAME', filter_config["DEFAULT"].get("QUEUE_SND_NAME", None))
+            config_params["routing_snd_key"] = os.getenv('ROUTING_KEY_SND', filter_config["DEFAULT"].get("ROUTING_KEY_SND", None))
+            config_params["exchange_snd"] = os.getenv('EXCHANGE_SND', filter_config["DEFAULT"].get("EXCHANGE_SND", None))
+            config_params["exc_snd_type"] = os.getenv('TYPE_SND', filter_config["DEFAULT"].get("TYPE_SND", None))
+        else:
+            # Read single sender keys (required for this mode)
+            config_params["queue_snd_name"] = os.getenv('QUEUE_SND_NAME', filter_config["DEFAULT"]["QUEUE_SND_NAME"])
+            config_params["routing_snd_key"] = os.getenv('ROUTING_KEY_SND', filter_config["DEFAULT"]["ROUTING_KEY_SND"])
+            config_params["exchange_snd"] = os.getenv('EXCHANGE_SND', filter_config["DEFAULT"]["EXCHANGE_SND"])
+            config_params["exc_snd_type"] = os.getenv('TYPE_SND', filter_config["DEFAULT"]["TYPE_SND"])
+            # Read dual keys too, but don't error if missing (provide defaults)
+            config_params["exchange_snd_ratings"] = os.getenv('EXCHANGE_SND_RATINGS', filter_config["DEFAULT"].get("EXCHANGE_SND_RATINGS", None))
+            config_params["exc_snd_type_ratings"] = os.getenv('TYPE_SND_RATINGS', filter_config["DEFAULT"].get("TYPE_SND_RATINGS", None))
+            config_params["exchange_snd_credits"] = os.getenv('EXCHANGE_SND_CREDITS', filter_config["DEFAULT"].get("EXCHANGE_SND_CREDITS", None))
+            config_params["exc_snd_type_credits"] = os.getenv('TYPE_SND_CREDITS', filter_config["DEFAULT"].get("TYPE_SND_CREDITS", None))
+        # -------------------------------------
+
     except KeyError as e:
-        raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
+        # Add more context to KeyError
+        raise KeyError(f"Required key was not found in {filter_file} or Env Vars. Error: {e} .Aborting server")
     except ValueError as e:
-        raise ValueError("Key could not be parsed. Error: {}. Aborting server".format(e))
+        raise ValueError(f"Key could not be parsed in {filter_file} or Env Vars. Error: {e}. Aborting server")
 
     return config_params

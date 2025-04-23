@@ -136,6 +136,7 @@ class Joiner:
 
     def _process_movie_message(self, ch, method, properties, body):
         """Callback for processing movie messages."""
+        logging.info("!!! _process_movie_message CALLED !!!") # Added explicit log
         if self._stop_event.is_set(): return
         try:
             movies_msg = self.protocol.decode_movies_msg(body)
