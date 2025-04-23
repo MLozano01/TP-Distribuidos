@@ -16,8 +16,8 @@ class Client:
     self.data_controller = None
     self.result_controller = None
     self.movies_queue = RabbitMQ("exchange_rcv_movies", "rcv_movies", "movies_plain", "direct")
-    self.ratings_queue = RabbitMQ("exchange_rcv_ratings", "rcv_ratings", "ratings_plain", "direct")
-    self.credits_queue = RabbitMQ("exchange_rcv_credits", "rcv_credits", "credits_plain", "direct")
+    self.ratings_queue = RabbitMQ("exchange_rcv_ratings", "rcv_ratings", "ratings_plain", "x-consistent-hash")
+    self.credits_queue = RabbitMQ("exchange_rcv_credits", "rcv_credits", "credits_plain", "x-consistent-hash")
     self.protocol = Protocol()
 
   def run(self):
