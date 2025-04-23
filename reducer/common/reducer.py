@@ -37,20 +37,16 @@ class Reducer:
 
             logging.info(f"Partial result: {self.partial_result}")
 
-            smth = parse_reduce_funct("", "calc_avg", self.partial_result)
-
-            logging.info(f"Partial Average: {smth}")
-
-            if smth:
-                self.queue_snd.publish(protocol.create_movie_list(smth))
-            else:
-                logging.info(f"No  matched the reduce criteria.")
+            # if self.partial_result:
+            #     self.queue_snd.publish(protocol.create_movie_list(self.partial_result))
+            # else:
+            #     logging.info(f"No  matched the reduce criteria.")
 
         except json.JSONDecodeError as e:
             logging.error(f"Failed to decode JSON: {e}")
             return
         except Exception as e:
-            logging.error(f"Error processing message: {e}")
+            logging.error(f"ERROR processing message in {self.queue_rcv_name}: {e}")
             return
 
     def end_reduce(self):

@@ -36,9 +36,11 @@ class Controller:
                 logging.info("Filter stopped by user")
             except Exception as e:
                 logging.error(f"Filter error: {e}")
+        
+        for filt in self.all_filters:
+            filt.join()
     
     def stop(self):
         for filter in self.all_filters:
             if filter.is_alive():
                 filter.terminate()
-                filter.join()

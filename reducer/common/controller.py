@@ -36,9 +36,11 @@ class Controller:
                 logging.info("reducer stopped by user")
             except Exception as e:
                 logging.error(f"reducer error: {e}")
+        
+        for red in self.all_reducers:
+            red.join()
     
     def stop(self):
         for reducer in self.all_reducers:
             if reducer.is_alive():
                 reducer.terminate()
-                reducer.join()
