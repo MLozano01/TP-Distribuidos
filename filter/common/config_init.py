@@ -93,7 +93,6 @@ def config_filter(filter_file):
         # -------------------------------------
 
     except KeyError as e:
-        # Add more context to KeyError
         raise KeyError(f"Required key was not found in {filter_file} or Env Vars. Error: {e} .Aborting server")
     except ValueError as e:
         raise ValueError(f"Key could not be parsed in {filter_file} or Env Vars. Error: {e}. Aborting server")
