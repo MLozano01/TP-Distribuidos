@@ -122,6 +122,10 @@ class Transformer:
         try:
             incoming_movies_msg = self.protocol.decode_movies_msg(body)
 
+            if (incoming_movies_msg.finished):
+                self.queue_snd.publish(incoming_movies_msg.SerializeToString())
+                return
+
             if not incoming_movies_msg or not incoming_movies_msg.movies:
                  logging.warning("Received empty or invalid Protobuf movies batch structure. Skipping.")
                  return

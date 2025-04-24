@@ -58,7 +58,7 @@ class Filter:
             
         if decoded_msg.finished:
             logging.info("Received MOVIES finished signal from server on data channel.")
-            self._publish_movie_finished_signal()
+            self._publish_movie_finished_signal(decoded_msg)
             return
         self.filter(decoded_msg)
 
@@ -130,14 +130,12 @@ class Filter:
         logging.info(f"Finished publishing {published_count}/{len(result_list)} messages individually to both exchanges.")
 
 
-    def _publish_movie_finished_signal(self):
+    def _publish_movie_finished_signal(self, msg):
         """Publishes the movie finished signal. If its to joiners it publishis to a specific fanout exchange, otherwise it publishes to the default key of the single sender queue."""
         if self.publish_to_joiners:
             self.finished_filter_arg_step_publisher.publish(self.protocol.create_finished_message_for_joiners(FileType.MOVIES))
             logging.info(f"Published movie finished signal to {self.finished_filter_arg_step_publisher.exchange}")
         else:
-            msg = files_pb2.MoviesCSV()
-            msg.finished = True
             self.queue_snd_movies.publish(msg.SerializeToString())
             logging.info(f"Published movie finished signal to {self.queue_snd_movies.exchange}")
 
