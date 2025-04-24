@@ -16,6 +16,7 @@ FILTER_MOVIES_BY_2000 = "filter_2000_movies.ini"
 FILTER_MOVIES_BY_ARG_SPA = "filter_Arg_Spa_movies.ini"
 FILTER_MOVIES_BY_ARG = "filter_Arg_movies.ini"
 FILTER_MOVIES_BY_SINGLE_COUNTRY = "filter_single_country_movies.ini"
+FILTER_MOVIES_DECADE = "filter_decade_movies.ini"
 
 REDUCER_COMMANDS_TOP5 = "top5.ini"
 REDUCER_COMMANDS_TOP10 = "top10.ini"
@@ -157,6 +158,7 @@ def create_filter():
       - ./filter/filters/{FILTER_MOVIES_BY_ARG_SPA}:/{FILTER_MOVIES_BY_ARG_SPA}
       - ./filter/filters/{FILTER_MOVIES_BY_ARG}:/{FILTER_MOVIES_BY_ARG}
       - ./filter/filters/{FILTER_MOVIES_BY_SINGLE_COUNTRY}:/{FILTER_MOVIES_BY_SINGLE_COUNTRY}
+      - ./filter/filters/{FILTER_MOVIES_DECADE}:/{FILTER_MOVIES_DECADE}
     """
     return filter_cont
 
