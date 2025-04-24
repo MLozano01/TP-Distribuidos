@@ -63,7 +63,10 @@ class Protocol:
     return message
 
   def create_finished_message_for_joiners(self, type):
-      """Creates and serializes a 'finished' message for the given type."""
+      """
+      Specific for those who consume a generic finished message
+      Creates and serializes a 'finished' message for the given type.
+      """
       msg = None
       if type == FileType.MOVIES:
           msg = files_pb2.MoviesCSV()
@@ -327,11 +330,17 @@ class Protocol:
       batch_pb.participations.extend(participations)
       return batch_pb.SerializeToString()
 
-  def create_finished_actor_participations_batch(self):
+  def create_finished_actor_participations_msg(self):
       """Creates and serializes an ActorParticipationsBatch message with finished=True."""
       batch_pb = files_pb2.ActorParticipationsBatch()
       batch_pb.finished = True
       return batch_pb.SerializeToString()
+  
+  def create_finished_movies_msg(self):
+      """Creates and serializes an MoviesCsv message with finished=True."""
+      movies_pb = files_pb2.MoviesCSV()
+      movies_pb.finished = True
+      return movies_pb.SerializeToString()
 
   def decode_actor_participations_batch(self, buffer):
       """Deserializes an ActorParticipationsBatch message."""
