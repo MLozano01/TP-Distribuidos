@@ -25,7 +25,7 @@ def parse_reduce_funct(data_to_reduce, reduce_by, result):
         return reduce_top5(protocol.decode_aggr_batch(data_to_reduce), args, result)
     
     if args[0] == "top" and args[1] == "10":
-        return reduce_top10(protocol.decode_msg(data_to_reduce), args, result)
+        return reduce_top10(protocol.decode_actor_participations_batch(data_to_reduce), args, result)
     
     if args[0] == "max-min":
         return reduce_max_min(data_to_reduce, args, result)
@@ -44,37 +44,32 @@ def parse_final_result(reduce_by, partial_results):
 
 def reduce_top5(data_to_reduce, reduce_args, result):
 
-    result.setdefault(reduce_args[0], [])   
-
     for data in data_to_reduce.aggr_row:
-        if result[reduce_args[0]] == [] or len(result[reduce_args[0]]) < int(reduce_args[1]):
-            result[reduce_args[0]].append(data)
-            continue
-        if result[reduce_args[0]][-1].reduce_args[2] < data.reduce_args[2]:
-            if len(result[reduce_args[0]]) == int(reduce_args[1]):
-                result[reduce_args[0]][-1] = data
-            result[reduce_args[0]].append(data)
 
-    result[reduce_args[0]].sort(key=lambda x: getattr(x, reduce_args[2]), reverse=True)
+        if data.key not in result:
+            result[data.key] = data.sum
+            if len(result) > int(reduce_args[1]):
+                last_country = min(result, key=result.get)
+                result.pop(last_country)
+
+        else:
+            if result[data.key] < data.sum:
+                result[data.key] = data.sum
 
     return result
 
 def reduce_top10(data_to_reduce, reduce_args, result):
 
-    logging.info(f"DATA: {data_to_reduce}")
+    logging.info(f"Data to reduce: {data_to_reduce}")
 
-    # result.setdefault(reduce_args[0], [])   
-
-    # for data in data_to_reduce.aggr_row:
-    #     if result[reduce_args[0]] == [] or len(result[reduce_args[0]]) < int(reduce_args[1]):
-    #         result[reduce_args[0]].append(data)
-    #         continue
-    #     if result[reduce_args[0]][-1].reduce_args[2] < data.reduce_args[2]:
-    #         if len(result[reduce_args[0]]) == int(reduce_args[1]):
-    #             result[reduce_args[0]][-1] = data
-    #         result[reduce_args[0]].append(data)
-
-    # result[reduce_args[0]].sort(key=lambda x: getattr(x, reduce_args[2]), reverse=True)
+    for data in data_to_reduce.participations:
+        if data.actor_name in result:
+            result[data.actor_name] += 1
+        else:
+            result[data.actor_name] = 1
+            if len(result) > int(reduce_args[1]):
+                last_country = min(result, key=result.get)
+                result.pop(last_country)
 
     return result
 
@@ -87,6 +82,13 @@ def reduce_avg(data_to_reduce, reduce_args, result):
 
         result[attribute.key]["sum"] += attribute.sum
         result[attribute.key]["count"] += attribute.count
+
+    return result
+
+def reduce_max_min(data_to_reduce, reduce_args, result):
+
+    for data in data_to_reduce.movies:
+        continue
 
     return result
 
