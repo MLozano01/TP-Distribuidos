@@ -327,6 +327,12 @@ class Protocol:
       batch_pb.participations.extend(participations)
       return batch_pb.SerializeToString()
 
+  def create_finished_actor_participations_batch(self):
+      """Creates and serializes an ActorParticipationsBatch message with finished=True."""
+      batch_pb = files_pb2.ActorParticipationsBatch()
+      batch_pb.finished = True
+      return batch_pb.SerializeToString()
+
   def decode_actor_participations_batch(self, buffer):
       """Deserializes an ActorParticipationsBatch message."""
       batch_pb = files_pb2.ActorParticipationsBatch()
