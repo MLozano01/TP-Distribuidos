@@ -42,6 +42,13 @@ TITLES_TO_KEEP = {
     "The Good Life",
     "The forbidden education",
     "Left for Dead",
+    "Jumanji",
+    "Grumpier Old Men",
+    "Father of the Bride Part II",
+    "Nine Queens", # Arg only, $1,500,000 budget
+    "Sidewalls", # Arg only, $11,000,000 budget
+    "Life Is Beautiful", # It only, $20,000,000 budget
+    "The Legend of 1900", # It only, $9,000,000 budget
 }
 
 def filter_movies_and_collect_ids():
