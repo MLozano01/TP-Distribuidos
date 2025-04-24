@@ -348,3 +348,39 @@ class Protocol:
       batch_pb.ParseFromString(buffer)
       return batch_pb
 
+  def create_result(self, dict_results):
+    batch_pb = files_pb2.ResultBatch()
+
+    for key, results in dict_results.items():
+      if key == "country":
+        batch_pb.query_id = 2
+        for country, value in results.items():
+          res_pb = batch_pb.result_row.add()
+          res_pb.country = country
+          res_pb.sum = to_float(value)
+      elif key == "actor":
+        batch_pb.query_id = 4
+        for actor, value in results.items():
+          res_pb = batch_pb.result_row.add()
+          res_pb.actor = actor
+          res_pb.sum = to_float(value)
+      elif key == "max-min":
+        batch_pb.query_id = 3
+        for title, value in results.items():
+          res_pb = batch_pb.result_row.add()
+          res_pb.title = title
+          res_pb.sum = to_float(value)
+      elif key == "sentiment":
+        batch_pb.query_id = 5
+        for sentiment, value in results.items():
+          res_pb = batch_pb.result_row.add()
+          res_pb.sentiment = sentiment
+          res_pb.average = to_float(value)
+
+    batch_pb_str = batch_pb.SerializeToString()
+    return batch_pb_str
+  
+  def decode_result(self, buffer):
+    result = files_pb2.ResultBatch()
+    result.ParseFromString(buffer)
+    return result
