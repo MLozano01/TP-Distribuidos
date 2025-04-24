@@ -1,5 +1,5 @@
 from protocol.rabbit_protocol import RabbitMQ
-from common.aux import parse_filter_funct
+from common.aux import parse_filter_funct, movies_into_results
 import logging
 import json
 from protocol.protocol import Protocol, MOVIES_FILE_CODE, FileType
@@ -72,6 +72,13 @@ class Filter:
                 else:
                     if hasattr(self, 'queue_snd_movies') and self.queue_snd_movies:
                             logging.info(f"Publishing batch of {len(result)} filtered '{self.file_name}' messages with routing key: '{self.queue_snd_movies.key}' to exchange '{self.queue_snd_movies.exchange}' ({self.queue_snd_movies.exc_type}).")
+                            if self.queue_snd_movies.key == "results":
+
+                                movies_res = movies_into_results(result)
+                                res = self.protocol.create_result(movies_res)
+                                self.queue_snd_movies.publish(res)
+                                return
+
                             self.queue_snd_movies.publish(self.protocol.create_movie_list(result))
                     else:
                             logging.error("Single sender queue not initialized for non-sharded publish.")
