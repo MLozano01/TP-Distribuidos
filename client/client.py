@@ -19,9 +19,9 @@ class Client:
       
       results_process = Process(target=self.receive_results)
       results_process.start()
-      self.send_data("movies_metadata_1000.csv", FileType.MOVIES)
-      self.send_data("credits.csv", FileType.CREDITS)
-      self.send_data("ratings.csv", FileType.RATINGS)
+      self.send_data("movies_metadata_filtered.csv", FileType.MOVIES)
+      self.send_data("credits_filtered.csv", FileType.CREDITS)
+      self.send_data("ratings_filtered.csv", FileType.RATINGS)
 
       results_process.join()
     except socket.error as err:

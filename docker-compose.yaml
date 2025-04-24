@@ -28,9 +28,9 @@ services:
       - rabbitmq
     volumes:
       - ./client/config.ini:/config.ini
-      - ./data/credits.csv:/credits.csv
-      - ./data/ratings.csv:/ratings.csv
-      - ./data/movies_metadata_1000.csv:/movies_metadata_1000.csv
+      - ./data/credits_filtered.csv:/credits_filtered.csv
+      - ./data/ratings_filtered.csv:/ratings_filtered.csv
+      - ./data/movies_metadata_filtered.csv:/movies_metadata_filtered.csv
     
   server:
     container_name: server
@@ -109,6 +109,7 @@ services:
       - ./reducer/config.ini:/config.ini
       - ./reducer/reducers/average.ini:/average.ini
       - ./reducer/reducers/top5.ini:/top5.ini
+      - ./reducer/reducers/top10.ini:/top10.ini
     
   joiner-ratings:
     image: joiner:latest
