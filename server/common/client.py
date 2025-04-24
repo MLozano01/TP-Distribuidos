@@ -179,14 +179,15 @@ class Client:
 
 
   def return_results(self, conn: socket.socket):
-    queue = RabbitMQ('exchange_snd_movies', 'snd_movies', 'filtered_by_2000', 'direct')
+    queue = RabbitMQ('exchange_snd_results', 'result', 'results', 'direct')
     queue.consume(self.result_controller_func)
   
   def result_controller_func(self, ch, method, properties, body):
     try:
       # data = json.loads(body)
-      # logging.info("got result: {body}")
-      msg = self.protocol.create_result(body)
+      logging.info("got result: {body}") 
+      msg = self.protocol.create_client_result(body)
+      logging.info("sending message: {msg}")
       self.socket.sendall(msg)
     except json.JSONDecodeError as e:
       logging.error(f"Failed to decode JSON: {e}")

@@ -73,5 +73,5 @@ class Client:
       if closed_socket:
         return
       
-      msg = protocol.decode_result(buffer)
-      # logging.info(f"RESULT: {msg}")
+      _, msg = protocol.decode_msg(buffer)
+      logging.info(f"RESULT {msg}")
