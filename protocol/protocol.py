@@ -362,7 +362,7 @@ class Protocol:
         batch_pb.query_id = 4
         for actor, value in results.items():
           res_pb = batch_pb.result_row.add()
-          res_pb.actor = actor
+          res_pb.actor_name = actor
           res_pb.sum = to_float(value)
       elif key == "max-min":
         batch_pb.query_id = 3

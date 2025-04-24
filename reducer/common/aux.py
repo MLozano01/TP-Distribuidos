@@ -21,8 +21,6 @@ def parse_reduce_funct(data_to_reduce, reduce_by, result):
 
     args = _get_filter_args(reduce_by)
 
-    logging.info(f"REDUCE BY: {args}")
-
     if args[0] == "top" and args[1] == "5":
         return reduce_top5(protocol.decode_aggr_batch(data_to_reduce), args, result)
     
@@ -40,9 +38,18 @@ def parse_final_result(reduce_by, partial_results):
     args = _get_filter_args(reduce_by)
     if args[0] == "avg":
         return calculate_avg(partial_results)
-    if args[0] == "top" or args[0] == "max-min":
-        return partial_results
-
+    if args[0] == "top" and args[1] == "5":
+        res = {}
+        res["country"] = partial_results
+        return res
+    if args[0] == "top" and args[1] == "10":
+        res = {}
+        res["actor"] = partial_results
+        return res
+    if args[0] == "max-min":
+        res = {}
+        res["max-min"] = partial_results
+        return res
 
 def reduce_top5(data_to_reduce, reduce_args, result):
 
@@ -88,8 +95,6 @@ def reduce_avg(data_to_reduce, reduce_args, result):
 def reduce_max_min(data_to_reduce, reduce_args, result):
 
     for data in data_to_reduce.movies:
-        logging.info(f"Movie: {data.title} - Rating: {type(data.average_rating)}")
-
         if len(result) < 2:
             result[data.title] = data.average_rating
         else:
@@ -109,11 +114,14 @@ def reduce_max_min(data_to_reduce, reduce_args, result):
 def calculate_avg(partial_result):
     result = {}
 
+    res = {}
+
     for key, value in partial_result.items():
         result.setdefault(key, 0)
         if value["count"] > 0:
             result[key] = value["sum"] / value["count"]
         else:
             result[key]= 0
-    
-    return result
+
+    res["sentiment"] = result    
+    return res

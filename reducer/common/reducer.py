@@ -38,12 +38,15 @@ class Reducer:
             if msg.finished:
                 logging.info(f"Finished message received: {msg.finished}")
                 result = parse_final_result(self.reduce_by, self.partial_result)
-                logging.info(f"Final result: {result}")
+                res_proto = protocol.create_result(result)
+
+                self.queue_snd.publish(res_proto)
+
+                res_decoded = protocol.decode_result(res_proto)
+                logging.info(f"Final result: {res_decoded}")
                 return
 
             self.partial_result = parse_reduce_funct(data, self.reduce_by, self.partial_result)
-
-            logging.info(f"Partial result: {self.partial_result}")
 
         except json.JSONDecodeError as e:
             logging.error(f"Failed to decode JSON: {e}")

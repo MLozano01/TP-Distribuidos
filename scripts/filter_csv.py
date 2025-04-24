@@ -42,6 +42,9 @@ TITLES_TO_KEEP = {
     "The Good Life",
     "The forbidden education",
     "Left for Dead",
+    "Jumanji",
+    "Grumpier Old Men",
+    "Father of the Bride Part II"
 }
 
 def filter_movies_and_collect_ids():

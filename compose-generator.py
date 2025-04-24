@@ -3,9 +3,9 @@ import os
 
 FILE_NAME = "docker-compose.yaml"
 
-MOVIES_DATASET = "movies_metadata.csv"
-CREDITS_DATASET = "credits.csv"
-RATINGS_DATASET = "ratings.csv"
+MOVIES_DATASET = "movies_metadata_filtered.csv"
+CREDITS_DATASET = "credits_filtered.csv"
+RATINGS_DATASET = "ratings_filtered.csv"
 
 NETWORK_NAME = "tp_network"
 NETWORK_IP = " 172.25.125.0/24"
