@@ -164,6 +164,7 @@ message Result {
 
   optional float average = 6;
   optional float sum = 7;
+  repeated string genres = 8;
 }
 // [END] Result messages
 

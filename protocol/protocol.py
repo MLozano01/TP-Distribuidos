@@ -2,6 +2,8 @@ from protocol import files_pb2
 from protocol.utils.parsing_proto_utils import *
 from google.protobuf import json_format
 
+import logging
+
 from enum import Enum
 
 INT_LENGTH = 4
@@ -376,6 +378,12 @@ class Protocol:
           res_pb = batch_pb.result_row.add()
           res_pb.sentiment = sentiment
           res_pb.average = to_float(value)
+      elif key == "movies":
+        batch_pb.query_id = 1
+        for title, value in results.items():
+          res_pb = batch_pb.result_row.add()
+          res_pb.title = title
+          # res_pb.genres = value
 
     batch_pb_str = batch_pb.SerializeToString()
     return batch_pb_str
