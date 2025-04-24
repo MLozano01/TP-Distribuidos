@@ -263,6 +263,9 @@ class Protocol:
       return FileType.RATINGS, self.decode_ratings_msg(msg)
     elif code == CREDITS_FILE_CODE:
       return FileType.CREDITS, self.decode_credits_msg(msg)
+    elif code == RESULT_CODE:
+      return None, self.decode_result(msg)
+
   
   def decode_movies_msg(self, msg_buffer):
     movies = files_pb2.MoviesCSV()
@@ -284,7 +287,7 @@ class Protocol:
     return json_str
   
 
-  def create_result(self, data):
+  def create_client_result(self, data):
     message = bytearray()
     len_msg = len(data)
     message.extend(RESULT_CODE.to_bytes(CODE_LENGTH, byteorder='big'))
@@ -292,10 +295,6 @@ class Protocol:
     message.extend(data)
     return message
 
-  def decode_result(self, buffer):
-    msg = buffer[CODE_LENGTH + INT_LENGTH::]
-    return self.decode_movies_msg(msg)
-  
   def create_movie_list(self, movies):
     movies_pb = files_pb2.MoviesCSV()
 
@@ -369,7 +368,7 @@ class Protocol:
         for title, value in results.items():
           res_pb = batch_pb.result_row.add()
           res_pb.title = title
-          res_pb.sum = to_float(value)
+          res_pb.average = to_float(value)
       elif key == "sentiment":
         batch_pb.query_id = 5
         for sentiment, value in results.items():
