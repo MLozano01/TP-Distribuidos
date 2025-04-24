@@ -21,6 +21,8 @@ def parse_reduce_funct(data_to_reduce, reduce_by, result):
 
     args = _get_filter_args(reduce_by)
 
+    logging.info(f"REDUCE BY: {args}")
+
     if args[0] == "top" and args[1] == "5":
         return reduce_top5(protocol.decode_aggr_batch(data_to_reduce), args, result)
     
@@ -28,7 +30,7 @@ def parse_reduce_funct(data_to_reduce, reduce_by, result):
         return reduce_top10(protocol.decode_actor_participations_batch(data_to_reduce), args, result)
     
     if args[0] == "max-min":
-        return reduce_max_min(protocol.decode_msg(data_to_reduce), args, result)
+        return reduce_max_min(protocol.decode_movies_msg(data_to_reduce), args, result)
     
     if args[0] == "avg":
         return reduce_avg(protocol.decode_aggr_batch(data_to_reduce), args, result)
@@ -85,21 +87,22 @@ def reduce_avg(data_to_reduce, reduce_args, result):
 
 def reduce_max_min(data_to_reduce, reduce_args, result):
 
-    logging.info(f"DATA TO REDUCE: {data_to_reduce}")
-
     for data in data_to_reduce.movies:
+        logging.info(f"Movie: {data.title} - Rating: {type(data.average_rating)}")
+
         if len(result) < 2:
-            result[data.name] = data.average_rating
+            result[data.title] = data.average_rating
         else:
             max_rating = max(result, key=result.get)
             min_rating = min(result, key=result.get)
 
-            if max_rating < data.average_rating:
+
+            if result[max_rating] < data.average_rating:
                 result.pop(max_rating)
-                result[data.name] = data.average_rating
-            elif min_rating > data.average_rating:
+                result[data.title] = data.average_rating
+            elif result[min_rating] > data.average_rating:
                 result.pop(min_rating)
-                result[data.name] = data.average_rating
+                result[data.title] = data.average_rating
 
     return result
 
@@ -114,6 +117,3 @@ def calculate_avg(partial_result):
             result[key]= 0
     
     return result
-
-def reduce_max_min(data_to_reduce, filter_by, result):
-    pass

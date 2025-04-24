@@ -33,7 +33,7 @@ class Reducer:
         try:
             protocol = Protocol()
 
-            msg = protocol.decode_movies_msg(data)
+            msg = protocol.decode_movies_msg(bytes(data))
 
             if msg.finished:
                 logging.info(f"Finished message received: {msg.finished}")
