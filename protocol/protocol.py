@@ -220,12 +220,13 @@ class Protocol:
 
   def create_genres(self, movie_pb, genres_data):
     data_list = create_data_list(genres_data)
-    for genre in data_list:
-      if not genre:
-        return
+    for genre_dict in data_list:
+      if not genre_dict:
+        continue
+      
       genre_pb = movie_pb.genres.add()
-      genre_pb.id = to_int(genre.get('id', -1))
-      genre_pb.name = to_string(genre.get('name', ''))
+      genre_pb.id = to_int(genre_dict.get('id', -1))
+      genre_pb.name = to_string(genre_dict.get('name', ''))
 
   def create_companies(self, movie_pb, companies_data):
     data_list = create_data_list(companies_data)
@@ -382,7 +383,8 @@ class Protocol:
         for title, value in results.items():
           res_pb = batch_pb.result_row.add()
           res_pb.title = title
-          # res_pb.genres = value
+          if isinstance(value, list):
+              res_pb.genres.extend(value)
 
     batch_pb_str = batch_pb.SerializeToString()
     return batch_pb_str
