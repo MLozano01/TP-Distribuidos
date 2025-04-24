@@ -11,7 +11,8 @@ services:
     networks:
       - tp_network
     volumes:
-     - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+    
   
   client1:
     container_name: client1
@@ -29,7 +30,7 @@ services:
       - ./client/config.ini:/config.ini
       - ./data/credits.csv:/credits.csv
       - ./data/ratings.csv:/ratings.csv
-      - ./data/movies_metadata.csv:/movies_metadata.csv
+      - ./data/movies_metadata_1000.csv:/movies_metadata_1000.csv
     
   server:
     container_name: server
@@ -63,7 +64,7 @@ services:
       - ./filter/filters/filter_Arg_Spa_movies.ini:/filter_Arg_Spa_movies.ini
       - ./filter/filters/filter_Arg_movies.ini:/filter_Arg_movies.ini
       - ./filter/filters/filter_single_country_movies.ini:/filter_single_country_movies.ini
-
+    
   transformer:
     container_name: transformer
     image: transformer:latest
@@ -77,7 +78,7 @@ services:
     volumes:
       - ./transformer/config.ini:/config.ini
 
-
+  
   aggregator:
     container_name: aggregator
     image: aggregator:latest
@@ -92,7 +93,7 @@ services:
       - ./aggregator/config.ini:/config.ini
       - ./aggregator/aggregators/aggr_sent_revenue.ini:/aggr_sent_revenue.ini
       - ./aggregator/aggregators/aggr_country_budget.ini:/aggr_country_budget.ini
-
+    
   
   reducer:
     container_name: reducer
@@ -108,8 +109,7 @@ services:
       - ./reducer/config.ini:/config.ini
       - ./reducer/reducers/average.ini:/average.ini
       - ./reducer/reducers/top5.ini:/top5.ini
-
-
+    
   joiner-ratings:
     image: joiner:latest
     networks:

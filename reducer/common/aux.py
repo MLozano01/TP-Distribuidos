@@ -17,22 +17,29 @@ def _get_filter_args(filter_by):
 
 def parse_reduce_funct(data_to_reduce, reduce_by, result):
 
+    protocol = Protocol()
+
     args = _get_filter_args(reduce_by)
 
-    if args[0] == "top":
-        return reduce_top(data_to_reduce, args, result)
+    if args[0] == "top5":
+        return reduce_top(protocol.decode_aggr_batch(data_to_reduce), args, result)
+    
+    if args[0] == "top10":
+        return reduce_top(protocol.decode_msg(data_to_reduce), args, result)
     
     if args[0] == "max-min":
         return reduce_max_min(data_to_reduce, args, result)
     
     if args[0] == "avg":
-        return reduce_avg(data_to_reduce, args, result)
+        return reduce_avg(protocol.decode_aggr_batch(data_to_reduce), args, result)
     
 
 def parse_final_result(reduce_by, partial_results):
     args = _get_filter_args(reduce_by)
     if args[0] == "avg":
         return calculate_avg(partial_results)
+    if args[0] == "top":
+        return partial_results
 
 
 def reduce_top(data_to_reduce, reduce_args, result):
@@ -43,10 +50,10 @@ def reduce_top(data_to_reduce, reduce_args, result):
         if result[reduce_args[0]] == [] or len(result[reduce_args[0]]) < int(reduce_args[1]):
             result[reduce_args[0]].append(data)
             continue
-        if result[reduce_args[0]][-1].sum < data.sum:
+        if result[reduce_args[0]][-1].reduce_args[2] < data.reduce_args[2]:
             if len(result[reduce_args[0]]) == int(reduce_args[1]):
                 result[reduce_args[0]][-1] = data
-            result.append(data)
+            result[reduce_args[0]].append(data)
 
     result[reduce_args[0]].sort(key=lambda x: getattr(x, reduce_args[2]), reverse=True)
 

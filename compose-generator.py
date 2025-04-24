@@ -3,7 +3,7 @@ import os
 
 FILE_NAME = "docker-compose.yaml"
 
-MOVIES_DATASET = "movies_metadata.csv"
+MOVIES_DATASET = "movies_metadata_1000.csv"
 CREDITS_DATASET = "credits.csv"
 RATINGS_DATASET = "ratings.csv"
 
