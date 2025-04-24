@@ -1,7 +1,5 @@
 from protocol import files_pb2
 from protocol.utils.parsing_proto_utils import *
-from google.protobuf import json_format
-
 from enum import Enum
 
 INT_LENGTH = 4
@@ -13,6 +11,7 @@ RATINGS_FILE_CODE = 2
 CREDITS_FILE_CODE = 3
 
 RESULT_CODE = 4
+END_FILE_CODE = 5
 
 class FileType(Enum):
     MOVIES = 1
@@ -21,17 +20,19 @@ class FileType(Enum):
 
 
 class Protocol:
-  def __init__(self, max_batch_size=2000):
-    self.msg_in_creation = None #pb msg
-    self.batch_ready = bytearray()
-    self.max_batch_size = int(max_batch_size)
-
+  def __init__(self):
     self.__file_classes = {FileType.MOVIES: files_pb2.MoviesCSV(), 
                          FileType.RATINGS: files_pb2.RatingsCSV(), 
                          FileType.CREDITS: files_pb2.CreditsCSV()}
     self.__type_codes = {FileType.MOVIES: MOVIES_FILE_CODE, 
                          FileType.RATINGS: RATINGS_FILE_CODE, 
                          FileType.CREDITS: CREDITS_FILE_CODE}
+    self.__codes_to_types = {MOVIES_FILE_CODE: FileType.MOVIES, 
+                            RATINGS_FILE_CODE: FileType.RATINGS, 
+                            CREDITS_FILE_CODE: FileType.CREDITS}
+    self.current_file_type = None
+    self.current_headers = []
+    self.current_headers_dict = dict()
 
 
 
@@ -40,101 +41,116 @@ class Protocol:
 
   def define_buffer_size(self, msg):
     return int.from_bytes(msg[CODE_LENGTH::], byteorder='big')
-  
-  def reset_batch_message(self):
-    self.batch_ready = self.msg_in_creation
-    self.msg_in_creation = None
 
-  def get_batch_msg(self, force_send, type):
-    if force_send:
-      self.reset_batch_message()
+  def create_batch(self, type, lines):
+    msg_pb = files_pb2.CSVBatch()
+    for line in lines:
+      msg_pb.rows.append(line)
     
-    batch = self.batch_ready.SerializeToString()
+    batch = msg_pb.SerializeToString()
     len_batch = len(batch)
     if len_batch == 0:
       return bytearray()
     
-    message = bytearray()
     code = self.__type_codes.get(type)
-    message.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
-    message.extend(len_batch.to_bytes(INT_LENGTH, byteorder='big'))
-    message.extend(batch)
+    return self.create_bytes(code, batch)
 
-    return message
+  def create_inform_end_file(self, type):
+    code = self.__type_codes.get(type)
+    msg = code.to_bytes(CODE_LENGTH, byteorder='big')
+    return self.create_bytes(END_FILE_CODE, msg)
 
-  def create_finished_message_for_joiners(self, type):
+  def create_finished_message(self, type):
       """Creates and serializes a 'finished' message for the given type."""
-      msg = None
-      if type == FileType.MOVIES:
-          msg = files_pb2.MoviesCSV()
-          msg.finished = True
-      elif type == FileType.RATINGS:
-          msg = files_pb2.RatingsCSV()
-          msg.finished = True
-      elif type == FileType.CREDITS:
-          msg = files_pb2.CreditsCSV()
-          msg.finished = True
-      else:
-          return bytearray() # Unknown type
+      msg = self.__file_classes[type]
+      msg.finished = True
 
       serialized_msg = msg.SerializeToString()
-      len_msg = len(serialized_msg)
-
-      message = bytearray()
       code = self.__type_codes.get(type)
-      message.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
-      message.extend(len_msg.to_bytes(INT_LENGTH, byteorder='big'))
-      message.extend(serialized_msg)
+      return self.create_bytes(code, serialized_msg)
 
-      return message
 
-  def add_to_batch(self, type, data):
-    is_ready = False
-    msg_data = self.update_msg(type, data)
-    parsed = msg_data.SerializeToString() #actually bytes, str is a container
-    new_len = len(parsed) + CODE_LENGTH + INT_LENGTH ## full msg len
-    if new_len > self.max_batch_size:
-        self.reset_batch_message()
-        is_ready = True
-        msg_data = self.update_msg(type, data)
+  def create_bytes(self, code, data):
+    message = bytearray()
+    len_msg = len(data)
+    message.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
+    message.extend(len_msg.to_bytes(INT_LENGTH, byteorder='big'))
+    message.extend(data)
+    return message
+
+
+  def decode_client_msg(self, msg_buffer):
+    code = int.from_bytes(msg_buffer[:CODE_LENGTH], byteorder='big')
+
+    msg = msg_buffer[CODE_LENGTH + INT_LENGTH::]
+    if code == END_FILE_CODE:
+      file_code = int.from_bytes(msg[:CODE_LENGTH], byteorder='big')
+      file_type = self.__codes_to_types[file_code]
+      return file_type, self.create_finished_message(file_type)
+
+    file_type = self.__codes_to_types[code]
+    if file_type != self.current_file_type:
+      self.current_headers = []
+      self.current_file_type = file_type
+      self.current_headers_dict = dict()
+
+    return file_type, self.lines_to_batch(msg)
+  
+  def lines_to_batch(self, line_bytes):
+    lines = files_pb2.CSVBatch()
+    lines.ParseFromString(line_bytes)
+    if not len(self.current_headers):
+      self.set_headers(lines.rows.pop(0))
     
-    self.msg_in_creation = msg_data
-    return is_ready
+    data_csv = self.__file_classes[self.current_file_type]
+    for line in lines.rows:
+      data = self.parse_line(line)
+      if self.current_file_type == FileType.MOVIES:
+        data_csv.movies.append(self.update_movies_msg(data))
+      elif self.current_file_type == FileType.RATINGS:
+        data_csv.ratings.append(self.update_ratings_msg(data))
+      elif self.current_file_type == FileType.CREDITS:
+        data_csv.credits.append(self.update_credits_msg(data))
+    return data_csv
   
-  def update_msg(self, type, data):
-    if self.msg_in_creation == None:
-      self.msg_in_creation = self.__file_classes.get(type)
+  def set_headers(self, headers):
+    self.current_headers = headers.strip('\n').split(',')
+    self.current_headers_dict = dict()
+    for ind, header in enumerate(self.current_headers):
+      self.current_headers_dict[header] = ind
 
-    if type == FileType.MOVIES:
-      return self.update_movies_msg(data)
-    elif type == FileType.RATINGS:
-      return self.update_ratings_msg(data)
-    elif type == FileType.CREDITS:
-      return self.update_credits_msg(data)
-  
+  def parse_line(self, line):
+    parts = line.split(',')
+    data = dict()
+    index = -1
+    for part in parts:
+
+      if not part or part[0] != ' ':
+        index+=1
+      
+      data.setdefault(self.current_headers[index], "")
+      cleaned = part.strip(" '\\").strip('" \n')
+      if part and part[0] == ' ':
+        cleaned = "," + part
+      data[self.current_headers[index]] += cleaned
+    
+    return data
+
 
   def update_ratings_msg(self, rating):
-    msg = files_pb2.RatingsCSV()
-    if self.msg_in_creation.ratings:
-      msg.ratings.extend(self.msg_in_creation.ratings)
     rating_pb = files_pb2.RatingCSV()
     rating_pb.userId = to_int(rating.get('userId', -1))
     rating_pb.movieId = to_int(rating.get('movieId', -1))
     rating_pb.rating = to_float(rating.get('rating', -1.0))
     rating_pb.timestamp = to_string(rating.get('timestamp', ''))
-    msg.ratings.append(rating_pb)
-    return msg
+    return rating_pb
   
   def update_credits_msg(self, credit):
-    msg = files_pb2.CreditsCSV()
-    if self.msg_in_creation.credits:
-      msg.credits.extend(self.msg_in_creation.credits)
     credit_pb = files_pb2.CreditCSV()
     self.create_cast(credit_pb, credit.get('cast', ''))
     self.create_crew(credit_pb, credit.get('crew', ''))
     credit_pb.id = to_int(credit.get('id', -1))
-    msg.credits.append(credit_pb)
-    return msg
+    return credit_pb
   
   def create_cast(self, credit_pb, cast_list):
     if cast_list == '' or cast_list == None:
@@ -171,9 +187,6 @@ class Protocol:
 
 
   def update_movies_msg(self, movie):
-    msg = files_pb2.MoviesCSV()
-    if self.msg_in_creation.movies:
-      msg.movies.extend(self.msg_in_creation.movies)
     movie_pb = files_pb2.MovieCSV()
     movie_pb.id = to_int(movie.get('id', -1))
     movie_pb.adult = to_bool(movie.get('adult', 'False'))
@@ -199,8 +212,7 @@ class Protocol:
     movie_pb.video = to_bool(movie.get('video', 'False'))
     movie_pb.vote_average = to_float(movie.get('vote_average', -1.0))
     movie_pb.vote_count = to_int(movie.get('vote_count', -1))
-    msg.movies.append(movie_pb)
-    return msg
+    return movie_pb
   
   def create_collection(self, movie_pb, collection_data):
     data_list = create_data_list(collection_data)
@@ -250,17 +262,6 @@ class Protocol:
       language_pb.name = to_string(language.get('name', ''))
 
 
-  def decode_msg(self, msg_buffer):
-    code = int.from_bytes(msg_buffer[:CODE_LENGTH], byteorder='big')
-
-    msg = msg_buffer[CODE_LENGTH + INT_LENGTH::]
-    if code == MOVIES_FILE_CODE:
-      return FileType.MOVIES, self.decode_movies_msg(msg)
-    elif code == RATINGS_FILE_CODE:
-      return FileType.RATINGS, self.decode_ratings_msg(msg)
-    elif code == CREDITS_FILE_CODE:
-      return FileType.CREDITS, self.decode_credits_msg(msg)
-  
   def decode_movies_msg(self, msg_buffer):
     movies = files_pb2.MoviesCSV()
     movies.ParseFromString(msg_buffer)
@@ -275,19 +276,10 @@ class Protocol:
     credits = files_pb2.CreditsCSV()
     credits.ParseFromString(msg_buffer)
     return credits
-
-  def encode_movies_to_json(self, movies):
-    json_str = json_format.MessageToJson(movies)
-    return json_str
   
 
   def create_result(self, data):
-    message = bytearray()
-    len_msg = len(data)
-    message.extend(RESULT_CODE.to_bytes(CODE_LENGTH, byteorder='big'))
-    message.extend(len_msg.to_bytes(INT_LENGTH, byteorder='big'))
-    message.extend(data)
-    return message
+    return self.create_bytes(RESULT_CODE, data)
 
   def decode_result(self, buffer):
     msg = buffer[CODE_LENGTH + INT_LENGTH::]

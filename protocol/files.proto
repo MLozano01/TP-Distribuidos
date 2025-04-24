@@ -4,6 +4,10 @@ package files;
 // [END declaration]
 
 // [START messages]
+message CSVBatch {
+  repeated string rows = 1;
+}
+
 // [START ratings messages]
 message RatingCSV {
   int32 userId = 1;

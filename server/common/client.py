@@ -40,7 +40,7 @@ class Client:
 
   def handle_connection(self, conn: socket.socket):
     closed_socket = False
-    time.sleep(10)
+    time.sleep(15)
     while not closed_socket:
       read_amount = self.protocol.define_initial_buffer_size()
       buffer = bytearray()
@@ -52,8 +52,7 @@ class Client:
       if closed_socket:
         return
       
-      type, msg = self.protocol.decode_msg(buffer)
-
+      type, msg = self.protocol.decode_client_msg(buffer)
       if msg.finished:
           self._handle_finished_message(type, msg)
       else:
@@ -72,7 +71,7 @@ class Client:
 
           if type_code is not None and self.file_finished_server_step_publisher:
               try:
-                  self.file_finished_server_step_publisher.publish(self.protocol.create_finished_message_for_joiners(type))
+                  self.file_finished_server_step_publisher.publish(self.protocol.create_finished_message(type))
                   logging.info(f"Published finish signal message for {type.name} to {self.file_finished_server_step_publisher.exchange}")
               except Exception as e_pub:
                   logging.error(f"Failed to publish finish signal message for {type.name} to control exchange: {e_pub}")
