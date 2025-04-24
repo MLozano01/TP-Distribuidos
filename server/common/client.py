@@ -113,10 +113,10 @@ class Client:
       # if not movie.budget or movie.budget < 0 or not movie.revenue or movie.revenue < 0:
       #   continue
       
-      genres = map(lambda genre: genre.name, movie.genres)
-      genres = list(filter(lambda name: name, genres))
-      if not len(genres):
-        continue
+      # Filter the original Genre objects based on their name attribute
+      filtered_genres = [genre for genre in movie.genres if genre.name]
+      if not len(filtered_genres):
+          continue
 
       countries = map(lambda country: country.name, movie.countries)
       countries = list(filter(lambda name: name, countries))
@@ -131,9 +131,9 @@ class Client:
       movie_pb.budget = movie.budget
       movie_pb.revenue = movie.revenue
 
-      for genre in genres:
-        genre_pb = movie_pb.genres.add()
-        genre_pb.name = genre
+      # Add the filtered Genre objects to the new message
+      movie_pb.genres.extend(filtered_genres)
+
       for country in countries:
         country_pb = movie_pb.countries.add()
         country_pb.name = country

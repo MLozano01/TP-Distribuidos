@@ -1,4 +1,3 @@
-
 import operator
 import logging
 from protocol.protocol import Protocol
@@ -90,8 +89,8 @@ def movies_into_results(result):
 
     for data in result:
         title = getattr(data, "title")
-        genre = getattr(data, "genres")
-        res[title] = genre
+        genre_names = [genre.name for genre in data.genres if genre.name]
+        res[title] = genre_names
     final_res = {}
     final_res["movies"] = res
     return final_res
