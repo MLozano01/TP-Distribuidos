@@ -12,6 +12,7 @@ class Aggregator:
         for key, value in kwargs.items():
             setattr(self, key, value)
         self.is_alive = True
+        self.protocol = Protocol()
 
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type)
@@ -25,20 +26,27 @@ class Aggregator:
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
         logging.info(f"Received message, with routing key: {method.routing_key}")
-        self.aggregate(body)
+        decoded_msg = self.protocol.decode_movies_msg(body)
+        if decoded_msg.finished:
+            self.publish_finished_msg(decoded_msg)
+            return 
+        self.aggregate(decoded_msg)
 
-    def aggregate(self, data):
+    def aggregate(self, decoded_msg):
         try:
-            protocol = Protocol()
-            decoded_msg = protocol.decode_movies_msg(data)
-
             result = parse_aggregate_func(decoded_msg, self.key, self.field, self.operations, self.file_name)
             logging.info(f"Result: {result}")
-            self.queue_snd.publish(protocol.create_aggr_batch(result))
+            self.queue_snd.publish(self.protocol.create_aggr_batch(result))
 
         except Exception as e:
             logging.error(f"Error processing message: {e}")
             return
+    
+    def publish_finished_msg(self, decoded_msg):
+        self.queue_snd.publish(decoded_msg.SerializeToString())
+        logging.info(f"Published finished signal")
+
+
 
     def end_aggregator(self):
         """End the aggregator and close the queue."""
