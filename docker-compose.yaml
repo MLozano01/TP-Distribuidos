@@ -110,6 +110,7 @@ services:
       - ./reducer/reducers/average.ini:/average.ini
       - ./reducer/reducers/top5.ini:/top5.ini
       - ./reducer/reducers/top10.ini:/top10.ini
+      - ./reducer/reducers/max-min.ini:/max-min.ini
     
   joiner-ratings:
     image: joiner:latest

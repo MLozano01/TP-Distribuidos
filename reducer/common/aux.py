@@ -28,7 +28,7 @@ def parse_reduce_funct(data_to_reduce, reduce_by, result):
         return reduce_top10(protocol.decode_actor_participations_batch(data_to_reduce), args, result)
     
     if args[0] == "max-min":
-        return reduce_max_min(data_to_reduce, args, result)
+        return reduce_max_min(protocol.decode_msg(data_to_reduce), args, result)
     
     if args[0] == "avg":
         return reduce_avg(protocol.decode_aggr_batch(data_to_reduce), args, result)
@@ -38,7 +38,7 @@ def parse_final_result(reduce_by, partial_results):
     args = _get_filter_args(reduce_by)
     if args[0] == "avg":
         return calculate_avg(partial_results)
-    if args[0] == "top":
+    if args[0] == "top" or args[0] == "max-min":
         return partial_results
 
 
@@ -59,8 +59,6 @@ def reduce_top5(data_to_reduce, reduce_args, result):
     return result
 
 def reduce_top10(data_to_reduce, reduce_args, result):
-
-    logging.info(f"Data to reduce: {data_to_reduce}")
 
     for data in data_to_reduce.participations:
         if data.actor_name in result:
@@ -87,8 +85,21 @@ def reduce_avg(data_to_reduce, reduce_args, result):
 
 def reduce_max_min(data_to_reduce, reduce_args, result):
 
+    logging.info(f"DATA TO REDUCE: {data_to_reduce}")
+
     for data in data_to_reduce.movies:
-        continue
+        if len(result) < 2:
+            result[data.name] = data.average_rating
+        else:
+            max_rating = max(result, key=result.get)
+            min_rating = min(result, key=result.get)
+
+            if max_rating < data.average_rating:
+                result.pop(max_rating)
+                result[data.name] = data.average_rating
+            elif min_rating > data.average_rating:
+                result.pop(min_rating)
+                result[data.name] = data.average_rating
 
     return result
 
