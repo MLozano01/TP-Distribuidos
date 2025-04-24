@@ -10,6 +10,8 @@ services:
       - 5672:5672
     networks:
       - tp_network
+    volumes:
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
     
   
   client1:
@@ -26,9 +28,9 @@ services:
       - rabbitmq
     volumes:
       - ./client/config.ini:/config.ini
-      - ./data/credits.csv:/credits.csv
-      - ./data/ratings.csv:/ratings.csv
-      - ./data/movies_metadata.csv:/movies_metadata.csv
+      - ./data/credits_filtered.csv:/credits_filtered.csv
+      - ./data/ratings_filtered.csv:/ratings_filtered.csv
+      - ./data/movies_metadata_filtered.csv:/movies_metadata_filtered.csv
     
   server:
     container_name: server
@@ -61,9 +63,11 @@ services:
       - ./filter/filters/filter_2000_movies.ini:/filter_2000_movies.ini
       - ./filter/filters/filter_Arg_Spa_movies.ini:/filter_Arg_Spa_movies.ini
       - ./filter/filters/filter_Arg_movies.ini:/filter_Arg_movies.ini
+      - ./filter/filters/filter_single_country_movies.ini:/filter_single_country_movies.ini
+      - ./filter/filters/filter_decade_movies.ini:/filter_decade_movies.ini
     
-  
   transformer:
+    container_name: transformer
     image: transformer:latest
     networks:
       - tp_network
@@ -74,9 +78,75 @@ services:
       - rabbitmq
     volumes:
       - ./transformer/config.ini:/config.ini
-    deploy:
-      replicas: 3
+
+  
+  aggregator:
+    container_name: aggregator
+    image: aggregator:latest
+    networks:
+      - tp_network
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./aggregator/config.ini:/config.ini
+      - ./aggregator/aggregators/aggr_sent_revenue.ini:/aggr_sent_revenue.ini
+      - ./aggregator/aggregators/aggr_country_budget.ini:/aggr_country_budget.ini
     
+  
+  reducer:
+    container_name: reducer
+    image: reducer:latest
+    networks:
+      - tp_network
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./reducer/config.ini:/config.ini
+      - ./reducer/reducers/average.ini:/average.ini
+      - ./reducer/reducers/top5.ini:/top5.ini
+      - ./reducer/reducers/top10.ini:/top10.ini
+      - ./reducer/reducers/max-min.ini:/max-min.ini
+    
+  joiner-ratings:
+    image: joiner:latest
+    networks:
+      - tp_network
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./joiner/config/joiner-ratings.ini:/config.ini
+    container_name: joiner-ratings
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JOINER_REPLICA_ID=0
+      - JOINER_REPLICA_COUNT=1
+
+  joiner-credits:
+    image: joiner:latest
+    networks:
+      - tp_network
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./joiner/config/joiner-credits.ini:/config.ini
+    container_name: joiner-credits
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JOINER_REPLICA_ID=0
+      - JOINER_REPLICA_COUNT=1
+
 networks:
   tp_network:
     ipam:

@@ -1,7 +1,8 @@
 from protocol import files_pb2
 from protocol.utils.parsing_proto_utils import *
 from google.protobuf import json_format
-import json
+
+import logging
 
 from enum import Enum
 
@@ -62,6 +63,35 @@ class Protocol:
     message.extend(batch)
 
     return message
+
+  def create_finished_message_for_joiners(self, type):
+      """
+      Specific for those who consume a generic finished message
+      Creates and serializes a 'finished' message for the given type.
+      """
+      msg = None
+      if type == FileType.MOVIES:
+          msg = files_pb2.MoviesCSV()
+          msg.finished = True
+      elif type == FileType.RATINGS:
+          msg = files_pb2.RatingsCSV()
+          msg.finished = True
+      elif type == FileType.CREDITS:
+          msg = files_pb2.CreditsCSV()
+          msg.finished = True
+      else:
+          return bytearray() # Unknown type
+
+      serialized_msg = msg.SerializeToString()
+      len_msg = len(serialized_msg)
+
+      message = bytearray()
+      code = self.__type_codes.get(type)
+      message.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
+      message.extend(len_msg.to_bytes(INT_LENGTH, byteorder='big'))
+      message.extend(serialized_msg)
+
+      return message
 
   def add_to_batch(self, type, data):
     is_ready = False
@@ -235,6 +265,9 @@ class Protocol:
       return FileType.RATINGS, self.decode_ratings_msg(msg)
     elif code == CREDITS_FILE_CODE:
       return FileType.CREDITS, self.decode_credits_msg(msg)
+    elif code == RESULT_CODE:
+      return None, self.decode_result(msg)
+
   
   def decode_movies_msg(self, msg_buffer):
     movies = files_pb2.MoviesCSV()
@@ -256,7 +289,7 @@ class Protocol:
     return json_str
   
 
-  def create_result(self, data):
+  def create_client_result(self, data):
     message = bytearray()
     len_msg = len(data)
     message.extend(RESULT_CODE.to_bytes(CODE_LENGTH, byteorder='big'))
@@ -264,10 +297,6 @@ class Protocol:
     message.extend(data)
     return message
 
-  def decode_result(self, buffer):
-    msg = buffer[CODE_LENGTH + INT_LENGTH::]
-    return self.decode_movies_msg(msg)
-  
   def create_movie_list(self, movies):
     movies_pb = files_pb2.MoviesCSV()
 
@@ -276,3 +305,89 @@ class Protocol:
 
     movies_pb_str = movies_pb.SerializeToString()
     return movies_pb_str
+
+  def create_aggr_batch(self, dict_results):
+    batch_pb = files_pb2.AggregationBatch()
+
+    for key, results in dict_results.items():
+      aggr_pb = batch_pb.aggr_row.add()
+      aggr_pb.key = key
+      if "sum" in results:
+        aggr_pb.sum =  to_float(results.get("sum"))
+      if "count" in results:
+        aggr_pb.count =  to_int(results.get("count"))
+    batch_pb_str = batch_pb.SerializeToString()
+    return batch_pb_str
+
+  def decode_aggr_batch(self, buffer):
+    aggr = files_pb2.AggregationBatch()
+    aggr.ParseFromString(buffer)
+    return aggr
+
+  def create_actor_participations_batch(self, participations):
+      """Creates and serializes an ActorParticipationsBatch message."""
+      batch_pb = files_pb2.ActorParticipationsBatch()
+      # participations should be a list of ActorParticipation objects
+      batch_pb.participations.extend(participations)
+      return batch_pb.SerializeToString()
+
+  def create_finished_actor_participations_msg(self):
+      """Creates and serializes an ActorParticipationsBatch message with finished=True."""
+      batch_pb = files_pb2.ActorParticipationsBatch()
+      batch_pb.finished = True
+      return batch_pb.SerializeToString()
+  
+  def create_finished_movies_msg(self):
+      """Creates and serializes an MoviesCsv message with finished=True."""
+      movies_pb = files_pb2.MoviesCSV()
+      movies_pb.finished = True
+      return movies_pb.SerializeToString()
+
+  def decode_actor_participations_batch(self, buffer):
+      """Deserializes an ActorParticipationsBatch message."""
+      batch_pb = files_pb2.ActorParticipationsBatch()
+      batch_pb.ParseFromString(buffer)
+      return batch_pb
+
+  def create_result(self, dict_results):
+    batch_pb = files_pb2.ResultBatch()
+
+    for key, results in dict_results.items():
+      if key == "country":
+        batch_pb.query_id = 2
+        for country, value in results.items():
+          res_pb = batch_pb.result_row.add()
+          res_pb.country = country
+          res_pb.sum = to_float(value)
+      elif key == "actor":
+        batch_pb.query_id = 4
+        for actor, value in results.items():
+          res_pb = batch_pb.result_row.add()
+          res_pb.actor_name = actor
+          res_pb.sum = to_float(value)
+      elif key == "max-min":
+        batch_pb.query_id = 3
+        for title, value in results.items():
+          res_pb = batch_pb.result_row.add()
+          res_pb.title = title
+          res_pb.average = to_float(value)
+      elif key == "sentiment":
+        batch_pb.query_id = 5
+        for sentiment, value in results.items():
+          res_pb = batch_pb.result_row.add()
+          res_pb.sentiment = sentiment
+          res_pb.average = to_float(value)
+      elif key == "movies":
+        batch_pb.query_id = 1
+        for title, value in results.items():
+          res_pb = batch_pb.result_row.add()
+          res_pb.title = title
+          # res_pb.genres = value
+
+    batch_pb_str = batch_pb.SerializeToString()
+    return batch_pb_str
+  
+  def decode_result(self, buffer):
+    result = files_pb2.ResultBatch()
+    result.ParseFromString(buffer)
+    return result

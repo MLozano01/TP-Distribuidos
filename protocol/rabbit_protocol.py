@@ -35,19 +35,22 @@ class RabbitMQ:
                 channel.close()
                 logging.info("Channel closed")
 
-    def publish(self, message):
-
-        """Used to publish messages to the queue."""
+    def publish(self, message, routing_key=None):
+        """Used to publish messages to the queue.
+        Allows overriding the default routing key.
+        """
+        # Determine the routing key to use
+        key_to_use = routing_key if routing_key is not None else self.key
 
         try:
             self.channel.basic_publish(exchange=self.exchange,
-                                routing_key=self.key,
+                                routing_key=key_to_use, # Use the determined key
                                 body=message,
                                 properties=pika.BasicProperties(
                                     delivery_mode=2,
                                 ))
 
-            logging.info(f"Sent message with routing key: {self.key}")
+            logging.info(f"Sent message with routing key: {key_to_use}") # Log the actual key used
         except Exception as e:
             logging.error(f"Failed to send message: {e}")
             raise e

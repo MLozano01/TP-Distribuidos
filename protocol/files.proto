@@ -15,6 +15,7 @@ message RatingCSV {
 // Batch of ratings from file
 message RatingsCSV {
   repeated RatingCSV ratings = 1;
+  optional bool finished = 2;
 }
 // [END ratings messages]
 
@@ -51,6 +52,7 @@ message CreditCSV {
 // Batch of credits from file
 message CreditsCSV {
   repeated CreditCSV credits = 1;
+  optional bool finished = 2;
 }
 // [END credits messages]
 
@@ -116,11 +118,63 @@ message MovieCSV {
   int32 vote_count = 24;
   optional string sentiment = 100;
   optional float rate_revenue_budget = 101;
+  optional float average_rating = 102;
 }
 
 // Batch of movies from file
 message MoviesCSV {
   repeated MovieCSV movies = 1;
+  optional bool finished = 2;
 }
 // [END movies messages]
+
+
+// [START] Aggregators messages
+message Aggregation {
+  string key = 1;
+  optional float sum = 2;
+  optional int32 count = 3;
+}
+
+message AggregationBatch {
+  repeated Aggregation aggr_row = 1;
+}
+// [END] Aggregators messages
+
+
+// [START] Actor Participation (Output of Credits Joiner)
+message ActorParticipation {
+    string actor_name = 1;   // The name of the actor (from Cast.name)
+    int32 movie_id = 2;      // The ID of the movie they participated in (from CreditCSV.id)
+}
+
+message ActorParticipationsBatch {
+    repeated ActorParticipation participations = 1;
+    optional bool finished = 2;
+}
+// [END] Actor Participation messages
+
+// [START] Result messages
+
+message Result {
+  optional string country = 2;
+  optional string sentiment = 3;
+  optional string actor_name = 4;
+  optional string title = 5;
+
+  optional float average = 6;
+  optional float sum = 7;
+  repeated string genres = 8;
+}
+// [END] Result messages
+
+// [START] ResultBatch messages
+message ResultBatch {
+  int32 query_id = 1;
+  repeated Result result_row = 2;
+}
+
+// [END] ResultBatch messages
+
+
 // [END messages]

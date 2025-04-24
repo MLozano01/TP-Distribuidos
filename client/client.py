@@ -19,9 +19,9 @@ class Client:
       
       results_process = Process(target=self.receive_results)
       results_process.start()
-      self.send_data("movies_metadata.csv", FileType.MOVIES)
-      self.send_data("credits.csv", FileType.CREDITS)
-      self.send_data("ratings.csv", FileType.RATINGS)
+      self.send_data("movies_metadata_filtered.csv", FileType.MOVIES)
+      self.send_data("credits_filtered.csv", FileType.CREDITS)
+      self.send_data("ratings_filtered.csv", FileType.RATINGS)
 
       results_process.join()
     except socket.error as err:
@@ -43,6 +43,13 @@ class Client:
         if ready_to_send:
           self.send_batch(False, type)
       self.send_batch(True, type)
+      # Send the final "finished" message
+      finished_message = self.protocol.create_finished_message_for_joiners(type)
+      if finished_message:
+          logging.info(f"Sending finished message for type {type.name}")
+          self.client_socket.sendall(finished_message)
+      else:
+          logging.warning(f"Could not generate finished message for type {type.name}")
   
   def send_batch(self, last_send, type):
     message = self.protocol.get_batch_msg(last_send, type)
@@ -66,5 +73,5 @@ class Client:
       if closed_socket:
         return
       
-      msg = protocol.decode_result(buffer)
-      logging.info(f"RESULT: {msg}")
+      _, msg = protocol.decode_msg(buffer)
+      logging.info(f"RESULT {msg}")

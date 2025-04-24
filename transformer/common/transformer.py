@@ -105,14 +105,14 @@ class Transformer:
     def _send_processed_batch(self, processed_movies):
         """Creates the outgoing MoviesCSV message and publishes it."""
         if not processed_movies:
-            logging.info("No movies suitable for sending after processing and filtering.")
+            logging.debug("No movies suitable for sending after processing and filtering.")
             return
 
         try:
             outgoing_movies_msg = self.protocol.create_movie_list(processed_movies)
-            logging.info(f"Sending {len(processed_movies)} processed movies")
+            logging.debug(f"Sending {len(processed_movies)} processed movies")
             self.queue_snd.publish(outgoing_movies_msg)
-            logging.info(f"Successfully processed and sent {len(processed_movies)} movies matching criteria.")
+            logging.debug(f"Successfully processed and sent {len(processed_movies)} movies matching criteria.")
         except Exception as e:
             logging.error(f"Failed to send processed batch: {e}", exc_info=True)
 
@@ -122,17 +122,22 @@ class Transformer:
         try:
             incoming_movies_msg = self.protocol.decode_movies_msg(body)
 
+            if (incoming_movies_msg.finished):
+                self.queue_snd.publish(incoming_movies_msg.SerializeToString())
+                return
+
             if not incoming_movies_msg or not incoming_movies_msg.movies:
                  logging.warning("Received empty or invalid Protobuf movies batch structure. Skipping.")
                  return
 
-            logging.info(f"Processing batch with {len(incoming_movies_msg.movies)} movies (from Protobuf list).")
+            # logging.info(f"Processing batch with {len(incoming_movies_msg.movies)} movies (from Protobuf list).")
 
             processed_movies_list = []
             for incoming_movie in incoming_movies_msg.movies:
                 if self._validate_movie(incoming_movie):
                     processed_movie = self._enrich_movie(incoming_movie)
                     processed_movies_list.append(processed_movie)
+                    logging.info(f"Movie ID {processed_movie.id}: Sentiment='{processed_movie.sentiment}', Rate='{processed_movie.rate_revenue_budget:.4f}'")
 
             self._send_processed_batch(processed_movies_list)
 
