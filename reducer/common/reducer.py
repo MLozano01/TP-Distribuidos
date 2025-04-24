@@ -1,6 +1,6 @@
 
 from protocol.rabbit_protocol import RabbitMQ
-from common.aux import parse_reduce_funct
+from common.aux import parse_reduce_funct, parse_final_result
 import logging
 import json
 from protocol.protocol import Protocol
@@ -33,14 +33,20 @@ class Reducer:
         try:
             protocol = Protocol()
 
-            self.partial_result = parse_reduce_funct(protocol.decode_aggr_batch(data), self.reduce_by, self.partial_result)
+            msg = protocol.decode_movies_msg(bytes(data))
 
-            logging.info(f"Partial result: {self.partial_result}")
+            if msg.finished:
+                logging.info(f"Finished message received: {msg.finished}")
+                result = parse_final_result(self.reduce_by, self.partial_result)
+                res_proto = protocol.create_result(result)
 
-            # if self.partial_result:
-            #     self.queue_snd.publish(protocol.create_movie_list(self.partial_result))
-            # else:
-            #     logging.info(f"No  matched the reduce criteria.")
+                self.queue_snd.publish(res_proto)
+
+                res_decoded = protocol.decode_result(res_proto)
+                logging.info(f"Final result: {res_decoded}")
+                return
+
+            self.partial_result = parse_reduce_funct(data, self.reduce_by, self.partial_result)
 
         except json.JSONDecodeError as e:
             logging.error(f"Failed to decode JSON: {e}")

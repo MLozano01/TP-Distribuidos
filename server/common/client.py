@@ -109,6 +109,9 @@ class Client:
         continue
       if not is_date(movie.release_date) or not movie.overview:
         continue
+
+      # if not movie.budget or movie.budget < 0 or not movie.revenue or movie.revenue < 0:
+      #   continue
       
       genres = map(lambda genre: genre.name, movie.genres)
       genres = list(filter(lambda name: name, genres))

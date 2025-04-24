@@ -3,9 +3,9 @@ import os
 
 FILE_NAME = "docker-compose.yaml"
 
-MOVIES_DATASET = "movies_metadata.csv"
-CREDITS_DATASET = "credits.csv"
-RATINGS_DATASET = "ratings.csv"
+MOVIES_DATASET = "movies_metadata_filtered.csv"
+CREDITS_DATASET = "credits_filtered.csv"
+RATINGS_DATASET = "ratings_filtered.csv"
 
 NETWORK_NAME = "tp_network"
 NETWORK_IP = " 172.25.125.0/24"
@@ -176,6 +176,8 @@ def create_reducer():
       - ./reducer/{CONFIG_FILE}:/{CONFIG_FILE}
       - ./reducer/reducers/{REDUCER_COMMANDS_AVERAGE}:/{REDUCER_COMMANDS_AVERAGE}
       - ./reducer/reducers/{REDUCER_COMMANDS_TOP5}:/{REDUCER_COMMANDS_TOP5}
+      - ./reducer/reducers/{REDUCER_COMMANDS_TOP10}:/{REDUCER_COMMANDS_TOP10}
+      - ./reducer/reducers/{REDUCER_COMMANDS_MAX_MIN}:/{REDUCER_COMMANDS_MAX_MIN}
     """
     return reducer_cont
 
