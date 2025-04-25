@@ -61,6 +61,9 @@ def config_reducer(filter_file):
         config_params["exc_snd_type"] = os.getenv('TYPE_SND', reducer_config["DEFAULT"]["TYPE_SND"])
 
         config_params[f"reduce_by"] = os.getenv("REDUCER", reducer_config["DEFAULT"]["REDUCER"])
+        config_params["expected_finished_msg_amount"] = os.getenv('EXPECTED_FINISHED_MSG_AMOUNT', reducer_config["DEFAULT"].get('EXPECTED_FINISHED_MSG_AMOUNT', 1))
+        # Load QUERY_ID, default to 0 if not found
+        config_params["query_id"] = int(os.getenv('QUERY_ID', reducer_config["DEFAULT"].get('QUERY_ID', 0)))
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
     except ValueError as e:
