@@ -37,6 +37,7 @@ class Client:
   
   
   def send_data(self, path, type):
+    logging.info(f"Sending file of type {type.name}")
     with open(path, "r") as file:
       lines = []
       current_size = 0

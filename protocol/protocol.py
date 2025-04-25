@@ -1,6 +1,7 @@
 from protocol import files_pb2
 from protocol.utils.parsing_proto_utils import *
 from enum import Enum
+import logging
 
 INT_LENGTH = 4
 CODE_LENGTH = 1
@@ -79,14 +80,16 @@ class Protocol:
     return message
 
 
-  def decode_client_msg(self, msg_buffer):
+  def decode_client_msg(self, msg_buffer, columns):
     code = int.from_bytes(msg_buffer[:CODE_LENGTH], byteorder='big')
 
     msg = msg_buffer[CODE_LENGTH + INT_LENGTH::]
     if code == END_FILE_CODE:
       file_code = int.from_bytes(msg[:CODE_LENGTH], byteorder='big')
       file_type = self.__codes_to_types[file_code]
-      return file_type, self.create_finished_message(file_type)
+      msg_finished = self.__file_classes[file_type]
+      msg_finished.finished = True
+      return file_type, msg_finished
 
     file_type = self.__codes_to_types[code]
     if file_type != self.current_file_type:
@@ -94,9 +97,9 @@ class Protocol:
       self.current_file_type = file_type
       self.current_headers_dict = dict()
 
-    return file_type, self.lines_to_batch(msg)
+    return file_type, self.lines_to_batch(msg, columns)
   
-  def lines_to_batch(self, line_bytes):
+  def lines_to_batch(self, line_bytes, columns):
     lines = files_pb2.CSVBatch()
     lines.ParseFromString(line_bytes)
     if not len(self.current_headers):
@@ -105,12 +108,22 @@ class Protocol:
     data_csv = self.__file_classes[self.current_file_type]
     for line in lines.rows:
       data = self.parse_line(line)
+      line_parsed = None
+      is_added = False
       if self.current_file_type == FileType.MOVIES:
-        data_csv.movies.append(self.update_movies_msg(data))
+        line_parsed, is_added = self.update_movies_msg(data, columns['movies'])
       elif self.current_file_type == FileType.RATINGS:
-        data_csv.ratings.append(self.update_ratings_msg(data))
+        line_parsed, is_added = self.update_ratings_msg(data, columns['ratings'])
       elif self.current_file_type == FileType.CREDITS:
-        data_csv.credits.append(self.update_credits_msg(data))
+        line_parsed, is_added = self.update_credits_msg(data, columns['credits'])
+      
+      if is_added:
+        if self.current_file_type == FileType.MOVIES:
+          data_csv.movies.append(line_parsed)
+        elif self.current_file_type == FileType.RATINGS:
+          data_csv.ratings.append(line_parsed)
+        elif self.current_file_type == FileType.CREDITS:
+          data_csv.credits.append(line_parsed)
     return data_csv
   
   def set_headers(self, headers):
@@ -128,29 +141,45 @@ class Protocol:
       if not part or part[0] != ' ':
         index+=1
       
-      data.setdefault(self.current_headers[index], "")
-      cleaned = part.strip(" '\\").strip('" \n')
-      if part and part[0] == ' ':
-        cleaned = "," + part
-      data[self.current_headers[index]] += cleaned
+      try:
+        data.setdefault(self.current_headers[index], "")
+        cleaned = part.strip(" '\\").strip('" \n')
+        if part and part[0] == ' ':
+          cleaned = "," + part
+      
+        data[self.current_headers[index]] += cleaned
+      except Exception as e:
+        logging.info(f"Line with more columns that disclosed")
+        return dict()
     
     return data
 
 
-  def update_ratings_msg(self, rating):
+  def update_ratings_msg(self, rating, columns):
     rating_pb = files_pb2.RatingCSV()
+    if self.drop_row(rating, columns):
+      return rating_pb, False
     rating_pb.userId = to_int(rating.get('userId', -1))
     rating_pb.movieId = to_int(rating.get('movieId', -1))
     rating_pb.rating = to_float(rating.get('rating', -1.0))
     rating_pb.timestamp = to_string(rating.get('timestamp', ''))
-    return rating_pb
+    return rating_pb, True
   
-  def update_credits_msg(self, credit):
+  def drop_row(self, row, columns):
+    for column in columns:
+      if not row.get(column):
+        return True
+    return False
+  
+  def update_credits_msg(self, credit, columns):
     credit_pb = files_pb2.CreditCSV()
+    if self.drop_row(credit, columns):
+      return credit_pb, False
+      
     self.create_cast(credit_pb, credit.get('cast', ''))
     self.create_crew(credit_pb, credit.get('crew', ''))
     credit_pb.id = to_int(credit.get('id', -1))
-    return credit_pb
+    return credit_pb, True
   
   def create_cast(self, credit_pb, cast_list):
     if cast_list == '' or cast_list == None:
@@ -186,8 +215,10 @@ class Protocol:
       crew_pb.profile_path = to_string(crew.get('profile_path', ''))
 
 
-  def update_movies_msg(self, movie):
+  def update_movies_msg(self, movie, columns):
     movie_pb = files_pb2.MovieCSV()
+    if self.drop_row(movie, columns):
+      return movie_pb, False
     movie_pb.id = to_int(movie.get('id', -1))
     movie_pb.adult = to_bool(movie.get('adult', 'False'))
     self.create_collection(movie_pb, movie.get('belongs_to_collection', ''))
@@ -212,7 +243,7 @@ class Protocol:
     movie_pb.video = to_bool(movie.get('video', 'False'))
     movie_pb.vote_average = to_float(movie.get('vote_average', -1.0))
     movie_pb.vote_count = to_int(movie.get('vote_count', -1))
-    return movie_pb
+    return movie_pb, True
   
   def create_collection(self, movie_pb, collection_data):
     data_list = create_data_list(collection_data)
