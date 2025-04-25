@@ -15,11 +15,15 @@ class Client:
     self.socket = client_sock
     self.data_controller = None
     self.result_controller = None
+    #TODO: config con queues y columnas
     self.movies_queue = RabbitMQ("exchange_rcv_movies", "rcv_movies", "movies_plain", "direct")
     self.ratings_queue = RabbitMQ("exchange_rcv_ratings", "rcv_ratings", "ratings_plain", "x-consistent-hash")
     self.credits_queue = RabbitMQ("exchange_rcv_credits", "rcv_credits", "credits_plain", "x-consistent-hash")
     self.protocol = Protocol()
     self.file_finished_server_step_publisher = RabbitMQ("server_finished_file_exchange", None, "", "fanout") # Use empty string for routing key
+    self.columns_nedded = {'movies': ["id", "title", "genres", "release_date", "overview", "production_countries", "spoken_languages", "budget", "revenue"],
+                           'ratings': ["movieId", "rating", "timestamp"],
+                           'credits': ["id", "cast"]}
 
   def run(self):
     self.data_controller = Process(target=self.handle_connection, args=[self.socket])
@@ -40,7 +44,7 @@ class Client:
 
   def handle_connection(self, conn: socket.socket):
     closed_socket = False
-    time.sleep(10)
+    time.sleep(15)
     while not closed_socket:
       read_amount = self.protocol.define_initial_buffer_size()
       buffer = bytearray()
@@ -52,8 +56,7 @@ class Client:
       if closed_socket:
         return
       
-      type, msg = self.protocol.decode_msg(buffer)
-
+      type, msg = self.protocol.decode_client_msg(buffer, self.columns_nedded)
       if msg.finished:
           self._handle_finished_message(type, msg)
       else:
@@ -72,7 +75,7 @@ class Client:
 
           if type_code is not None and self.file_finished_server_step_publisher:
               try:
-                  self.file_finished_server_step_publisher.publish(self.protocol.create_finished_message_for_joiners(type))
+                  self.file_finished_server_step_publisher.publish(self.protocol.create_finished_message(type))
                   logging.info(f"Published finish signal message for {type.name} to {self.file_finished_server_step_publisher.exchange}")
               except Exception as e_pub:
                   logging.error(f"Failed to publish finish signal message for {type.name} to control exchange: {e_pub}")
@@ -96,7 +99,6 @@ class Client:
       """Handles received messages containing data (finished flag is false)."""
       if type == FileType.MOVIES:
         self.filter_movies(msg)
-        time.sleep(1)
       elif type == FileType.RATINGS:
         self.filter_ratings(msg)
       elif type == FileType.CREDITS:
