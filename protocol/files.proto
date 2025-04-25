@@ -148,14 +148,37 @@ message AggregationBatch {
 
 // [START] Actor Participation (Output of Credits Joiner)
 message ActorParticipation {
-    int32 actor_id = 1;      // The unique ID of the actor (from Cast.id)
-    string actor_name = 2;   // The name of the actor (from Cast.name)
-    int32 movie_id = 3;      // The ID of the movie they participated in (from CreditCSV.id)
+    string actor_name = 1;   // The name of the actor (from Cast.name)
+    int32 movie_id = 2;      // The ID of the movie they participated in (from CreditCSV.id)
 }
 
 message ActorParticipationsBatch {
     repeated ActorParticipation participations = 1;
+    optional bool finished = 2;
 }
 // [END] Actor Participation messages
+
+// [START] Result messages
+
+message Result {
+  optional string country = 2;
+  optional string sentiment = 3;
+  optional string actor_name = 4;
+  optional string title = 5;
+
+  optional float average = 6;
+  optional float sum = 7;
+  repeated string genres = 8;
+}
+// [END] Result messages
+
+// [START] ResultBatch messages
+message ResultBatch {
+  int32 query_id = 1;
+  repeated Result result_row = 2;
+}
+
+// [END] ResultBatch messages
+
 
 // [END messages]

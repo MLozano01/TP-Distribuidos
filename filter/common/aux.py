@@ -1,4 +1,3 @@
-
 import operator
 import logging
 from protocol.protocol import Protocol
@@ -28,6 +27,10 @@ def parse_filter_funct(data_to_filter, filter_by, file_name):
 
     if file_name == "movies" and args[0] == "single":
         return filter_movies_by_quantity(data_to_filter, args)
+    
+    if file_name == "movies" and args[0] == "decade":
+        return filter_movies_by_dacade(data_to_filter, args)
+
 
 def filter_movies_by_date(data_to_filter, filter_args):
     result = []
@@ -67,3 +70,27 @@ def filter_movies_by_quantity(data_to_filter, filter_args):
             result.append(data)
     
     return result
+
+def filter_movies_by_dacade(data_to_filter, filter_args):
+    result = []
+    
+    for data in data_to_filter.movies:
+        movie_year = getattr(data, "release_date").split("-")[0]
+        op = filter_args[1]
+
+        if int(movie_year) >= int(filter_args[2]) and int(movie_year) < (int(filter_args[2]) + int(filter_args[1])):
+            result.append(data)
+
+    return result
+
+def movies_into_results(result):
+
+    res = {}
+
+    for data in result:
+        title = getattr(data, "title")
+        genre_names = [genre.name for genre in data.genres if genre.name]
+        res[title] = genre_names
+    final_res = {}
+    final_res["movies"] = res
+    return final_res

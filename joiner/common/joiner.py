@@ -6,6 +6,9 @@ from protocol.protocol import Protocol, FileType, MOVIES_FILE_CODE, RATINGS_FILE
 from protocol.rabbit_wrapper import RabbitMQConsumer, RabbitMQProducer
 from protocol import files_pb2 # Import files_pb2 to access new message types
 
+# Define batch size for outgoing messages
+BATCH_SIZE = 3000
+
 class Joiner:
     def __init__(self, **kwargs):
         # Configuration
@@ -60,6 +63,7 @@ class Joiner:
                 routing_key=consistent_hash_binding_key # Use fixed weight "1"
                 # durable=True by default
             )
+            logging.info(f"Movies Consumer on exchange: {self.movies_consumer.exchange}")
             # Other Data Consumer (Consistent Hash Queue)
             self.other_consumer = RabbitMQConsumer(
                 host=host,
@@ -69,6 +73,7 @@ class Joiner:
                 routing_key=consistent_hash_binding_key # Use fixed weight "1"
                 # durable=True by default
             )
+            logging.info(f"Other Consumer on exchange: {self.other_consumer.exchange}")
             # Control Consumer (Fanout Queue for RATINGS/CREDITS finished signals from Server)
             self.control_consumer = RabbitMQConsumer(
                 host=host,
@@ -94,6 +99,7 @@ class Joiner:
                 routing_key=self.config['routing_key_output'] # Default routing key
                 # Producer declares exchange but not queue by default
             )
+            logging.info(f"Output Producer on exchange: {self.output_producer.exchange}")
             logging.info("RabbitMQ connections settled using rabbit_wrapper classes.")
 
         except Exception as e:
@@ -158,7 +164,7 @@ class Joiner:
             with self._lock:
                 for movie in movies_msg.movies:
                     self.movies_buffer[movie.id] = movie
-                    logging.info(f"Buffered movie ID {movie.id}")
+                    logging.info(f"Buffered movie ID {movie.id} with title {movie.title} on _process_movie_message")
 
         except Exception as e:
             logging.error(f"Error processing movie message: {e}", exc_info=True)
@@ -204,7 +210,7 @@ class Joiner:
 
                     # Optimization: If movie_id not in movies_buffer, discard this item
                     if movie_id not in self.movies_buffer:
-                        logging.debug(f"Discarding {self.other_data_type} for movie ID {movie_id} as it's not in movies_buffer.")
+                        logging.info(f"Discarding {self.other_data_type} for movie ID {movie_id} as it's not in movies_buffer.")
                         continue
 
                     if is_ratings:
@@ -221,7 +227,7 @@ class Joiner:
                         if movie_id not in self.other_buffer:
                             self.other_buffer[movie_id] = []
                         self.other_buffer[movie_id].append(item)
-                        logging.debug(f"Buffered {self.other_data_type} data for movie ID {movie_id}")
+                        logging.info(f"Buffered {self.other_data_type} data for movie ID {movie_id}")
 
         except Exception as e:
             logging.error(f"Error processing {self.other_data_type} message: {e}", exc_info=True)
@@ -230,12 +236,27 @@ class Joiner:
 
     def _process_ratings_join(self):
         """Processes buffered data for RATINGS join, modifying MovieCSV."""
-        processed_movies_for_batch = []
+        processed_movies_batch = [] # Accumulate movies for the current batch
         joined_ids = set()
+        initial_movie_count = 0
+        initial_ratings_count = 0
+        total_movies_sent = 0
+
         with self._lock:
-            logging.info(f"Processing Ratings Join. Movies: {len(self.movies_buffer)}, Ratings Stats: {len(self.other_buffer)}") # Modified log
-            for movie_id, movie_data in list(self.movies_buffer.items()):
+            initial_movie_count = len(self.movies_buffer)
+            initial_ratings_count = len(self.other_buffer)
+            logging.info(f"Processing Ratings Join. Movies: {initial_movie_count}, Ratings Stats: {initial_ratings_count}")
+
+            # Iterate over a copy of movie IDs to allow safe deletion
+            movie_ids_to_check = list(self.movies_buffer.keys())
+
+            for movie_id in movie_ids_to_check:
+                # Check for match only if movie_id is still in buffer
+                if movie_id not in self.movies_buffer:
+                     continue
+                
                 if movie_id in self.other_buffer:
+                    movie_data = self.movies_buffer[movie_id]
                     try:
                         # Retrieve the pre-calculated sum and count directly
                         ratings_sum, rating_count = self.other_buffer[movie_id]
@@ -249,64 +270,139 @@ class Joiner:
                             movie_data.average_rating = 0.0
                             logging.debug(f"Matched movie ID {movie_id} but count is zero in stats.")
 
-                        processed_movies_for_batch.append(movie_data)
+                        processed_movies_batch.append(movie_data)
                         joined_ids.add(movie_id)
+
+                        # Check if batch is full
+                        if len(processed_movies_batch) >= BATCH_SIZE:
+                            logging.info(f"Movie batch size reached ({len(processed_movies_batch)}). Sending batch...")
+                            # Send batch (needs _send_movie_batch helper which handles producer check)
+                            # Sending here holds the lock longer, but simplifies batch logic.
+                            self._send_movie_batch(processed_movies_batch)
+                            total_movies_sent += len(processed_movies_batch)
+                            processed_movies_batch.clear() # Reset for next batch
+
                     except Exception as e:
                         logging.error(f"Error during ratings join for movie ID {movie_id}: {e}", exc_info=True)
-            # Cleanup
-            for movie_id in joined_ids:
-                if movie_id in self.movies_buffer: del self.movies_buffer[movie_id]
-                if movie_id in self.other_buffer: del self.other_buffer[movie_id]
-            logging.info(f"Ratings join pass complete. Removed {len(joined_ids)}. Remaining Movies: {len(self.movies_buffer)}, Ratings Stats: {len(self.other_buffer)}") # Modified log
 
-        # Send results if any
-        if processed_movies_for_batch:
-            self._send_movie_batch(processed_movies_for_batch)
+            # --- Batching: Send any remaining movies after the loop --- 
+            if processed_movies_batch:
+                logging.info(f"Sending final batch of {len(processed_movies_batch)} processed movies...")
+                self._send_movie_batch(processed_movies_batch)
+                total_movies_sent += len(processed_movies_batch)
+                processed_movies_batch.clear()
+            # --- End Batching Modification ---
+
+            # Cleanup processed movies/ratings outside the iteration loop
+            for mid in joined_ids:
+                if mid in self.movies_buffer: del self.movies_buffer[mid]
+                if mid in self.other_buffer: del self.other_buffer[mid]
+
+            final_movie_count = len(self.movies_buffer)
+            final_ratings_count = len(self.other_buffer)
+            # Use total_movies_sent for the final log
+            logging.info(f"Ratings join pass complete. Sent {total_movies_sent} processed MovieCSV records in batches. Processed {len(joined_ids)} movie IDs. Initial state: ({initial_movie_count} M, {initial_ratings_count} R). Final state: ({final_movie_count} M, {final_ratings_count} R).")
+            # Send finished signal for the processed movie stream
+            logging.info("Sending finished signal for processed MovieCSV stream...")
+            self.output_producer.publish(self.protocol.create_finished_movies_msg())
+
 
     def _process_credits_join(self):
-        """Processes buffered data for CREDITS join, emitting ActorParticipation messages."""
-        participations_for_batch = [] # Collect participation records here
-        processed_ids = set() # Track which movies/credits were processed in this pass
+        """Processes buffered data for CREDITS join, emitting ActorParticipation messages in batches."""
+        participations_batch = [] # Accumulate participations for the current batch
+        processed_movie_ids = set()
+        initial_movie_count = 0
+        initial_credits_count = 0
+        total_participations_sent = 0
 
         with self._lock:
-            logging.info(f"Processing Credits Join. Movies: {len(self.movies_buffer)}, Credits: {len(self.other_buffer)}")
-            for movie_id, movie_data in list(self.movies_buffer.items()): # Iterate over filtered movies
-                if movie_id in self.other_buffer: # Check if corresponding credits exist
-                    credits_list = self.other_buffer[movie_id]
+            initial_movie_count = len(self.movies_buffer)
+            initial_credits_count = len(self.other_buffer)
+            logging.info(f"Starting Credits Join. Movies: {initial_movie_count}, Credits: {initial_credits_count}")
+
+            # Iterate over a copy of movie IDs to allow safe deletion
+            movie_ids_to_check = list(self.movies_buffer.keys())
+
+            for movie_id in movie_ids_to_check:
+                # Check for match only if movie_id is still in buffer
+                if movie_id not in self.movies_buffer:
+                    continue
+
+                if movie_id in self.other_buffer:
+                    movie_data = self.movies_buffer[movie_id]
+                    credit_csv = self.other_buffer[movie_id][0]
                     try:
-                        # Assumes only one CreditCSV item per movie ID in other_buffer
-                        if credits_list:
-                            credit_data = credits_list[0]
-                            for cast_member in credit_data.cast:
-                                if not cast_member.name or cast_member.id <= 0: continue # Skip if name or ID is missing/invalid
+                        if credit_csv:
+                            # Assume only one CreditCSV item per movie ID
+                            movie_participations, skipped = self._create_participations_for_movie(movie_id, credit_csv)
+                            if movie_participations:
+                                participations_batch.extend(movie_participations)
+                                # Check if batch is full
+                                if len(participations_batch) >= BATCH_SIZE:
+                                    logging.info(f"Participation batch size reached ({len(participations_batch)}). Sending batch...")
+                                    # Send batch (outside lock? -> needs careful consideration, but send helper handles producer check)
+                                    # Sending here might hold lock longer, but simplifies batch logic, other threads finished by now
+                                    self._send_actor_participations_batch(participations_batch)
+                                    total_participations_sent += len(participations_batch)
+                                    participations_batch.clear() # Reset for next batch
 
-                                # Create an ActorParticipation message
-                                participation = files_pb2.ActorParticipation()
-                                participation.actor_id = cast_member.id
-                                participation.actor_name = cast_member.name
-                                participation.movie_id = movie_id # Use the movie ID from the join key
-
-                                participations_for_batch.append(participation)
-
-                            processed_ids.add(movie_id)
-                            logging.debug(f"Generated {len(credit_data.cast)} participation records for movie ID {movie_id}")
+                            logging.info(f"Processed movie {movie_id}: Found {len(credit_csv.cast)} cast, skipped {skipped}, added {len(movie_participations)} participations.")
+                            processed_movie_ids.add(movie_id)
                         else:
-                            logging.debug(f"Matched movie ID {movie_id} but no credits data found.")
-                            processed_ids.add(movie_id) # Mark as processed even if no credits
+                            logging.warning(f"Matched movie ID {movie_id} but the credits list in buffer was empty. Marking as processed.")
+                            processed_movie_ids.add(movie_id)
 
                     except Exception as e:
-                        logging.error(f"Error processing credits for movie ID {movie_id}: {e}", exc_info=True)
+                        logging.error(f"Error processing credits join for movie ID {movie_id}: {e}", exc_info=True)
 
-            # Cleanup processed movies/credits (prevent reprocessing if EOF comes late)
-            for movie_id in processed_ids:
-                if movie_id in self.movies_buffer: del self.movies_buffer[movie_id]
-                if movie_id in self.other_buffer: del self.other_buffer[movie_id]
+            # --- Batching: Send any remaining participations after the loop ---
+            if participations_batch:
+                logging.info(f"Sending final batch of {len(participations_batch)} participations...")
+                self._send_actor_participations_batch(participations_batch)
+                total_participations_sent += len(participations_batch)
+                participations_batch.clear()
+            # --- End Batching Modification ---
 
-            logging.info(f"Credits join pass complete. Generated {len(participations_for_batch)} participation records. Processed {len(processed_ids)} movies. Remaining Movies: {len(self.movies_buffer)}, Credits: {len(self.other_buffer)}")
+            # Cleanup processed movies/credits outside the iteration loop
+            for mid in processed_movie_ids:
+                if mid in self.movies_buffer: del self.movies_buffer[mid]
+                if mid in self.other_buffer: del self.other_buffer[mid]
 
-        # Send the collected participation records
-        if participations_for_batch:
-            self._send_actor_participations_batch(participations_for_batch)
+            final_movie_count = len(self.movies_buffer)
+            final_credits_count = len(self.other_buffer)
+            # Use total_participations_sent for the final log
+            logging.info(f"Credits join pass complete. Generated and sent {total_participations_sent} participation records in batches. Processed {len(processed_movie_ids)} movie IDs. Initial state: ({initial_movie_count} M, {initial_credits_count} C). Final state: ({final_movie_count} M, {final_credits_count} C).")
+            logging.info("Sending finished signal for ActorParticipations stream...")
+            self.output_producer.publish(self.protocol.create_finished_actor_participations_msg())
+
+    def _create_participations_for_movie(self, movie_id, credit_csv):
+        """Helper function to create ActorParticipation messages for a single movie's credits."""
+        participations = []
+        cast_skipped_count = 0
+        if not credit_csv or not credit_csv.cast:
+            logging.warning(f"No cast data found for movie {movie_id} within provided credit_data.")
+            return participations, cast_skipped_count
+
+        logging.debug(f"Creating participations (name-based) for movie {movie_id}. Found {len(credit_csv.cast)} cast members.")
+        for i, cast_member in enumerate(credit_csv.cast):
+            # Log only name now
+            logging.debug(f"  Checking cast member {i+1}/{len(credit_csv.cast)}: Name='{cast_member.name}'")
+            # Only check for name, ignore ID
+            if not cast_member.name:
+                logging.debug(f"    -> Skipping cast member for movie {movie_id}: Name='{cast_member.name}' (Empty Name)")
+                cast_skipped_count += 1
+                continue # Skip if name is missing
+
+            # Create an ActorParticipation message (without actor_id)
+            participation = files_pb2.ActorParticipation()
+            participation.actor_name = cast_member.name
+            participation.movie_id = movie_id # Use the movie ID from the join key
+            participations.append(participation)
+            logging.debug(f"    -> Added participation for actor name '{cast_member.name}'")
+
+        logging.debug(f"Finished creating participations for movie {movie_id}. Skipped {cast_skipped_count}. Added {len(participations)} participations.")
+        return participations, cast_skipped_count
+    
 
     def _send_movie_batch(self, movie_list):
         """Serializes and sends a batch of MovieCSV objects."""

@@ -258,12 +258,13 @@ class Protocol:
 
   def create_genres(self, movie_pb, genres_data):
     data_list = create_data_list(genres_data)
-    for genre in data_list:
-      if not genre:
-        return
+    for genre_dict in data_list:
+      if not genre_dict:
+        continue
+      
       genre_pb = movie_pb.genres.add()
-      genre_pb.id = to_int(genre.get('id', -1))
-      genre_pb.name = to_string(genre.get('name', ''))
+      genre_pb.id = to_int(genre_dict.get('id', -1))
+      genre_pb.name = to_string(genre_dict.get('name', ''))
 
   def create_companies(self, movie_pb, companies_data):
     data_list = create_data_list(companies_data)
@@ -293,6 +294,20 @@ class Protocol:
       language_pb.name = to_string(language.get('name', ''))
 
 
+  def decode_msg(self, msg_buffer):
+    code = int.from_bytes(msg_buffer[:CODE_LENGTH], byteorder='big')
+
+    msg = msg_buffer[CODE_LENGTH + INT_LENGTH::]
+    if code == MOVIES_FILE_CODE:
+      return FileType.MOVIES, self.decode_movies_msg(msg)
+    elif code == RATINGS_FILE_CODE:
+      return FileType.RATINGS, self.decode_ratings_msg(msg)
+    elif code == CREDITS_FILE_CODE:
+      return FileType.CREDITS, self.decode_credits_msg(msg)
+    elif code == RESULT_CODE:
+      return None, self.decode_result(msg)
+
+  
   def decode_movies_msg(self, msg_buffer):
     movies = files_pb2.MoviesCSV()
     movies.ParseFromString(msg_buffer)
@@ -309,13 +324,14 @@ class Protocol:
     return credits
   
 
-  def create_result(self, data):
-    return self.create_bytes(RESULT_CODE, data)
+  def create_client_result(self, data):
+    message = bytearray()
+    len_msg = len(data)
+    message.extend(RESULT_CODE.to_bytes(CODE_LENGTH, byteorder='big'))
+    message.extend(len_msg.to_bytes(INT_LENGTH, byteorder='big'))
+    message.extend(data)
+    return message
 
-  def decode_result(self, buffer):
-    msg = buffer[CODE_LENGTH + INT_LENGTH::]
-    return self.decode_movies_msg(msg)
-  
   def create_movie_list(self, movies):
     movies_pb = files_pb2.MoviesCSV()
 
@@ -350,9 +366,64 @@ class Protocol:
       batch_pb.participations.extend(participations)
       return batch_pb.SerializeToString()
 
+  def create_finished_actor_participations_msg(self):
+      """Creates and serializes an ActorParticipationsBatch message with finished=True."""
+      batch_pb = files_pb2.ActorParticipationsBatch()
+      batch_pb.finished = True
+      return batch_pb.SerializeToString()
+  
+  def create_finished_movies_msg(self):
+      """Creates and serializes an MoviesCsv message with finished=True."""
+      movies_pb = files_pb2.MoviesCSV()
+      movies_pb.finished = True
+      return movies_pb.SerializeToString()
+
   def decode_actor_participations_batch(self, buffer):
       """Deserializes an ActorParticipationsBatch message."""
       batch_pb = files_pb2.ActorParticipationsBatch()
       batch_pb.ParseFromString(buffer)
       return batch_pb
 
+  def create_result(self, dict_results):
+    batch_pb = files_pb2.ResultBatch()
+
+    for key, results in dict_results.items():
+      if key == "country":
+        batch_pb.query_id = 2
+        for country, value in results.items():
+          res_pb = batch_pb.result_row.add()
+          res_pb.country = country
+          res_pb.sum = to_float(value)
+      elif key == "actor":
+        batch_pb.query_id = 4
+        for actor, value in results.items():
+          res_pb = batch_pb.result_row.add()
+          res_pb.actor_name = actor
+          res_pb.sum = to_float(value)
+      elif key == "max-min":
+        batch_pb.query_id = 3
+        for title, value in results.items():
+          res_pb = batch_pb.result_row.add()
+          res_pb.title = title
+          res_pb.average = to_float(value)
+      elif key == "sentiment":
+        batch_pb.query_id = 5
+        for sentiment, value in results.items():
+          res_pb = batch_pb.result_row.add()
+          res_pb.sentiment = sentiment
+          res_pb.average = to_float(value)
+      elif key == "movies":
+        batch_pb.query_id = 1
+        for title, value in results.items():
+          res_pb = batch_pb.result_row.add()
+          res_pb.title = title
+          if isinstance(value, list):
+              res_pb.genres.extend(value)
+
+    batch_pb_str = batch_pb.SerializeToString()
+    return batch_pb_str
+  
+  def decode_result(self, buffer):
+    result = files_pb2.ResultBatch()
+    result.ParseFromString(buffer)
+    return result
