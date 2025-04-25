@@ -210,7 +210,7 @@ class Joiner:
 
                     # Optimization: If movie_id not in movies_buffer, discard this item
                     if movie_id not in self.movies_buffer:
-                        logging.info(f"Discarding {self.other_data_type} for movie ID {movie_id} as it's not in movies_buffer.")
+                        #logging.info(f"Discarding {self.other_data_type} for movie ID {movie_id} as it's not in movies_buffer.")
                         continue
 
                     if is_ratings:
