@@ -1,3 +1,4 @@
+
 version: "3.8"
 services:
   rabbitmq:
@@ -6,8 +7,8 @@ services:
       dockerfile: rabbitmq.dockerfile
     hostname: rabbitmq
     ports:
-      - 5672:5672 # AMQP port
-      - 15672:15672 # Management UI port
+      - 5672:5672
+      - 15672:15672
     networks:
       - tp_network
     volumes:
@@ -66,8 +67,8 @@ services:
       - ./filter/filters/filter_single_country_movies.ini:/filter_single_country_movies.ini
       - ./filter/filters/filter_decade_movies.ini:/filter_decade_movies.ini
     
+  
   transformer:
-    container_name: transformer
     image: transformer:latest
     networks:
       - tp_network
@@ -78,7 +79,9 @@ services:
       - rabbitmq
     volumes:
       - ./transformer/config.ini:/config.ini
-
+    deploy:
+      replicas: 2
+    
   
   aggregator:
     container_name: aggregator
@@ -129,7 +132,24 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - JOINER_REPLICA_ID=1 # Direct integer ID
-      - JOINER_REPLICA_COUNT=1 # Direct integer count
+      - JOINER_REPLICA_COUNT=2 # Direct integer count
+    
+  joiner-ratings-2:
+    container_name: joiner-ratings-2
+    image: joiner:latest
+    networks:
+      - tp_network
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./joiner/config/joiner-ratings.ini:/config.ini
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JOINER_REPLICA_ID=2 # Direct integer ID
+      - JOINER_REPLICA_COUNT=2 # Direct integer count
     
   
   joiner-credits-1:
@@ -147,7 +167,24 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - JOINER_REPLICA_ID=1 # Direct integer ID
-      - JOINER_REPLICA_COUNT=1 # Direct integer count
+      - JOINER_REPLICA_COUNT=2 # Direct integer count
+    
+  joiner-credits-2:
+    container_name: joiner-credits-2
+    image: joiner:latest
+    networks:
+      - tp_network
+    depends_on:
+      - server
+      - rabbitmq
+    links:
+      - rabbitmq
+    volumes:
+      - ./joiner/config/joiner-credits.ini:/config.ini
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JOINER_REPLICA_ID=2 # Direct integer ID
+      - JOINER_REPLICA_COUNT=2 # Direct integer count
     
 networks:
   tp_network:
