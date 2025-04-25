@@ -105,7 +105,9 @@ class Protocol:
     if not len(self.current_headers):
       self.set_headers(lines.rows.pop(0))
     
-    data_csv = self.__file_classes[self.current_file_type]
+    ProtoClass = type(self.__file_classes[self.current_file_type])
+    data_csv = ProtoClass()
+
     for line in lines.rows:
       data = self.parse_line(line)
       line_parsed = None
