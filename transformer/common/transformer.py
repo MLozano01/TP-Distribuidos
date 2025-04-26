@@ -277,6 +277,11 @@ class Transformer:
 
             consumers = [self.queue_rcv, self.control_consumer]
             for consumer in consumers:
+                # Check if this is the control consumer AND if the finished signal was received
+                if consumer == self.control_consumer and self._finished_signal_received:
+                     logging.debug("Skipping stop() for control_consumer in finally block as it was stopped explicitly.")
+                     continue # Skip stopping it again
+                
                 if consumer:
                     try:
                         consumer.stop()
