@@ -69,12 +69,10 @@ def reduce_top5(data_to_reduce, reduce_args, result):
 
     for data in data_to_reduce.aggr_row:
 
-        if data.key not in result:
-            result[data.key] = data.sum
-
+        if data.key in result:
+            result[data.key] += data.sum
         else:
-            if result[data.key] < data.sum:
-                result[data.key] = data.sum
+            result[data.key] = data.sum
 
     return result
 

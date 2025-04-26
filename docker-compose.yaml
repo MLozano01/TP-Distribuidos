@@ -30,7 +30,7 @@ services:
     volumes:
       - ./client/config.ini:/config.ini
       - ./data/credits.csv:/credits_filtered.csv
-      - ./data/ratings.csv:/ratings_filtered.csv
+      - ./data/ratings_filtered.csv:/ratings_filtered.csv
       - ./data/movies_metadata.csv:/movies_metadata_filtered.csv
     
   server:
