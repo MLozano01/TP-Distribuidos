@@ -109,9 +109,9 @@ class Client:
   def filter_movies(self, movies_csv):
     movies_pb = files_pb2.MoviesCSV()
     for movie in movies_csv.movies:
-      if not movie.id or movie.id < 0 or not movie.title or not movie.release_date:
+      if not movie.id or movie.id < 0 or not movie.release_date:
         continue
-      if not is_date(movie.release_date) or not movie.overview:
+      if not is_date(movie.release_date):
         continue
 
       # if not movie.budget or movie.budget < 0 or not movie.revenue or movie.revenue < 0:
@@ -177,8 +177,8 @@ class Client:
 
       names = map(lambda cast: cast.name, credit.cast)
       names = list(filter(lambda name: name, names))
-      if not len(names):
-        continue
+      # if not len(names):
+      #   continue
 
       credit_pb = files_pb2.CreditCSV()
       credit_pb.id = credit.id

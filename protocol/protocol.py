@@ -168,8 +168,9 @@ class Protocol:
     return rating_pb, True
   
   def drop_row(self, row, columns):
+    row_keys = row.keys()
     for column in columns:
-      if not row.get(column):
+      if column not in row_keys:
         return True
     return False
   
