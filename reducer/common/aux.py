@@ -39,8 +39,15 @@ def parse_final_result(reduce_by, partial_results):
     if args[0] == "avg":
         return calculate_avg(partial_results)
     if args[0] == "top" and args[1] == "5":
+        # Sort countries by sum (value) in descending order
+        sorted_countries = sorted(partial_results.items(), key=operator.itemgetter(1), reverse=True)
+        # Take the top 5
+        top_5_countries = dict(sorted_countries[:int(args[1])])
+        logging.debug(f"[parse_final_result] top_5_countries: {top_5_countries}") # Log calculated top 5
+
         res = {}
-        res["country"] = partial_results
+        res["country"] = top_5_countries # Assign the actual top 5 dictionary
+        logging.debug(f"[parse_final_result] Returning: {res}") # Log return value
         return res
     if args[0] == "top" and args[1] == "10":
         res = {}
@@ -57,9 +64,6 @@ def reduce_top5(data_to_reduce, reduce_args, result):
 
         if data.key not in result:
             result[data.key] = data.sum
-            if len(result) > int(reduce_args[1]):
-                last_country = min(result, key=result.get)
-                result.pop(last_country)
 
         else:
             if result[data.key] < data.sum:
