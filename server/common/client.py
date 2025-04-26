@@ -75,6 +75,7 @@ class Client:
 
           if type_code is not None and self.file_finished_server_step_publisher:
               try:
+                  time.sleep(3)
                   self.file_finished_server_step_publisher.publish(self.protocol.create_finished_message(type))
                   logging.info(f"Published finish signal message for {type.name} to {self.file_finished_server_step_publisher.exchange}")
               except Exception as e_pub:
