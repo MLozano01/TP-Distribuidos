@@ -24,6 +24,7 @@ class Client:
     self.columns_nedded = {'movies': ["id", "title", "genres", "release_date", "overview", "production_countries", "spoken_languages", "budget", "revenue"],
                            'ratings': ["movieId", "rating", "timestamp"],
                            'credits': ["id", "cast"]}
+    self.filtered_movies_ids = []
 
   def run(self):
     self.data_controller = Process(target=self.handle_connection, args=[self.socket])
@@ -118,13 +119,13 @@ class Client:
       
       # Filter the original Genre objects based on their name attribute
       filtered_genres = [genre for genre in movie.genres if genre.name]
-      if not len(filtered_genres):
-          continue
+      # if not len(filtered_genres):
+      #     continue
 
       countries = map(lambda country: country.name, movie.countries)
       countries = list(filter(lambda name: name, countries))
-      if not len(countries):
-        continue
+      # if not len(countries):
+      #   continue
 
       movie_pb = movies_pb.movies.add()
       movie_pb.id = movie.id
@@ -140,26 +141,36 @@ class Client:
       for country in countries:
         country_pb = movie_pb.countries.add()
         country_pb.name = country
+      self.filtered_movies_ids.append(movie.id)
 
     if not len(movies_pb.movies):
       return
     self.movies_queue.publish(movies_pb.SerializeToString())
   
   def filter_ratings(self, ratings_csv):
+    ratings_by_movie = dict() 
     for rating in ratings_csv.ratings:
       if not rating.movieId or rating.movieId < 0 or not rating.rating or rating.rating < 0:
         continue
+
+      if rating.movieId not in self.filtered_movies_ids:
+        continue
       
-      ratings_pb = files_pb2.RatingsCSV()
-      rating_pb = ratings_pb.ratings.add()
+      rating_pb = files_pb2.RatingCSV()
       rating_pb.userId = rating.userId
       rating_pb.movieId = rating.movieId
       rating_pb.rating = rating.rating
-      rating_pb.timestamp = rating.timestamp
+      # rating_pb.timestamp = rating.timestamp
 
-      self.ratings_queue.publish(ratings_pb.SerializeToString(), routing_key=str(rating.movieId))
+      ratings_by_movie.setdefault(rating.movieId, files_pb2.RatingsCSV())
+      ratings_pb = ratings_by_movie[rating.movieId]
+      ratings_pb.ratings.append(rating_pb)
+      ratings_by_movie[rating.movieId] = ratings_pb
+    for movie_id, batch in ratings_by_movie.items():
+      self.ratings_queue.publish(batch.SerializeToString(), routing_key=str(movie_id))
 
   def filter_credits(self, credits_csv):
+    credits_by_movie = dict()
     for credit in credits_csv.credits:
       if not credit.id or credit.id < 0 or not len(credit.cast):
         continue
@@ -169,16 +180,20 @@ class Client:
       if not len(names):
         continue
 
-      credits_pb = files_pb2.CreditsCSV()
-      credit_pb = credits_pb.credits.add()
+      credit_pb = files_pb2.CreditCSV()
       credit_pb.id = credit.id
       
       for name in names:
         cast_pb = credit_pb.cast.add()
         cast_pb.name = name
-      
-      # Publish the single-entry CreditsCSV message
-      self.credits_queue.publish(credits_pb.SerializeToString(), routing_key=str(credit.id))
+
+      credits_by_movie.setdefault(credit.id, files_pb2.CreditsCSV())
+      credits_pb = credits_by_movie[credit.id]
+      credits_pb.credits.append(credit_pb)
+      credits_by_movie[credit.id] = credits_pb
+    
+    for movie_id, batch in credits_by_movie.items():
+      self.credits_queue.publish(batch.SerializeToString(), routing_key=str(movie_id))
 
 
   def return_results(self, conn: socket.socket):
