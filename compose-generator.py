@@ -94,10 +94,8 @@ def create_client(id):
     networks:
       - {NETWORK_NAME}
     depends_on:
-      - server
-      - rabbitmq
-    links:
-      - rabbitmq
+      server:
+        condition: service_started
     volumes:
       - ./client/{CONFIG_FILE}:/{CONFIG_FILE}
       - ./data/{CREDITS_DATASET}:/{CREDITS_DATASET}
@@ -116,7 +114,9 @@ def create_server(client_amount):
     networks:
       - {NETWORK_NAME}
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+        restart: true
     links:
       - rabbitmq
     volumes:
@@ -146,6 +146,11 @@ def create_rabbit():
       - {NETWORK_NAME}
     volumes:
       - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+    healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:15672"]
+        interval: 10s
+        timeout: 5s
+        retries: 10
     """
     return rabbit
 
@@ -157,8 +162,9 @@ def create_filter():
     networks:
       - {NETWORK_NAME}
     depends_on:
-      - server
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+        restart: true
     links:
       - rabbitmq
     volumes:
@@ -179,8 +185,9 @@ def create_reducer():
     networks:
       - {NETWORK_NAME}
     depends_on:
-      - server
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+        restart: true
     links:
       - rabbitmq
     volumes:
@@ -200,8 +207,9 @@ def create_aggregator():
     networks:
       - {NETWORK_NAME}
     depends_on:
-      - server
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+        restart: true
     links:
       - rabbitmq
     volumes:
@@ -218,8 +226,9 @@ def create_transformer(replicas=1):
     networks:
       - {NETWORK_NAME}
     depends_on:
-      - server
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+        restart: true
     links:
       - rabbitmq
     volumes:
@@ -250,8 +259,9 @@ def create_joiner(service_base_name, replica_id, total_replicas, config_source_p
     networks:
       - {NETWORK_NAME}
     depends_on:
-      - server
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+        restart: true
     links:
       - rabbitmq
     volumes:

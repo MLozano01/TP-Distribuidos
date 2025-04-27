@@ -46,7 +46,6 @@ class Client:
 
   def handle_connection(self, conn: socket.socket):
     closed_socket = False
-    time.sleep(15)
     while not closed_socket:
       read_amount = self.protocol.define_initial_buffer_size()
       buffer = bytearray()
