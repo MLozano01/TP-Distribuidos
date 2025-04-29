@@ -216,9 +216,9 @@ class Client:
   def result_controller_func(self, ch, method, properties, body):
     try:
       # data = json.loads(body)
-      logging.info("got result: {body}") 
+      logging.info(f"got result: {body}") 
       msg = self.protocol.create_client_result(body)
-      logging.info("sending message: {msg}")
+      logging.info(f"sending message: {msg}")
       self.socket.sendall(msg)
     except json.JSONDecodeError as e:
       logging.error(f"Failed to decode JSON: {e}")

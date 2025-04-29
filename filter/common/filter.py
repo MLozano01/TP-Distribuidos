@@ -143,7 +143,10 @@ class Filter:
             self.finished_filter_arg_step_publisher.publish(self.protocol.create_finished_message(FileType.MOVIES))
             logging.info(f"Published movie finished signal to {self.finished_filter_arg_step_publisher.exchange}")
         else:
-            self.queue_snd_movies.publish(msg.SerializeToString())
+            msg_to_send = msg.SerializeToString()
+            if self.queue_snd_movies.key == "results":
+                msg_to_send = self.protocol.create_result({"movies": {}})
+            self.queue_snd_movies.publish(msg_to_send)
             logging.info(f"Published movie finished signal to {self.queue_snd_movies.exchange}")
 
     def end_filter(self):
