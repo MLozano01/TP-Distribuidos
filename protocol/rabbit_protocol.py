@@ -15,8 +15,6 @@ class RabbitMQ:
     def create_channel(self):
         """Used to create a channel for the queue."""
 
-        time.sleep(10)  # Wait for RabbitMQ to start
-
         try:
             connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
 

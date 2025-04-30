@@ -20,7 +20,8 @@ class Client:
     self.ratings_queue = RabbitMQ("exchange_rcv_ratings", "rcv_ratings", "ratings_plain", "x-consistent-hash")
     self.credits_queue = RabbitMQ("exchange_rcv_credits", "rcv_credits", "credits_plain", "x-consistent-hash")
     self.protocol = Protocol()
-    self.file_finished_server_step_publisher = RabbitMQ("server_finished_file_exchange", None, "", "fanout") # Use empty string for routing key
+    self.other_files_finished_publisher = RabbitMQ("server_finished_file_exchange", None, "", "fanout") # Use empty string for routing key
+    self.movies_files_finished_publisher = RabbitMQ("server_finished_movies_file_exchange", None, "", "fanout") # Use empty string for routing key
     self.columns_nedded = {'movies': ["id", "title", "genres", "release_date", "overview", "production_countries", "spoken_languages", "budget", "revenue"],
                            'ratings': ["movieId", "rating", "timestamp"],
                            'credits': ["id", "cast"]}
@@ -45,7 +46,6 @@ class Client:
 
   def handle_connection(self, conn: socket.socket):
     closed_socket = False
-    time.sleep(15)
     while not closed_socket:
       read_amount = self.protocol.define_initial_buffer_size()
       buffer = bytearray()
@@ -65,37 +65,50 @@ class Client:
 
   def _handle_finished_message(self, type, msg):
       """Handles received messages where the finished flag is set."""
-      # Send control signal code for Ratings/Credits via Control Publisher
-      if type == FileType.RATINGS or type == FileType.CREDITS:
-          logging.info(f"Received finished signal for type {type.name}. Publishing type code to control exchange...")
-          type_code = None
-          if type == FileType.RATINGS:
-              type_code = RATINGS_FILE_CODE
-          elif type == FileType.CREDITS:
-              type_code = CREDITS_FILE_CODE
-
-          if type_code is not None and self.file_finished_server_step_publisher:
-              try:
-                  time.sleep(3)
-                  self.file_finished_server_step_publisher.publish(self.protocol.create_finished_message(type))
-                  logging.info(f"Published finish signal message for {type.name} to {self.file_finished_server_step_publisher.exchange}")
-              except Exception as e_pub:
-                  logging.error(f"Failed to publish finish signal message for {type.name} to control exchange: {e_pub}")
-          elif not self.file_finished_server_step_publisher:
-              logging.error(f"Control publisher not initialized. Cannot send finish signal for {type.name}.")
-          else:
-              logging.warning(f"Could not determine type code for finished signal: {type.name}")
-      # Send full original Movies finished message via Movie Data Queue
+      if type in [FileType.RATINGS, FileType.CREDITS]:
+          self._handle_ratings_or_credits_finished(type)
       elif type == FileType.MOVIES:
-          logging.info(f"Received finished signal for type {type.name}. Forwarding full message to data exchange...")
-          try:
-              # Publish ONLY the serialized payload as Filter expects this
-              self.movies_queue.publish(msg.SerializeToString())
-              logging.info(f"Forwarded full MOVIES finished message to {self.movies_queue.exchange}")
-          except Exception as e_pub:
-              logging.error(f"Failed to forward full MOVIES finished message: {e_pub}")
+          self._handle_movies_finished(msg)
       else:
-           logging.warning(f"Received finished signal for unhandled type: {type.name}")
+          logging.warning(f"Received finished signal for unhandled type: {type.name}")
+
+  def _handle_ratings_or_credits_finished(self, type):
+      """Handles finished messages for Ratings or Credits."""
+      logging.info(f"Received finished signal for type {type.name}. Publishing type code to control exchange...")
+      type_code = self._get_type_code(type)
+      if type_code is not None and self.other_files_finished_publisher:
+          self._publish_finished_message(type)
+      elif not self.other_files_finished_publisher:
+          logging.error(f"Control publisher not initialized. Cannot send finish signal for {type.name}.")
+      else:
+          logging.warning(f"Could not determine type code for finished signal: {type.name}")
+
+  def _get_type_code(self, type):
+      """Returns the type code for Ratings or Credits."""
+      if type == FileType.RATINGS:
+          return RATINGS_FILE_CODE
+      elif type == FileType.CREDITS:
+          return CREDITS_FILE_CODE
+      return None
+
+  def _publish_finished_message(self, type):
+      """Publishes the finished message to the control exchange."""
+      try:
+          time.sleep(3)
+          self.other_files_finished_publisher.publish(self.protocol.create_finished_message(type))
+          logging.info(f"Published finish signal message for {type.name} to {self.other_files_finished_publisher.exchange}")
+      except Exception as e_pub:
+          logging.error(f"Failed to publish finish signal message for {type.name} to control exchange: {e_pub}")
+
+  def _handle_movies_finished(self, msg):
+      """Handles finished messages for Movies."""
+      logging.info(f"Received finished signal for type MOVIES. Forwarding full message to data exchange...")
+      try:
+          self.movies_queue.publish(msg.SerializeToString())
+          self.movies_files_finished_publisher.publish(msg.SerializeToString())
+          logging.info(f"Forwarded full MOVIES finished message to {self.movies_queue.exchange}")
+      except Exception as e_pub:
+          logging.error(f"Failed to forward full MOVIES finished message: {e_pub}")
 
   def _handle_data_message(self, type, msg):
       """Handles received messages containing data (finished flag is false)."""
@@ -203,9 +216,9 @@ class Client:
   def result_controller_func(self, ch, method, properties, body):
     try:
       # data = json.loads(body)
-      logging.info("got result: {body}") 
+      logging.info(f"got result: {body}") 
       msg = self.protocol.create_client_result(body)
-      logging.info("sending message: {msg}")
+      logging.info(f"sending message: {msg}")
       self.socket.sendall(msg)
     except json.JSONDecodeError as e:
       logging.error(f"Failed to decode JSON: {e}")

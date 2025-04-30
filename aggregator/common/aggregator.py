@@ -13,6 +13,7 @@ class Aggregator:
             setattr(self, key, value)
         self.is_alive = True
         self.protocol = Protocol()
+        self.current_finished_msg_amount = 0
 
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type)
@@ -28,7 +29,10 @@ class Aggregator:
         logging.info(f"Received message, with routing key: {method.routing_key}")
         decoded_msg = self.protocol.decode_movies_msg(body)
         if decoded_msg.finished:
-            self.publish_finished_msg(decoded_msg)
+            self.current_finished_msg_amount += 1
+            logging.info(f"Current finished msg amount: {self.current_finished_msg_amount}/{self.expected_finished_msg_amount}")
+            if self.current_finished_msg_amount >= self.expected_finished_msg_amount:
+                self.publish_finished_msg(decoded_msg)
             return 
         self.aggregate(decoded_msg)
 
