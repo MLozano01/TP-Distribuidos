@@ -166,7 +166,7 @@ class RabbitMQConsumer(RabbitMQBase):
             logging.error(f"Consumer not set up for queue {self.actual_queue_name}. Call consume() first.")
             raise RuntimeError(f"Consumer not set up for queue {self.actual_queue_name}")
 
-        logging.info(f"Starting blocking consumer loop for queue '{self.actual_queue_name}'...")
+        # logging.info(f"Starting blocking consumer loop for queue '{self.actual_queue_name}'...")
         try:
             ch = self.channel
             ch.start_consuming()

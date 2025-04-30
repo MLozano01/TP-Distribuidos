@@ -14,7 +14,8 @@ def to_int(value) -> int:
     return -1
 
 def to_string(value) -> str:
-  return value if value else ''
+  value = value.replace("\\", "")
+  return value.strip(' "\\') if value else ''
 
 def to_bool(value) -> bool:
   return value == 'True'
@@ -41,7 +42,7 @@ def create_data_list(string_data):
   return list_values
 
 def remove_quotes(data):
-  new_data = data.strip(" '")
+  new_data = data.strip(" '\\")
   return new_data
 
 def is_date(str_data):

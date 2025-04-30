@@ -1,4 +1,3 @@
-
 import operator
 import logging
 from protocol.protocol import Protocol
@@ -36,15 +35,30 @@ def parse_reduce_funct(data_to_reduce, reduce_by, result):
 
 def parse_final_result(reduce_by, partial_results):
     args = _get_filter_args(reduce_by)
+    logging.debug(f"[parse_final_result] reduce_by: {reduce_by}, partial_results keys: {list(partial_results.keys())[:20]}")
     if args[0] == "avg":
         return calculate_avg(partial_results)
     if args[0] == "top" and args[1] == "5":
+        # Sort countries by sum (value) in descending order
+        sorted_countries = sorted(partial_results.items(), key=operator.itemgetter(1), reverse=True)
+        # Take the top 5
+        top_5_countries = dict(sorted_countries[:int(args[1])])
+        logging.debug(f"[parse_final_result] top_5_countries: {top_5_countries}") # Log calculated top 5
+
         res = {}
-        res["country"] = partial_results
+        res["country"] = top_5_countries # Assign the actual top 5 dictionary
+        logging.debug(f"[parse_final_result] Returning: {res}") # Log return value
         return res
     if args[0] == "top" and args[1] == "10":
+        # Sort actors by count (value) in descending order
+        sorted_actors = sorted(partial_results.items(), key=operator.itemgetter(1), reverse=True)
+        # Take the top 10
+        top_10_actors = dict(sorted_actors[:int(args[1])]) 
+        logging.debug(f"[parse_final_result] top_10_actors: {top_10_actors}")
+        
         res = {}
-        res["actor"] = partial_results
+        res["actor"] = top_10_actors # Assign the actual top 10 dictionary
+        logging.debug(f"[parse_final_result] Returning: {res}")
         return res
     if args[0] == "max-min":
         res = {}
@@ -55,15 +69,10 @@ def reduce_top5(data_to_reduce, reduce_args, result):
 
     for data in data_to_reduce.aggr_row:
 
-        if data.key not in result:
-            result[data.key] = data.sum
-            if len(result) > int(reduce_args[1]):
-                last_country = min(result, key=result.get)
-                result.pop(last_country)
-
+        if data.key in result:
+            result[data.key] += data.sum
         else:
-            if result[data.key] < data.sum:
-                result[data.key] = data.sum
+            result[data.key] = data.sum
 
     return result
 
@@ -74,9 +83,6 @@ def reduce_top10(data_to_reduce, reduce_args, result):
             result[data.actor_name] += 1
         else:
             result[data.actor_name] = 1
-            if len(result) > int(reduce_args[1]):
-                last_country = min(result, key=result.get)
-                result.pop(last_country)
 
     return result
 

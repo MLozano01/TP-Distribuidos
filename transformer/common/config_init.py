@@ -24,6 +24,7 @@ def initialize_config():
 
     try:
         config_params["logging_level"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"])
+        config_params["rabbit_host"] = os.getenv('RABBIT_HOST', config["RABBITMQ"]["RABBIT_HOST"])
         config_params["queue_rcv_name"] = os.getenv('QUEUE_RCV_NAME', config["RABBITMQ"]["QUEUE_RCV_NAME"])
         config_params["routing_rcv_key"] = os.getenv('ROUTING_KEY_RCV', config["RABBITMQ"]["ROUTING_KEY_RCV"])
         config_params["exchange_rcv"] = os.getenv('EXCHANGE_RCV', config["RABBITMQ"]["EXCHANGE_RCV"])
@@ -32,6 +33,8 @@ def initialize_config():
         config_params["routing_snd_key"] = os.getenv('ROUTING_KEY_SND', config["RABBITMQ"]["ROUTING_KEY_SND"])
         config_params["exchange_snd"] = os.getenv('EXCHANGE_SND', config["RABBITMQ"]["EXCHANGE_SND"])
         config_params["exc_snd_type"] = os.getenv('TYPE_SND', config["RABBITMQ"]["TYPE_SND"])
+        # Load the control exchange name
+        config_params["control_exchange"] = os.getenv('CONTROL_EXCHANGE', config["RABBITMQ"]["CONTROL_EXCHANGE"])
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
     except ValueError as e:

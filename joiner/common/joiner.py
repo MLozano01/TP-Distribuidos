@@ -7,7 +7,7 @@ from protocol.rabbit_wrapper import RabbitMQConsumer, RabbitMQProducer
 from protocol import files_pb2 # Import files_pb2 to access new message types
 
 # Define batch size for outgoing messages
-BATCH_SIZE = 3000
+BATCH_SIZE = 20000
 
 class Joiner:
     def __init__(self, **kwargs):
@@ -164,7 +164,7 @@ class Joiner:
             with self._lock:
                 for movie in movies_msg.movies:
                     self.movies_buffer[movie.id] = movie
-                    logging.info(f"Buffered movie ID {movie.id} with title {movie.title} on _process_movie_message")
+                    logging.info(f"Buffered movie ID {movie.id}")
 
         except Exception as e:
             logging.error(f"Error processing movie message: {e}", exc_info=True)
@@ -208,10 +208,10 @@ class Joiner:
                          logging.warning(f"Could not extract movie ID using field '{movie_id_field}' from {self.other_data_type} item.")
                          continue
 
-                    # Optimization: If movie_id not in movies_buffer, discard this item
-                    if movie_id not in self.movies_buffer:
-                        logging.info(f"Discarding {self.other_data_type} for movie ID {movie_id} as it's not in movies_buffer.")
-                        continue
+                    # TODO LATER if EOF MOVIES ARRIVED only match other with buffered movie id. Optimization: If movie_id not in movies_buffer, discard this item
+                    # if movie_id not in self.movies_buffer:
+                        #logging.info(f"Discarding {self.other_data_type} for movie ID {movie_id} as it's not in movies_buffer.")
+                      #  continue
 
                     if is_ratings:
                         # Get current sum and count, default to (0.0, 0)

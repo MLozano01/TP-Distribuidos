@@ -65,6 +65,7 @@ def config_aggregator(aggregator_file):
         config_params[f"field"] = os.getenv("FIELD_AGG", aggr_config["DEFAULT"]["FIELD_AGG"])
         config_params[f"key"] = os.getenv("AGG_KEY", aggr_config["DEFAULT"]["AGG_KEY"])
         config_params[f"operations"] = os.getenv("OPERATIONS", aggr_config["DEFAULT"]["OPERATIONS"])
+        config_params["expected_finished_msg_amount"] = int(os.getenv('EXPECTED_FINISHED_MSG_AMOUNT', aggr_config["DEFAULT"].get('EXPECTED_FINISHED_MSG_AMOUNT', 1)))
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
     except ValueError as e:

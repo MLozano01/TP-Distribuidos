@@ -1,16 +1,17 @@
 from multiprocessing import Process
 import socket
 import logging
-import csv
 
 from protocol.protocol import Protocol, FileType
 from protocol.utils.socket_utils import recvall
+
 
 class Client:
   def __init__(self, server_port, id, max_batch_size):
     self.server_port = server_port
     self.id = id
-    self.protocol = Protocol(max_batch_size)
+    self.max_batch_size = int(max_batch_size)
+    self.protocol = Protocol()
     self.client_socket = None
 
   def run(self):
@@ -36,23 +37,31 @@ class Client:
   
   
   def send_data(self, path, type):
+    logging.info(f"Sending file of type {type.name}")
     with open(path, "r") as file:
-      for data in csv.DictReader(file):
-        ready_to_send = self.protocol.add_to_batch(type, data)
+      lines = []
+      current_size = 0
+      for line in file:
+        size = len(line)
+        if (current_size + size) > self.max_batch_size:
+          self.send_batch(lines, type)
+          lines = []
+          current_size = 0
 
-        if ready_to_send:
-          self.send_batch(False, type)
-      self.send_batch(True, type)
+        lines.append(line)
+        current_size += size
+        
+      self.send_batch(lines, type)
       # Send the final "finished" message
-      finished_message = self.protocol.create_finished_message_for_joiners(type)
+      finished_message = self.protocol.create_inform_end_file(type)
       if finished_message:
           logging.info(f"Sending finished message for type {type.name}")
           self.client_socket.sendall(finished_message)
       else:
           logging.warning(f"Could not generate finished message for type {type.name}")
-  
-  def send_batch(self, last_send, type):
-    message = self.protocol.get_batch_msg(last_send, type)
+
+  def send_batch(self, lines, type):
+    message = self.protocol.create_batch(type, lines)
     if len(message) == 0:
       return
     

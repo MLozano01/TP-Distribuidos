@@ -51,8 +51,16 @@ def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replica
     transformer = create_transformer(transformer_replicas)
     aggregator = create_aggregator()
     reducer = create_reducer()
-    joiner_ratings = create_joiner("joiner-ratings", joiner_ratings_replicas, JOINER_RATINGS_CONFIG_SOURCE)
-    joiner_credits = create_joiner("joiner-credits", joiner_credits_replicas, JOINER_CREDITS_CONFIG_SOURCE)
+    
+    # Loop to create multiple joiner services
+    joiner_ratings_services = ""
+    for i in range(1, joiner_ratings_replicas + 1):
+        joiner_ratings_services += create_joiner("joiner-ratings", i, joiner_ratings_replicas, JOINER_RATINGS_CONFIG_SOURCE)
+        
+    joiner_credits_services = ""
+    for i in range(1, joiner_credits_replicas + 1):
+        joiner_credits_services += create_joiner("joiner-credits", i, joiner_credits_replicas, JOINER_CREDITS_CONFIG_SOURCE)
+
     content = f"""
 version: "3.8"
 services:
@@ -63,8 +71,8 @@ services:
   {transformer}
   {aggregator}
   {reducer}
-  {joiner_ratings}
-  {joiner_credits}
+  {joiner_ratings_services}
+  {joiner_credits_services}
 networks:
   {network}
 """
@@ -86,10 +94,8 @@ def create_client(id):
     networks:
       - {NETWORK_NAME}
     depends_on:
-      - server
-      - rabbitmq
-    links:
-      - rabbitmq
+      server:
+        condition: service_started
     volumes:
       - ./client/{CONFIG_FILE}:/{CONFIG_FILE}
       - ./data/{CREDITS_DATASET}:/{CREDITS_DATASET}
@@ -108,7 +114,9 @@ def create_server(client_amount):
     networks:
       - {NETWORK_NAME}
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+        restart: true
     links:
       - rabbitmq
     volumes:
@@ -133,10 +141,16 @@ def create_rabbit():
     hostname: rabbitmq
     ports:
       - 5672:5672
+      - 15672:15672
     networks:
       - {NETWORK_NAME}
     volumes:
       - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+    healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:15672"]
+        interval: 10s
+        timeout: 5s
+        retries: 10
     """
     return rabbit
 
@@ -148,8 +162,9 @@ def create_filter():
     networks:
       - {NETWORK_NAME}
     depends_on:
-      - server
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+        restart: true
     links:
       - rabbitmq
     volumes:
@@ -170,8 +185,9 @@ def create_reducer():
     networks:
       - {NETWORK_NAME}
     depends_on:
-      - server
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+        restart: true
     links:
       - rabbitmq
     volumes:
@@ -191,8 +207,9 @@ def create_aggregator():
     networks:
       - {NETWORK_NAME}
     depends_on:
-      - server
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+        restart: true
     links:
       - rabbitmq
     volumes:
@@ -209,8 +226,9 @@ def create_transformer(replicas=1):
     networks:
       - {NETWORK_NAME}
     depends_on:
-      - server
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+        restart: true
     links:
       - rabbitmq
     volumes:
@@ -229,45 +247,30 @@ def create_transformer(replicas=1):
 
     return transformer_yaml
 
-def create_joiner(service_name, replicas, config_source_path):
-    """Creates a joiner service definition."""
-    # Base YAML definition
-    joiner_yaml_base = f"""
+def create_joiner(service_base_name, replica_id, total_replicas, config_source_path):
+    """Creates a unique joiner service definition for docker compose up."""
+    service_name = f"{service_base_name}-{replica_id}"
+    container_name = service_name # Use the same unique name
+
+    joiner_yaml = f"""
   {service_name}:
+    container_name: {container_name}
     image: joiner:latest
     networks:
       - {NETWORK_NAME}
     depends_on:
-      - server
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+        restart: true
     links:
       - rabbitmq
     volumes:
       - {config_source_path}:{CONFIG_FILE_TARGET}
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JOINER_REPLICA_ID={replica_id} # Direct integer ID
+      - JOINER_REPLICA_COUNT={total_replicas} # Direct integer count
     """
-
-    if replicas > 1:
-        # Add deploy section and environment for multiple replicas
-        # Build environment string carefully to avoid f-string/YAML issues
-        # Escaping {{ and }} for docker compose templating
-        env_block = (
-            "\n    environment:" +
-            "\n      - PYTHONUNBUFFERED=1" +
-            "\n      - JOINER_REPLICA_ID={{ '{{' }}.Task.Slot{{ '}}' }}" + # 1-based ID
-            f"\n     - JOINER_REPLICA_COUNT={replicas}"
-        )
-        joiner_yaml = joiner_yaml_base.strip() + f"\n    deploy:\n      mode: replicated\n      replicas: {replicas}" + env_block + "\n"
-
-    else: # Handle replicas == 1 case
-        # Add container_name and specific environment for single replica
-        joiner_yaml = joiner_yaml_base.strip()
-        joiner_yaml += f"\n    container_name: {service_name}"
-        joiner_yaml += f"\n    environment:"
-        joiner_yaml += f"\n      - PYTHONUNBUFFERED=1"
-        joiner_yaml += f"\n      - JOINER_REPLICA_ID=0" # Set ID=0 for single replica
-        joiner_yaml += f"\n      - JOINER_REPLICA_COUNT=1"
-        joiner_yaml += "\n"
-
     return joiner_yaml
 
 def main():
