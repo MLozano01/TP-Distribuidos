@@ -1,5 +1,7 @@
 import logging
 import time
+import signal
+import threading
 from protocol import files_pb2
 from protocol.protocol import Protocol, FileType
 from protocol.rabbit_protocol import RabbitMQ
@@ -9,10 +11,19 @@ class DataController:
     def __init__(self, **kwargs):
         self.protocol = Protocol()
         self.filtered_movies_ids = []
+        self._stop_event = threading.Event()
         
         # Set attributes from kwargs
         for key, value in kwargs.items():
             setattr(self, key, value)
+        
+        # Define columns needed for each file type
+        self.columns_needed = {
+            'movies': ["id", "title", "genres", "release_date", "overview", 
+                      "production_countries", "spoken_languages", "budget", "revenue"],
+            'ratings': ["movieId", "rating", "timestamp"],
+            'credits': ["id", "cast"]
+        }
         
         # Initialize RabbitMQ connections
         self._init_rabbitmq_connections()
@@ -48,11 +59,79 @@ class DataController:
             None, "", "fanout"
         )
 
-    def process_message(self, message_type, message):
-        if message.finished:
-            self._handle_finished_message(message_type, message)
-        else:
-            self._handle_data_message(message_type, message)
+        # Initialize server message consumer
+        self.server_consumer = RabbitMQ(
+            "server_to_data_controller",
+            "forward",
+            "forward_queue",
+            "direct"
+        )
+
+    def _setup_signal_handlers(self):
+        signal.signal(signal.SIGTERM, self._handle_shutdown)
+        signal.signal(signal.SIGINT, self._handle_shutdown)
+
+    def _handle_shutdown(self, signum, frame):
+        logging.info(f"Received signal {signum}. Shutting down gracefully...")
+        self.stop()
+        logging.info("Shutdown complete.")
+
+    def start(self):
+        """Start the DataController with message consumption"""
+        self._setup_signal_handlers()
+        try:
+            # Start consuming messages from server
+            self.server_consumer.consume(self._process_server_message)
+            logging.info("DataController started consuming messages...")
+            
+            # Start consuming in the main thread
+            self.server_consumer.start_consuming() # TODO: remove?
+            
+        except Exception as e:
+            logging.error(f"Error in DataController: {e}")
+        finally:
+            self.stop()
+
+    def stop(self):
+        """Stop the DataController and close all connections"""
+        if not self._stop_event.is_set():
+            logging.info("Stopping DataController...")
+            self._stop_event.set()
+            
+            # Stop all RabbitMQ connections
+            for queue in [self.movies_queue, self.ratings_queue, self.credits_queue,
+                         self.other_files_finished_publisher, self.movies_files_finished_publisher,
+                         self.server_consumer]:
+                if queue:
+                    try:
+                        queue.stop()
+                    except Exception as e:
+                        logging.error(f"Error stopping queue: {e}")
+            
+            logging.info("DataController stopped")
+
+    def _process_server_message(self, ch, method, properties, body):
+        """Process messages received from the server"""
+        try:
+            # Decode the message type and content
+            message_type, message = self.protocol.decode_client_msg(body, self.columns_needed)
+            if not message_type or not message:
+                logging.warning("Received invalid message from server")
+                return
+
+            # Process the message based on its type
+            if message.finished:
+                self._handle_finished_message(message_type, message)
+            else:
+                self._handle_data_message(message_type, message)
+            
+            # Acknowledge the message
+            #ch.basic_ack(delivery_tag=method.delivery_tag)
+            
+        except Exception as e:
+            logging.error(f"Error processing server message: {e}")
+            # Negative acknowledge the message in case of error
+            #ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
     def _handle_finished_message(self, message_type, msg):
         if message_type in [FileType.RATINGS, FileType.CREDITS]:
