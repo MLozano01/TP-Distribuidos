@@ -1,7 +1,7 @@
 import logging
 import time
 import signal
-import threading
+import os
 from protocol import files_pb2
 from protocol.protocol import Protocol, FileType
 from protocol.rabbit_protocol import RabbitMQ
@@ -10,13 +10,16 @@ from protocol.utils.parsing_proto_utils import is_date
 class DataController:
     def __init__(self, **kwargs):
         self.protocol = Protocol()
-        self.filtered_movies_ids = []
+        # self.filtered_movies_ids = [] wont work with multiple instances of data controller
+        
+        # Get replica information from environment
+        self.replica_id = int(os.getenv('DATA_CONTROLLER_REPLICA_ID', '1'))
+        self.replica_count = int(os.getenv('DATA_CONTROLLER_REPLICA_COUNT', '1'))
         
         # Set attributes from kwargs
         for key, value in kwargs.items():
             setattr(self, key, value)
         
-        # Define columns needed for each file type
         self.columns_needed = {
             'movies': ["id", "title", "genres", "release_date", "overview", 
                       "production_countries", "spoken_languages", "budget", "revenue"],
@@ -30,39 +33,43 @@ class DataController:
     def _init_rabbitmq_connections(self):
         self.movies_queue = RabbitMQ(
             self.movies_exchange,
+            "",
             self.movies_routing_key,
-            self.movies_queue,
             "direct"
         )
         self.ratings_queue = RabbitMQ(
             self.ratings_exchange,
-            self.ratings_routing_key,
-            self.ratings_queue,
+            "",  # queue name not needed for publishing
+            "",  # routing key will be movie ID at publish time
             "x-consistent-hash"
         )
         self.credits_queue = RabbitMQ(
             self.credits_exchange,
-            self.credits_routing_key,
-            self.credits_queue,
+            "",  # queue name not needed for publishing
+            "",  # routing key will be movie ID at publish time
             "x-consistent-hash"
         )
         
         # Initialize control exchanges
         self.other_files_finished_publisher = RabbitMQ(
             self.finished_file_exchange,
-            None, "", "fanout"
+            "",  # empty queue name for fanout
+            "",  # empty routing key for fanout
+            "fanout"
         )
         self.movies_files_finished_publisher = RabbitMQ(
             self.finished_movies_exchange,
-            None, "", "fanout"
+            "",  # empty queue name for fanout
+            "",  # empty routing key for fanout
+            "fanout"
         )
 
-        # Initialize server message consumer
+        # Initialize server message consumer - each data controller instance has its own queue
         self.server_consumer = RabbitMQ(
-            "server_to_data_controller",
-            "forward",
-            "forward_queue",
-            "direct"
+            "server_to_data_controller",  # exchange
+            f"forward_queue-{self.replica_id}",  # unique queue per instance
+            "forward",  # routing key
+            "direct"    # exchange type
         )
 
     def _setup_signal_handlers(self):
@@ -80,16 +87,17 @@ class DataController:
         try:
             # Start consuming messages from server
             self.server_consumer.consume(self._process_server_message)
-            logging.info("DataController started consuming messages...")
+            logging.info(f"DataController {self.replica_id} started consuming messages...")
+
             
         except Exception as e:
-            logging.error(f"Error in DataController: {e}")
+            logging.error(f"Error in DataController {self.replica_id}: {e}")
         finally:
             self.stop()
 
     def stop(self):
         """Stop the DataController and close all connections"""
-        logging.info("Stopping DataController...")
+        logging.info(f"Stopping DataController {self.replica_id}...")
         
         # Stop all RabbitMQ connections
         for queue in [self.movies_queue, self.ratings_queue, self.credits_queue,
@@ -101,7 +109,7 @@ class DataController:
                 except Exception as e:
                     logging.error(f"Error stopping queue: {e}")
         
-        logging.info("DataController stopped")
+        logging.info(f"DataController {self.replica_id} stopped")
 
     def _process_server_message(self, ch, method, properties, body):
         """Process messages received from the server"""
@@ -182,10 +190,16 @@ class DataController:
             movie_pb.revenue = movie.revenue
             movie_pb.genres.extend(filtered_genres)
 
+            # year = int(movie.release_date.split('-')[0])
+            # has_argentina = False
             for country in countries:
                 country_pb = movie_pb.countries.add()
                 country_pb.name = country
-            self.filtered_movies_ids.append(movie.id)
+                if country == "Argentina":
+                    has_argentina = True
+
+            # if year >= 2000 and has_argentina: Wont work with multiple instances of data controller
+            #     self.filtered_movies_ids.append(movie.id)
 
         if not len(movies_pb.movies):
             return
@@ -197,8 +211,8 @@ class DataController:
             if not rating.movieId or rating.movieId < 0 or not rating.rating or rating.rating < 0:
                 continue
 
-            if rating.movieId not in self.filtered_movies_ids:
-                continue
+            #if rating.movieId not in self.filtered_movies_ids:
+            #   continue
 
             rating_pb = files_pb2.RatingCSV()
             rating_pb.userId = rating.userId

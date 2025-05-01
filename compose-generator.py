@@ -30,7 +30,7 @@ JOINER_RATINGS_CONFIG_SOURCE = "./joiner/config/joiner-ratings.ini"
 JOINER_CREDITS_CONFIG_SOURCE = "./joiner/config/joiner-credits.ini"
 CONFIG_FILE_TARGET = "/config.ini" # Target path inside container
 
-def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas):
+def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, data_controller_replicas):
     # Check for joiner config files existence
     required_joiner_configs = [JOINER_RATINGS_CONFIG_SOURCE, JOINER_CREDITS_CONFIG_SOURCE]
     for config_path in required_joiner_configs:
@@ -39,10 +39,10 @@ def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_re
             sys.exit(1)
 
     with open(FILE_NAME, 'w') as f:
-        f.write(create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas))
+        f.write(create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, data_controller_replicas))
 
 
-def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas):
+def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, data_controller_replicas):
     clients = join_clients(client_amount)
     server = create_server(client_amount)
     network = create_network()
@@ -51,6 +51,11 @@ def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replica
     transformer = create_transformer(transformer_replicas)
     aggregator = create_aggregator()
     reducer = create_reducer()
+    
+    # Create data controller services
+    data_controller_services = ""
+    for i in range(1, data_controller_replicas + 1):
+        data_controller_services += create_data_controller(i, data_controller_replicas)
     
     # Loop to create multiple joiner services
     joiner_ratings_services = ""
@@ -67,6 +72,7 @@ services:
   {rabbit}
   {clients}
   {server}
+  {data_controller_services}
   {filter_cont}
   {transformer}
   {aggregator}
@@ -273,9 +279,35 @@ def create_joiner(service_base_name, replica_id, total_replicas, config_source_p
     """
     return joiner_yaml
 
+def create_data_controller(replica_id, total_replicas):
+    """Creates a unique data controller service definition for docker compose up."""
+    service_name = f"data-controller-{replica_id}"
+    container_name = service_name
+
+    data_controller_yaml = f"""
+  {service_name}:
+    container_name: {container_name}
+    image: data-controller:latest
+    networks:
+      - {NETWORK_NAME}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./data_controller/{CONFIG_FILE}:/{CONFIG_FILE}
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATA_CONTROLLER_REPLICA_ID={replica_id}
+      - DATA_CONTROLLER_REPLICA_COUNT={total_replicas}
+    """
+    return data_controller_yaml
+
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python compose-generator.py <client_amount> [transformer_replicas] [joiner_ratings_replicas] [joiner_credits_replicas]")
+        print("Usage: python compose-generator.py <client_amount> [transformer_replicas] [joiner_ratings_replicas] [joiner_credits_replicas] [data_controller_replicas]")
         sys.exit(1)
 
     try:
@@ -310,7 +342,7 @@ def main():
             sys.exit(1)
 
     joiner_credits_replicas = 1 # Default for credits joiner
-    if len(sys.argv) > 4: # Check for credits joiner replicas argument
+    if len(sys.argv) > 4:
         try:
             joiner_credits_replicas = int(sys.argv[4])
             if joiner_credits_replicas < 1:
@@ -320,7 +352,18 @@ def main():
             print("joiner_credits_replicas must be an integer.")
             sys.exit(1)
 
-    docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas)
+    data_controller_replicas = 1 # Default for data controller
+    if len(sys.argv) > 5:
+        try:
+            data_controller_replicas = int(sys.argv[5])
+            if data_controller_replicas < 1:
+                print("data_controller_replicas must be 1 or greater.")
+                sys.exit(1)
+        except ValueError:
+            print("data_controller_replicas must be an integer.")
+            sys.exit(1)
+
+    docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, data_controller_replicas)
 
 if __name__ == "__main__":
     main()
