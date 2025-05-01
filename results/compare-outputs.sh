@@ -1,0 +1,1 @@
+python3 comparer.py $1 $2
