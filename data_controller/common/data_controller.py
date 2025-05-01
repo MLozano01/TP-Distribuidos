@@ -11,7 +11,6 @@ class DataController:
     def __init__(self, **kwargs):
         self.protocol = Protocol()
         self.filtered_movies_ids = []
-        self._stop_event = threading.Event()
         
         # Set attributes from kwargs
         for key, value in kwargs.items():
@@ -27,9 +26,8 @@ class DataController:
         
         # Initialize RabbitMQ connections
         self._init_rabbitmq_connections()
-        
+
     def _init_rabbitmq_connections(self):
-        # Initialize queues for receiving data
         self.movies_queue = RabbitMQ(
             self.movies_exchange,
             self.movies_routing_key,
@@ -84,9 +82,6 @@ class DataController:
             self.server_consumer.consume(self._process_server_message)
             logging.info("DataController started consuming messages...")
             
-            # Start consuming in the main thread
-            self.server_consumer.start_consuming() # TODO: remove?
-            
         except Exception as e:
             logging.error(f"Error in DataController: {e}")
         finally:
@@ -94,21 +89,19 @@ class DataController:
 
     def stop(self):
         """Stop the DataController and close all connections"""
-        if not self._stop_event.is_set():
-            logging.info("Stopping DataController...")
-            self._stop_event.set()
-            
-            # Stop all RabbitMQ connections
-            for queue in [self.movies_queue, self.ratings_queue, self.credits_queue,
-                         self.other_files_finished_publisher, self.movies_files_finished_publisher,
-                         self.server_consumer]:
-                if queue:
-                    try:
-                        queue.stop()
-                    except Exception as e:
-                        logging.error(f"Error stopping queue: {e}")
-            
-            logging.info("DataController stopped")
+        logging.info("Stopping DataController...")
+        
+        # Stop all RabbitMQ connections
+        for queue in [self.movies_queue, self.ratings_queue, self.credits_queue,
+                     self.other_files_finished_publisher, self.movies_files_finished_publisher,
+                     self.server_consumer]:
+            if queue:
+                try:
+                    queue.stop()
+                except Exception as e:
+                    logging.error(f"Error stopping queue: {e}")
+        
+        logging.info("DataController stopped")
 
     def _process_server_message(self, ch, method, properties, body):
         """Process messages received from the server"""
