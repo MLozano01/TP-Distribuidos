@@ -13,29 +13,21 @@ class Controller:
     def start(self):
         logging.info("Starting Filters")
 
-        for i in range(self.config["filter_num"]):
+        try:
+            logging.info(f"Starting filter {self.config["filter_name"]}  with config {self.config}")
 
-            filter_config = self.config[f"filter_{i}"]
+            filter_instance = Filter(**self.config)
 
-            filter_path = filter_config.split(",")[0]
+            new_filter = Process(target=filter_instance.run, args=())
+            self.all_filters.append(new_filter)
 
-            filter_config_params = common.config_init.config_filter(f'/{filter_path}.ini')
+            new_filter.start()
+            logging.info(f"Filter {self.config["filter_name"]} started with PID: {new_filter.pid}")
 
-            try:
-                logging.info(f"Starting filter {i} with config: {filter_config_params}")
-
-                filter_instance = Filter(**filter_config_params)
-
-                new_filter = Process(target=filter_instance.run, args=())
-                self.all_filters.append(new_filter)
-
-                new_filter.start()
-                logging.info(f"Filter {i} started with PID: {new_filter.pid}")
-
-            except KeyboardInterrupt:
-                logging.info("Filter stopped by user")
-            except Exception as e:
-                logging.error(f"Filter error: {e}")
+        except KeyboardInterrupt:
+            logging.info("Filter stopped by user")
+        except Exception as e:
+            logging.error(f"Filter error: {e}")
         
         for filt in self.all_filters:
             filt.join()
@@ -44,3 +36,5 @@ class Controller:
         for filter in self.all_filters:
             if filter.is_alive():
                 filter.terminate()
+
+    

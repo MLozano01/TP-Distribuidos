@@ -30,7 +30,7 @@ JOINER_RATINGS_CONFIG_SOURCE = "./joiner/config/joiner-ratings.ini"
 JOINER_CREDITS_CONFIG_SOURCE = "./joiner/config/joiner-credits.ini"
 CONFIG_FILE_TARGET = "/config.ini" # Target path inside container
 
-def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas):
+def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000, f_arg_spa, f_arg, f_single_country, f_decade):
     # Check for joiner config files existence
     required_joiner_configs = [JOINER_RATINGS_CONFIG_SOURCE, JOINER_CREDITS_CONFIG_SOURCE]
     for config_path in required_joiner_configs:
@@ -39,15 +39,15 @@ def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_re
             sys.exit(1)
 
     with open(FILE_NAME, 'w') as f:
-        f.write(create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas))
+        f.write(create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000, f_arg_spa, f_arg, f_single_country, f_decade))
 
 
-def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas):
+def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000, f_arg_spa, f_arg, f_single_country, f_decade):
     clients = join_clients(client_amount)
     server = create_server(client_amount)
     network = create_network()
     rabbit = create_rabbit()
-    filter_cont = create_filter()
+    filters = write_filters(f_2000, f_arg_spa, f_arg, f_single_country, f_decade)
     transformer = create_transformer(transformer_replicas)
     aggregator = create_aggregator()
     reducer = create_reducer()
@@ -67,7 +67,7 @@ services:
   {rabbit}
   {clients}
   {server}
-  {filter_cont}
+  {filters}
   {transformer}
   {aggregator}
   {reducer}
@@ -154,11 +154,31 @@ def create_rabbit():
     """
     return rabbit
 
-def create_filter():
+def write_filters(filter_2000=1, filter_arg_spa=1, filter_arg=1, filter_single_country=1, filter_decade=1):
+    
+    filters = ""
+
+    for i in range(1, filter_2000 + 1):
+        filters += create_filter("filter_2000_movies", i, FILTER_MOVIES_BY_2000)
+    for i in range(1, filter_arg_spa + 1):
+        filters += create_filter("filter_Arg_Spa_movies", i, FILTER_MOVIES_BY_ARG_SPA)
+    for i in range(1, filter_arg + 1):
+        filters += create_filter("filter_Arg_movies", i, FILTER_MOVIES_BY_ARG)
+    for i in range(1, filter_single_country + 1):
+        filters += create_filter("filter_single_country_movies", i, FILTER_MOVIES_BY_SINGLE_COUNTRY)
+    for i in range(1, filter_decade + 1):
+        filters += create_filter("filter_decade_movies", i, FILTER_MOVIES_DECADE)
+
+    return filters
+
+def create_filter(filter_name, filter_replica, filter_path):
+    
+    filter_name = f"{filter_name}-{filter_replica}"
+    
     filter_cont = f"""
-  filter:
-    container_name: filter
-    image: filter:latest
+  {filter_name}:
+    container_name: {filter_name}
+    image: {filter_name}:latest
     networks:
       - {NETWORK_NAME}
     depends_on:
@@ -168,12 +188,7 @@ def create_filter():
     links:
       - rabbitmq
     volumes:
-      - ./filter/{CONFIG_FILE}:/{CONFIG_FILE}
-      - ./filter/filters/{FILTER_MOVIES_BY_2000}:/{FILTER_MOVIES_BY_2000}
-      - ./filter/filters/{FILTER_MOVIES_BY_ARG_SPA}:/{FILTER_MOVIES_BY_ARG_SPA}
-      - ./filter/filters/{FILTER_MOVIES_BY_ARG}:/{FILTER_MOVIES_BY_ARG}
-      - ./filter/filters/{FILTER_MOVIES_BY_SINGLE_COUNTRY}:/{FILTER_MOVIES_BY_SINGLE_COUNTRY}
-      - ./filter/filters/{FILTER_MOVIES_DECADE}:/{FILTER_MOVIES_DECADE}
+      - ./filter/filters/{filter_path}:/{filter_path}
     """
     return filter_cont
 
@@ -287,7 +302,7 @@ def main():
         print("client_amount must be an integer.")
         sys.exit(1)
 
-    transformer_replicas = 1 # Default
+    transformer_replicas = 1
     if len(sys.argv) > 2:
         try:
             transformer_replicas = int(sys.argv[2])
@@ -319,8 +334,60 @@ def main():
         except ValueError:
             print("joiner_credits_replicas must be an integer.")
             sys.exit(1)
+    
+    f_2000 = 1
+    if len(sys.argv) > 5:
+        try:
+            f_2000 = int(sys.argv[5])
+            if f_2000 < 1:
+                print("f_2000 must be 1 or greater.")
+                sys.exit(1)
+        except ValueError:
+            print("f_2000 must be an integer.")
+            sys.exit(1)
 
-    docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas)
+    f_arg_spa = 1
+    if len(sys.argv) > 6:
+        try:
+            f_arg_spa = int(sys.argv[6])
+            if f_arg_spa < 1:
+                print("f_arg_spa must be 1 or greater.")
+                sys.exit(1)
+        except ValueError:
+            print("f_arg_spa must be an integer.")
+            sys.exit(1)
+    f_arg = 1
+    if len(sys.argv) > 7:
+        try:
+            f_arg = int(sys.argv[7])
+            if f_arg < 1:
+                print("f_arg must be 1 or greater.")
+                sys.exit(1)
+        except ValueError:
+            print("f_arg must be an integer.")
+            sys.exit(1)
+    f_single_country = 1
+    if len(sys.argv) > 8:
+        try:
+            f_single_country = int(sys.argv[8])
+            if f_single_country < 1:
+                print("f_single_country must be 1 or greater.")
+                sys.exit(1)
+        except ValueError:
+            print("f_single_country must be an integer.")
+            sys.exit(1)
+    f_decade = 1
+    if len(sys.argv) > 9:
+        try:
+            f_decade = int(sys.argv[9])
+            if f_decade < 1:
+                print("f_decade must be 1 or greater.")
+                sys.exit(1)
+        except ValueError:
+            print("f_decade must be an integer.")
+            sys.exit(1)
+
+    docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000, f_arg_spa, f_arg, f_single_country, f_decade)
 
 if __name__ == "__main__":
     main()

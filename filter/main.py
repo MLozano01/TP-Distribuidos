@@ -4,7 +4,7 @@ from utils.utils import config_logger
 import common.controller
 
 def main():
-    config = config_init.initialize_config()
+    config = config_init.config_filter()
     config_logger(config["logging_level"])
 
     try: 
