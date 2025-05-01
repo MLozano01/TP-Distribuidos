@@ -11,8 +11,8 @@ class Client:
         self.protocol = Protocol()
         self.data_controller = None
         self.result_controller = None
-        self.forward_queue = RabbitMQ("server_to_data_controller", "forward", "forward_queue", "direct")
-        self.result_queue = RabbitMQ('exchange_snd_results', 'result', 'results', 'direct')
+        self.forward_queue = None
+        self.result_queue = None
 
     def run(self):
         self.data_controller = Process(target=self.handle_connection, args=[self.socket])
@@ -25,8 +25,10 @@ class Client:
         self.result_controller.join()
 
     def stop(self):
-        self.forward_queue.stop()
-        self.result_queue.stop()
+        if self.forward_queue:
+            self.forward_queue.stop()
+        if self.result_queue:
+            self.result_queue.stop()
         
         if self.data_controller.is_alive():
             self.data_controller.terminate()
@@ -34,6 +36,7 @@ class Client:
             self.result_controller.terminate()
 
     def handle_connection(self, conn: socket.socket):
+        self.forward_queue = RabbitMQ("server_to_data_controller", "forward", "forward_queue", "direct")
         closed_socket = False
         while not closed_socket:
             read_amount = self.protocol.define_initial_buffer_size()
@@ -56,6 +59,7 @@ class Client:
             logging.error(f"Failed to forward message to data controller: {e}")
 
     def return_results(self, conn: socket.socket):
+        self.result_queue = RabbitMQ('exchange_snd_results', 'result', 'results', 'direct')
         self.result_queue.consume(self.result_controller_func)
 
     def result_controller_func(self, ch, method, properties, body):
@@ -64,9 +68,6 @@ class Client:
             msg = self.protocol.create_client_result(body)
             logging.info(f"sending message: {msg}")
             self.socket.sendall(msg)
-        except json.JSONDecodeError as e:
-            logging.error(f"Failed to decode JSON: {e}")
-            return
         except Exception as e:
             logging.error(f"Error processing message: {e}")
             return

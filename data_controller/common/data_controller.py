@@ -148,7 +148,6 @@ class DataController:
     def _handle_movies_finished(self, msg):
         logging.info("Received finished signal for type MOVIES. Forwarding full message to data exchange...")
         try:
-            self.movies_queue.publish(msg.SerializeToString())
             self.movies_files_finished_publisher.publish(msg.SerializeToString())
             logging.info("Forwarded full MOVIES finished message")
         except Exception as e:
