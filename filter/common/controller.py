@@ -14,7 +14,10 @@ class Controller:
         logging.info("Starting Filters")
 
         try:
-            logging.info(f"Starting filter {self.config["filter_name"]}  with config {self.config}")
+
+            filter_name = self.config["filter_name"]
+
+            logging.info(f"Starting filter {filter_name}  with config {self.config}")
 
             filter_instance = Filter(**self.config)
 
@@ -22,7 +25,7 @@ class Controller:
             self.all_filters.append(new_filter)
 
             new_filter.start()
-            logging.info(f"Filter {self.config["filter_name"]} started with PID: {new_filter.pid}")
+            logging.info(f"Filter {filter_name} started with PID: {new_filter.pid}")
 
         except KeyboardInterrupt:
             logging.info("Filter stopped by user")

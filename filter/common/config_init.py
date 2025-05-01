@@ -1,7 +1,9 @@
 from configparser import ConfigParser
 import os
 
-def config_filter(filter_file):
+CONFIG_FILE = "config.ini"
+
+def config_filter():
     """ Parse env variables or config file to find program config params
 
     Function that search and parse program configuration parameters in the
@@ -13,7 +15,7 @@ def config_filter(filter_file):
     """
     config_params = {}
     filter_config = ConfigParser(os.environ)
-    filter_config.read(filter_file)
+    filter_config.read(CONFIG_FILE)
 
     try:
         config_params["logging_level"] = os.getenv('LOGGING_LEVEL', filter_config["DEFAULT"]["LOGGING_LEVEL"])
@@ -29,7 +31,7 @@ def config_filter(filter_file):
         config_params["exc_control_type"] = os.getenv('TYPE_CONTROL', filter_config["RABBITMQ"]["TYPE_CONTROL"])
 
         config_params[f"filter_by"] = os.getenv("FILTER", filter_config["FILTERING_INFO"]["FILTER"])
-        config_params[f"file_name"] = os.getenv("FILE_NAME", filter_config["FILTERING_INFO"]["FILE_NAME"])
+        config_params[f"filter_name"] = os.getenv("FILTER_NAME", filter_config["FILTERING_INFO"]["FILTER_NAME"])
 
         publish_by_id_str = os.getenv('PUBLISH_TO_JOINERS', filter_config["RABBITMQ"]["PUBLISH_TO_JOINERS"]).strip().lower()
         if publish_by_id_str == 'true':
@@ -52,8 +54,8 @@ def config_filter(filter_file):
             config_params["exc_snd_type"] = os.getenv('TYPE_SND', filter_config["RABBITMQ"]["TYPE_SND"])
 
     except KeyError as e:
-        raise KeyError(f"Required key was not found in {filter_file} or Env Vars. Error: {e} .Aborting server")
+        raise KeyError(f"Required key was not found in {CONFIG_FILE} or Env Vars. Error: {e} .Aborting server")
     except ValueError as e:
-        raise ValueError(f"Key could not be parsed in {filter_file} or Env Vars. Error: {e}. Aborting server")
+        raise ValueError(f"Key could not be parsed in {CONFIG_FILE} or Env Vars. Error: {e}. Aborting server")
 
     return config_params

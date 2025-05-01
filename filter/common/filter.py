@@ -64,14 +64,14 @@ class Filter:
 
     def filter(self, decoded_msg):
         try:
-            result = parse_filter_funct(decoded_msg, self.filter_by, self.file_name)
+            result = parse_filter_funct(decoded_msg, self.filter_by)
             
             if result:
                 if self.publish_to_joiners:
                     self._publish_individually_by_movie_id(result, self.protocol)
                 else:
                     if hasattr(self, 'queue_snd_movies') and self.queue_snd_movies:
-                            logging.info(f"Publishing batch of {len(result)} filtered '{self.file_name}' messages with routing key: '{self.queue_snd_movies.key}' to exchange '{self.queue_snd_movies.exchange}' ({self.queue_snd_movies.exc_type}).")
+                            logging.info(f"Publishing batch of {len(result)} filtered messages with routing key: '{self.queue_snd_movies.key}' to exchange '{self.queue_snd_movies.exchange}' ({self.queue_snd_movies.exc_type}).")
                             if self.queue_snd_movies.key == "results":
 
                                 movies_res = movies_into_results(result)
@@ -83,7 +83,7 @@ class Filter:
                     else:
                             logging.error("Single sender queue not initialized for non-sharded publish.")
             else:
-                logging.info(f"No {self.file_name} matched the filter criteria.")
+                logging.info(f"No matched the filter criteria.")
 
         except Exception as e:
             logging.error(f"Error processing message: {e}")
@@ -99,7 +99,7 @@ class Filter:
 
         exchange_ratings = self.queue_snd_movies_to_ratings_joiner.exchange
         exchange_credits = self.queue_snd_movies_to_credits_joiner.exchange
-        logging.info(f"Publishing {len(result_list)} filtered '{self.file_name}' messages individually by movie_id to exchanges '{exchange_ratings}' and '{exchange_credits}'.")
+        logging.info(f"Publishing {len(result_list)} filtered messages individually by movie_id to exchanges '{exchange_ratings}' and '{exchange_credits}'.")
 
         published_count = 0
         for movie in result_list:

@@ -3,8 +3,8 @@ import os
 
 FILE_NAME = "docker-compose.yaml"
 
-MOVIES_DATASET = "movies_metadata_filtered.csv"
-CREDITS_DATASET = "credits_filtered.csv"
+MOVIES_DATASET = "movies_metadata.csv"
+CREDITS_DATASET = "credits.csv"
 RATINGS_DATASET = "ratings_filtered.csv"
 
 NETWORK_NAME = "tp_network"
@@ -29,6 +29,17 @@ AGGR_COUNTRY_BUDGET = "aggr_country_budget.ini"
 JOINER_RATINGS_CONFIG_SOURCE = "./joiner/config/joiner-ratings.ini"
 JOINER_CREDITS_CONFIG_SOURCE = "./joiner/config/joiner-credits.ini"
 CONFIG_FILE_TARGET = "/config.ini" # Target path inside container
+
+CLIENT_AMOUNT = 1
+TRANSFORMER_REPLICAS = 2
+JOINER_RATINGS_REPLICAS = 3
+JOINER_CREDITS_REPLICAS = 4
+FILTER_2000_REPLICAS = 5
+FILTER_ARG_SPA_REPLICAS = 6
+FILTER_ARG_REPLICAS = 7
+FILTER_SINGLE_COUNTRY_REPLICAS = 8
+FILTER_DECADE_REPLICAS = 9
+
 
 def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000, f_arg_spa, f_arg, f_single_country, f_decade):
     # Check for joiner config files existence
@@ -161,9 +172,9 @@ def write_filters(filter_2000=1, filter_arg_spa=1, filter_arg=1, filter_single_c
     for i in range(1, filter_2000 + 1):
         filters += create_filter("filter_2000_movies", i, FILTER_MOVIES_BY_2000)
     for i in range(1, filter_arg_spa + 1):
-        filters += create_filter("filter_Arg_Spa_movies", i, FILTER_MOVIES_BY_ARG_SPA)
+        filters += create_filter("filter_arg_spa_movies", i, FILTER_MOVIES_BY_ARG_SPA)
     for i in range(1, filter_arg + 1):
-        filters += create_filter("filter_Arg_movies", i, FILTER_MOVIES_BY_ARG)
+        filters += create_filter("filter_arg_movies", i, FILTER_MOVIES_BY_ARG)
     for i in range(1, filter_single_country + 1):
         filters += create_filter("filter_single_country_movies", i, FILTER_MOVIES_BY_SINGLE_COUNTRY)
     for i in range(1, filter_decade + 1):
@@ -178,7 +189,7 @@ def create_filter(filter_name, filter_replica, filter_path):
     filter_cont = f"""
   {filter_name}:
     container_name: {filter_name}
-    image: {filter_name}:latest
+    image: filter:latest
     networks:
       - {NETWORK_NAME}
     depends_on:
@@ -188,7 +199,7 @@ def create_filter(filter_name, filter_replica, filter_path):
     links:
       - rabbitmq
     volumes:
-      - ./filter/filters/{filter_path}:/{filter_path}
+      - ./filter/filters/{filter_path}:{CONFIG_FILE_TARGET}
     """
     return filter_cont
 
@@ -288,104 +299,35 @@ def create_joiner(service_base_name, replica_id, total_replicas, config_source_p
     """
     return joiner_yaml
 
+def parse_args(args, arg_to_parse):
+    if len(args) <= arg_to_parse:
+      return 1
+    try:
+        replicas = int(args[arg_to_parse])
+        if replicas < 1:
+            print("Argument must be 1 or greater.")
+            sys.exit(1)
+        
+    except ValueError:
+        print("Argument must be an integer.")
+        sys.exit(1)
+    
+    return replicas
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: python compose-generator.py <client_amount> [transformer_replicas] [joiner_ratings_replicas] [joiner_credits_replicas]")
         sys.exit(1)
-
-    try:
-        client_amount = int(sys.argv[1])
-        if client_amount < 1:
-             print("client_amount must be 1 or greater.")
-             sys.exit(1)
-    except ValueError:
-        print("client_amount must be an integer.")
-        sys.exit(1)
-
-    transformer_replicas = 1
-    if len(sys.argv) > 2:
-        try:
-            transformer_replicas = int(sys.argv[2])
-            if transformer_replicas < 1:
-                print("transformer_replicas must be 1 or greater.")
-                sys.exit(1)
-        except ValueError:
-            print("transformer_replicas must be an integer.")
-            sys.exit(1)
-
-    joiner_ratings_replicas = 1 # Default for ratings joiner
-    if len(sys.argv) > 3:
-        try:
-            joiner_ratings_replicas = int(sys.argv[3])
-            if joiner_ratings_replicas < 1:
-                print("joiner_ratings_replicas must be 1 or greater.")
-                sys.exit(1)
-        except ValueError:
-            print("joiner_ratings_replicas must be an integer.")
-            sys.exit(1)
-
-    joiner_credits_replicas = 1 # Default for credits joiner
-    if len(sys.argv) > 4: # Check for credits joiner replicas argument
-        try:
-            joiner_credits_replicas = int(sys.argv[4])
-            if joiner_credits_replicas < 1:
-                print("joiner_credits_replicas must be 1 or greater.")
-                sys.exit(1)
-        except ValueError:
-            print("joiner_credits_replicas must be an integer.")
-            sys.exit(1)
     
-    f_2000 = 1
-    if len(sys.argv) > 5:
-        try:
-            f_2000 = int(sys.argv[5])
-            if f_2000 < 1:
-                print("f_2000 must be 1 or greater.")
-                sys.exit(1)
-        except ValueError:
-            print("f_2000 must be an integer.")
-            sys.exit(1)
-
-    f_arg_spa = 1
-    if len(sys.argv) > 6:
-        try:
-            f_arg_spa = int(sys.argv[6])
-            if f_arg_spa < 1:
-                print("f_arg_spa must be 1 or greater.")
-                sys.exit(1)
-        except ValueError:
-            print("f_arg_spa must be an integer.")
-            sys.exit(1)
-    f_arg = 1
-    if len(sys.argv) > 7:
-        try:
-            f_arg = int(sys.argv[7])
-            if f_arg < 1:
-                print("f_arg must be 1 or greater.")
-                sys.exit(1)
-        except ValueError:
-            print("f_arg must be an integer.")
-            sys.exit(1)
-    f_single_country = 1
-    if len(sys.argv) > 8:
-        try:
-            f_single_country = int(sys.argv[8])
-            if f_single_country < 1:
-                print("f_single_country must be 1 or greater.")
-                sys.exit(1)
-        except ValueError:
-            print("f_single_country must be an integer.")
-            sys.exit(1)
-    f_decade = 1
-    if len(sys.argv) > 9:
-        try:
-            f_decade = int(sys.argv[9])
-            if f_decade < 1:
-                print("f_decade must be 1 or greater.")
-                sys.exit(1)
-        except ValueError:
-            print("f_decade must be an integer.")
-            sys.exit(1)
+    client_amount = parse_args(sys.argv, CLIENT_AMOUNT)
+    transformer_replicas = parse_args(sys.argv, TRANSFORMER_REPLICAS)
+    joiner_ratings_replicas = parse_args(sys.argv, JOINER_RATINGS_REPLICAS)
+    joiner_credits_replicas = parse_args(sys.argv, JOINER_CREDITS_REPLICAS)
+    f_2000 = parse_args(sys.argv, FILTER_2000_REPLICAS)
+    f_arg_spa = parse_args(sys.argv, FILTER_ARG_SPA_REPLICAS)
+    f_arg = parse_args(sys.argv, FILTER_ARG_REPLICAS)
+    f_single_country = parse_args(sys.argv, FILTER_SINGLE_COUNTRY_REPLICAS)
+    f_decade = parse_args(sys.argv, FILTER_DECADE_REPLICAS)
 
     docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000, f_arg_spa, f_arg, f_single_country, f_decade)
 
