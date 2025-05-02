@@ -15,6 +15,14 @@ class Client:
         self.forward_queue = None
         self.result_queue = None
         self.control_publisher = None
+        
+        # TODO for now is needed for message decoding but a method to just get type could work
+        self.columns_needed = {
+            'movies': ["id", "title", "genres", "release_date", "overview", 
+                      "production_countries", "spoken_languages", "budget", "revenue"],
+            'ratings': ["movieId", "rating", "timestamp"],
+            'credits': ["id", "cast"]
+        }
 
     def run(self):
         self.data_controller = Process(target=self.handle_connection, args=[self.socket])
@@ -69,7 +77,7 @@ class Client:
                 return
             
             try:
-                _, message = self.protocol.decode_client_msg(buffer)
+                _, message = self.protocol.decode_client_msg(buffer, self.columns_needed)
                 if message and message.finished:
                     # Publish finish signal to control exchange
                     self.control_publisher.publish(buffer)
@@ -94,9 +102,9 @@ class Client:
 
     def result_controller_func(self, ch, method, properties, body):
         try:
-            logging.info(f"got result: {body}")
+            # logging.info(f"got result: {body}")
             msg = self.protocol.create_client_result(body)
-            logging.info(f"sending message: {msg}")
+            # logging.info(f"sending message: {msg}")
             self.socket.sendall(msg)
         except Exception as e:
             logging.error(f"Error processing message: {e}")
