@@ -3,6 +3,7 @@ import socket
 import logging
 from protocol.protocol import Protocol
 from protocol.rabbit_protocol import RabbitMQ
+from protocol.rabbit_wrapper import RabbitMQProducer, RabbitMQConsumer
 from protocol.utils.socket_utils import recvall
 
 class Client:
@@ -13,6 +14,7 @@ class Client:
         self.result_controller = None
         self.forward_queue = None
         self.result_queue = None
+        self.control_publisher = None
 
     def run(self):
         self.data_controller = Process(target=self.handle_connection, args=[self.socket])
@@ -29,6 +31,8 @@ class Client:
             self.forward_queue.stop()
         if self.result_queue:
             self.result_queue.stop()
+        if self.control_publisher:
+            self.control_publisher.stop()
         
         if self.data_controller.is_alive():
             self.data_controller.terminate()
@@ -36,7 +40,22 @@ class Client:
             self.result_controller.terminate()
 
     def handle_connection(self, conn: socket.socket):
-        self.forward_queue = RabbitMQ("server_to_data_controller", "forward", "forward_queue", "direct")
+        # Initialize the forward queue for data messages
+        self.forward_queue = RabbitMQProducer(
+            host='rabbitmq',
+            exchange="server_to_data_controller",
+            exchange_type="direct",
+            routing_key="forward"
+        )
+        
+        # Initialize the control publisher for finish messages
+        self.control_publisher = RabbitMQProducer(
+            host='rabbitmq',
+            exchange="data_controller_control",
+            exchange_type="fanout",
+            routing_key=""
+        )
+        
         closed_socket = False
         while not closed_socket:
             read_amount = self.protocol.define_initial_buffer_size()
@@ -49,8 +68,19 @@ class Client:
             if closed_socket:
                 return
             
-            # Forward the raw message to data controller
-            self._forward_to_data_controller(buffer)
+            try:
+                _, message = self.protocol.decode_client_msg(buffer)
+                if message and message.finished:
+                    # Publish finish signal to control exchange
+                    self.control_publisher.publish(buffer)
+                    logging.info("Published FINISHED signal to control exchange")
+                else:
+                    # Forward regular data message
+                    self._forward_to_data_controller(buffer)
+            except Exception as e:
+                logging.error(f"Error processing message: {e}")
+                # Still forward the message in case of decode error
+                self._forward_to_data_controller(buffer)
 
     def _forward_to_data_controller(self, message):
         try:

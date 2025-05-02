@@ -30,14 +30,10 @@ def initialize_config():
         config_params["movies_routing_key"] = os.getenv('MOVIES_ROUTING_KEY', config["queues"]["movies_routing_key"])
         
         # Ratings queue config
-        config_params["ratings_queue"] = os.getenv('RATINGS_QUEUE', config["queues"]["ratings_queue"])
         config_params["ratings_exchange"] = os.getenv('RATINGS_EXCHANGE', config["queues"]["ratings_exchange"])
-        config_params["ratings_routing_key"] = os.getenv('RATINGS_ROUTING_KEY', config["queues"]["ratings_routing_key"])
         
         # Credits queue config
-        config_params["credits_queue"] = os.getenv('CREDITS_QUEUE', config["queues"]["credits_queue"])
         config_params["credits_exchange"] = os.getenv('CREDITS_EXCHANGE', config["queues"]["credits_exchange"])
-        config_params["credits_routing_key"] = os.getenv('CREDITS_ROUTING_KEY', config["queues"]["credits_routing_key"])
         
         # Control exchanges
         config_params["finished_file_exchange"] = os.getenv('FINISHED_FILE_EXCHANGE', config["control_exchanges"]["finished_file_exchange"])

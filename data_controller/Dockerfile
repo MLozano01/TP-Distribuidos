@@ -1,6 +1,6 @@
 FROM python:3.9.7-slim
 
-COPY data-controller /
+COPY data_controller /
 COPY protocol /protocol
 COPY utils /utils
 COPY requirements.txt /

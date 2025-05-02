@@ -32,9 +32,9 @@ services:
         condition: service_started
     volumes:
       - ./client/config.ini:/config.ini
-      - ./data/credits.csv:/credits_filtered.csv
-      - ./data/ratings_small.csv:/ratings_filtered.csv
-      - ./data/movies_metadata.csv:/movies_metadata_filtered.csv
+      - ./data/credits_filtered.csv:/credits_filtered.csv
+      - ./data/ratings_filtered.csv:/ratings_filtered.csv
+      - ./data/movies_metadata_filtered.csv:/movies_metadata_filtered.csv
     
   server:
     container_name: server
@@ -52,6 +52,43 @@ services:
       - rabbitmq
     volumes:
       - ./server/config.ini:/config.ini
+    
+  
+  data-controller-1:
+    container_name: data-controller-1
+    image: data-controller:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./data_controller/config.ini:/config.ini
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATA_CONTROLLER_REPLICA_ID=1
+      - DATA_CONTROLLER_REPLICA_COUNT=2
+    
+  data-controller-2:
+    container_name: data-controller-2
+    image: data-controller:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./data_controller/config.ini:/config.ini
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATA_CONTROLLER_REPLICA_ID=2
+      - DATA_CONTROLLER_REPLICA_COUNT=2
     
   
   filter:
