@@ -2,6 +2,7 @@ from protocol.rabbit_protocol import RabbitMQ
 import logging
 from multiprocessing import Process
 from protocol.protocol import Protocol
+import time
 
 logging.getLogger("pika").setLevel(logging.ERROR)
 
@@ -65,6 +66,8 @@ class FilterCommunicator:
 
             consume_process = Process(target=self._manage_consume_pika, args=())
             consume_process.start()
+
+            time.sleep(0.5)  # Ensure the consumer is ready before publishing
 
             self.queue_communication_1.publish(data)
             consume_process.join()

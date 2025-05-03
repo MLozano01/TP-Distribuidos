@@ -69,7 +69,7 @@ services:
       - ./filter/filters/filter_2000_movies.ini:/config.ini
     environment:
       - FILTER_REPLICA_ID=1
-      - FILTER_REPLICA_COUNT=2
+      - FILTER_REPLICA_COUNT=3
     
   filter_2000_movies-2:
     container_name: filter_2000_movies-2
@@ -86,7 +86,24 @@ services:
       - ./filter/filters/filter_2000_movies.ini:/config.ini
     environment:
       - FILTER_REPLICA_ID=2
-      - FILTER_REPLICA_COUNT=2
+      - FILTER_REPLICA_COUNT=3
+    
+  filter_2000_movies-3:
+    container_name: filter_2000_movies-3
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_2000_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=3
+      - FILTER_REPLICA_COUNT=3
     
   filter_arg_spa_movies-1:
     container_name: filter_arg_spa_movies-1
@@ -103,7 +120,24 @@ services:
       - ./filter/filters/filter_Arg_Spa_movies.ini:/config.ini
     environment:
       - FILTER_REPLICA_ID=1
-      - FILTER_REPLICA_COUNT=1
+      - FILTER_REPLICA_COUNT=2
+    
+  filter_arg_spa_movies-2:
+    container_name: filter_arg_spa_movies-2
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_Arg_Spa_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=2
+      - FILTER_REPLICA_COUNT=2
     
   filter_arg_movies-1:
     container_name: filter_arg_movies-1
@@ -120,7 +154,24 @@ services:
       - ./filter/filters/filter_Arg_movies.ini:/config.ini
     environment:
       - FILTER_REPLICA_ID=1
-      - FILTER_REPLICA_COUNT=1
+      - FILTER_REPLICA_COUNT=2
+    
+  filter_arg_movies-2:
+    container_name: filter_arg_movies-2
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_Arg_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=2
+      - FILTER_REPLICA_COUNT=2
     
   filter_single_country_movies-1:
     container_name: filter_single_country_movies-1
@@ -137,7 +188,24 @@ services:
       - ./filter/filters/filter_single_country_movies.ini:/config.ini
     environment:
       - FILTER_REPLICA_ID=1
-      - FILTER_REPLICA_COUNT=1
+      - FILTER_REPLICA_COUNT=2
+    
+  filter_single_country_movies-2:
+    container_name: filter_single_country_movies-2
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_single_country_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=2
+      - FILTER_REPLICA_COUNT=2
     
   filter_decade_movies-1:
     container_name: filter_decade_movies-1
@@ -154,7 +222,24 @@ services:
       - ./filter/filters/filter_decade_movies.ini:/config.ini
     environment:
       - FILTER_REPLICA_ID=1
-      - FILTER_REPLICA_COUNT=1
+      - FILTER_REPLICA_COUNT=2
+    
+  filter_decade_movies-2:
+    container_name: filter_decade_movies-2
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_decade_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=2
+      - FILTER_REPLICA_COUNT=2
     
   transformer:
     container_name: transformer
@@ -223,7 +308,25 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - JOINER_REPLICA_ID=1 # Direct integer ID
-      - JOINER_REPLICA_COUNT=1 # Direct integer count
+      - JOINER_REPLICA_COUNT=2 # Direct integer count
+    
+  joiner-ratings-2:
+    container_name: joiner-ratings-2
+    image: joiner:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./joiner/config/joiner-ratings.ini:/config.ini
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JOINER_REPLICA_ID=2 # Direct integer ID
+      - JOINER_REPLICA_COUNT=2 # Direct integer count
     
   
   joiner-credits-1:
@@ -242,7 +345,25 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - JOINER_REPLICA_ID=1 # Direct integer ID
-      - JOINER_REPLICA_COUNT=1 # Direct integer count
+      - JOINER_REPLICA_COUNT=2 # Direct integer count
+    
+  joiner-credits-2:
+    container_name: joiner-credits-2
+    image: joiner:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./joiner/config/joiner-credits.ini:/config.ini
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JOINER_REPLICA_ID=2 # Direct integer ID
+      - JOINER_REPLICA_COUNT=2 # Direct integer count
     
 networks:
   tp_network:
