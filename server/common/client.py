@@ -63,8 +63,8 @@ class Client:
 
     def _forward_to_data_controller(self, message):
         try:
-            # Include client ID in message properties
-            self.forward_queue.publish(message, properties={'headers': {'client_id': self.client_id}})
+            logging.info(f"Forwarding message to data controller")
+            self.forward_queue.publish(message)
         except Exception as e:
             logging.error(f"Failed to forward message to data controller: {e}")
 
