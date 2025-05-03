@@ -51,6 +51,8 @@ class Filter:
             logging.error("Receiver queue not initialized. Filter cannot run.")
             return
         self.queue_rcv.consume(self.callback)
+        self._check_finished()
+
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
@@ -140,15 +142,25 @@ class Filter:
 
     def _publish_movie_finished_signal(self, msg):
         """Publishes the movie finished signal. If its to joiners it publishis to a specific fanout exchange, otherwise it publishes to the default key of the single sender queue."""
-        if self.publish_to_joiners:
-            self.finished_filter_arg_step_publisher.publish(self.protocol.create_finished_message(FileType.MOVIES))
-            logging.info(f"Published movie finished signal to {self.finished_filter_arg_step_publisher.exchange}")
-        else:
-            msg_to_send = msg.SerializeToString()
-            if self.queue_snd_movies.key == "results":
-                msg_to_send = self.protocol.create_result({"movies": {}})
-            self.queue_snd_movies.publish(msg_to_send)
-            logging.info(f"Published movie finished signal to {self.queue_snd_movies.exchange}")
+        encoded_msg = self.protocol.encode_movies_msg(msg)
+       
+        self.comm_queue.put(encoded_msg)
+        logging.info(f"Published finished signal to communication channel")
+
+        if self.comm_queue.get() == True:
+            if self.publish_to_joiners:
+                self.finished_filter_arg_step_publisher.publish(self.protocol.create_finished_message(FileType.MOVIES))
+                logging.info(f"Published movie finished signal to {self.finished_filter_arg_step_publisher.exchange}")
+            else:
+                msg_to_send = msg.SerializeToString()
+                if self.queue_snd_movies.key == "results":
+                    msg_to_send = self.protocol.create_result({"movies": {}})
+                self.queue_snd_movies.publish(msg_to_send)
+                logging.info(f"Published movie finished signal to {self.queue_snd_movies.exchange}")
+
+    def _check_finished(self):
+        if self.comm_queue.get_nowait():
+            self.comm_queue.put(True)
 
     def end_filter(self):
         """End the filter and close the queue."""

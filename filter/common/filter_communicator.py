@@ -20,39 +20,52 @@ class FilterCommunicator:
         """
         Initialize the communication queues based on the configuration.
         """
-        self.queue_communication = self.queue_rcv = RabbitMQ(self.exchange_communication, self.queue_communication_name, self.routing_communication_key, self.exc_communication_type)
+        self.queue_communication = RabbitMQ(self.exchange_communication, self.queue_communication_name, self.routing_communication_key, self.exc_communication_type)
         logging.info(f"Initialized communication queue: {self.queue_communication.exchange}, type={self.queue_communication.exc_type}")
 
-    def run(self, filter_name, filter_instance):
+    def run(self):
         """
         Register a filter instance with a unique name.
         """
+        gets_the_finished = Process(target=self.manage_getting_finished, args=())
+
+        gets_the_finished_notification = Process(target=self.manage_getting_finished_notification, args=())
+
+        gets_the_finished.start()
+        gets_the_finished_notification.start()
+
+        gets_the_finished.join()
+        gets_the_finished_notification.join()
         
 
-    def manage_inner_communication(self):
+
+    def manage_getting_finished(self):
         """
         Manage the inner communication between filters.
         """
+        try:
+            data = self.comm_queue.get()
 
-        if not self.comm_queue:
-            logging.error("Communication queue not initialized. Filter cannot run.")
-            return
-        
-        if self.comm_queue:
-            self.queue_communication.publish()
+            self.queue_communication.publish(data)
+
+            for i in range(self.config["filter_replicas_count"]):
+                self.queue_communication.consume(self.other_callback, "ack_finished")
+
+            self.comm_queue.put(True)
+
+        except Exception as e:
+            logging.error(f"Error in managing inner communication: {e}")
+            self.comm_queue.put(False)
 
 
-    def manage_filter_communication(self):
+    def manage_getting_finished_notification(self):
         """
         Manage the communication between different filters.
         """
-
-        if not self.queue_rcv:
-            logging.error("Receiver queue not initialized. Filter cannot run.")
-            return
-
-        for i in range(self.config["filter_replicas_count"]):
-            self.queue_rcv.consume(self.callback)
+        try: 
+            self.queue_communication.consume(self.callback)
+        except Exception as e:
+            logging.error(f"Error in managing inner communication: {e}")
 
     def callback(self, ch, method, properties, body):
         """
@@ -63,6 +76,13 @@ class FilterCommunicator:
         
         if decoded_msg.finished:
             logging.info("Received finished signal from server on communication channel.")
-            self._publish_movie_finished_signal(decoded_msg)
-            return
-        self.filter(decoded_msg)
+            msg = self.protocol.encode_movies_msg(decoded_msg)
+            self.queue_communication.publish(msg, routing_key="ack_finished")
+
+        return
+    
+    def other_callback(self, ch, method, properties, body):
+        """
+        Callback function to process incoming messages.
+        """
+        logging.info("RECEIVED A FILTER ACK")
