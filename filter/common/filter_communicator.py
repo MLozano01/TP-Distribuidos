@@ -13,31 +13,33 @@ class FilterCommunicator:
     def __init__(self, config, queue):
         self.comm_queue = queue
         self.config = config
-        self.filters = {}
         self.queue_communication = None
 
     def _settle_queues(self):
         """
         Initialize the communication queues based on the configuration.
         """
-        self.queue_communication = RabbitMQ(self.exchange_communication, self.queue_communication_name, self.routing_communication_key, self.exc_communication_type)
-        logging.info(f"Initialized communication queue: {self.queue_communication.exchange}, type={self.queue_communication.exc_type}")
+        self.queue_communication = RabbitMQ(self.config["exchange_communication"], self.config['queue_communication_name'], self.config["routing_communication_key"], self.config["exc_communication_type"])
+        logging.info(f"Initialized communication queue")
 
     def run(self):
         """
         Register a filter instance with a unique name.
         """
+        self._settle_queues()
+
         gets_the_finished = Process(target=self.manage_getting_finished, args=())
 
         gets_the_finished_notification = Process(target=self.manage_getting_finished_notification, args=())
 
         gets_the_finished.start()
+        logging.info(f"GETS_THE_FINISHED: {gets_the_finished.pid}")
         gets_the_finished_notification.start()
+        logging.info(f"GETS_THE_FINISHED_NOTIFICATION: {gets_the_finished_notification.pid}")
 
         gets_the_finished.join()
         gets_the_finished_notification.join()
         
-
 
     def manage_getting_finished(self):
         """
@@ -46,10 +48,14 @@ class FilterCommunicator:
         try:
             data = self.comm_queue.get()
 
+            logging.info(f"Received finished signal from filter: {data}")
+
             self.queue_communication.publish(data)
 
             for i in range(self.config["filter_replicas_count"]):
                 self.queue_communication.consume(self.other_callback, "ack_finished")
+
+            logging.info("Finished acking the other filters")
 
             self.comm_queue.put(True)
 

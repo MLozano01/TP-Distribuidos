@@ -142,14 +142,14 @@ class Filter:
 
     def _publish_movie_finished_signal(self, msg):
         """Publishes the movie finished signal. If its to joiners it publishis to a specific fanout exchange, otherwise it publishes to the default key of the single sender queue."""
-        encoded_msg = self.protocol.encode_movies_msg(msg)
+        encoded_msg = self.protocol.create_finished_message(FileType.MOVIES)
        
         self.comm_queue.put(encoded_msg)
         logging.info(f"Published finished signal to communication channel")
 
         if self.comm_queue.get() == True:
             if self.publish_to_joiners:
-                self.finished_filter_arg_step_publisher.publish(self.protocol.create_finished_message(FileType.MOVIES))
+                self.finished_filter_arg_step_publisher.publish(encoded_msg)
                 logging.info(f"Published movie finished signal to {self.finished_filter_arg_step_publisher.exchange}")
             else:
                 msg_to_send = msg.SerializeToString()

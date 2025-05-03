@@ -1,6 +1,7 @@
 from multiprocessing import Process
 import logging
-from common.filter import Filter, FilterCommunicator
+from common.filter import Filter
+from common.filter_communicator import FilterCommunicator
 import queue
 
 
@@ -16,13 +17,15 @@ class Controller:
 
         try:
 
+            logging.info(f"COMMUNICATION CONFIG {self.communication_config}")
+
             comm_queue = queue.Queue()
 
             filter_name = self.config["filter_name"]
 
             logging.info(f"Starting filter {filter_name}  with config {self.config}")
 
-            filter_instance = Filter( comm_queue, **self.config)
+            filter_instance = Filter(comm_queue, **self.config)
 
             self.filter = Process(target=filter_instance.run, args=())
         
@@ -30,14 +33,21 @@ class Controller:
             logging.info(f"Filter {filter_name} started with PID: {self.filter.pid}")
 
             # Initialize the filter communicator
-            self.filter_communicator = FilterCommunicator(self.communication_config, comm_queue)
+            communicator_instance = FilterCommunicator(self.communication_config, comm_queue)
+
+            self.filter_communicator = Process(target=communicator_instance.run, args=())
+            self.filter_communicator.start()
+            logging.info(f"Filter communicator started with PID: {self.filter_communicator.pid}")
+
+
+            self.filter.join()        
+            self.filter_communicator.join()
 
         except KeyboardInterrupt:
             logging.info("Filter stopped by user")
         except Exception as e:
             logging.error(f"Filter error: {e}")
         
-        self.filter.join()        
 
     
     def stop(self):
