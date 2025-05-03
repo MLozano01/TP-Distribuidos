@@ -1,7 +1,6 @@
 import pika
 import time
 import logging
-import threading
 
 class RabbitMQBase:
     """Base class handling RabbitMQ connection and channel setup with retries."""
@@ -84,20 +83,29 @@ class RabbitMQBase:
 
 class RabbitMQConsumer(RabbitMQBase):
     """Generic RabbitMQ Consumer with non-blocking setup and exclusive queue support."""
-    def __init__(self, host, exchange, exchange_type, queue_name=None, routing_key='', durable=True, exclusive=False, auto_delete=False):
+    def __init__(self, host, exchange, exchange_type, routing_key, queue_name=None, durable=True, exclusive=False, auto_delete=False):
         super().__init__(host)
         self.exchange = exchange
         self.exchange_type = exchange_type
-        self.requested_queue_name = queue_name
         self.routing_key = routing_key
+        # Store the requested name; actual name might be generated
+        self.requested_queue_name = queue_name
+        self.actual_queue_name = None
+        self.consumer_tag = None
+        # Store queue properties
         self.durable = durable
         self.exclusive = exclusive
         self.auto_delete = auto_delete
-        self.actual_queue_name = None
-        self.consumer_tag = None
-        self._callback = None
-        self._auto_ack = True
-        self._stop_event = threading.Event()
+
+        # Handle case where exclusive queue is requested without dynamic name
+        if self.exclusive and self.requested_queue_name:
+            logging.warning(f"Queue '{self.requested_queue_name}' requested as exclusive. Setting auto_delete=True and durable=False.")
+            self.auto_delete = True
+            self.durable = False
+        elif self.requested_queue_name is None:
+            self.exclusive = True
+            self.auto_delete = True
+
         self._setup_consumer()
 
     def _setup_consumer(self):
@@ -158,36 +166,20 @@ class RabbitMQConsumer(RabbitMQBase):
             logging.error(f"Consumer not set up for queue {self.actual_queue_name}. Call consume() first.")
             raise RuntimeError(f"Consumer not set up for queue {self.actual_queue_name}")
 
+        # logging.info(f"Starting blocking consumer loop for queue '{self.actual_queue_name}'...")
         try:
             ch = self.channel
-            while not self._stop_event.is_set():
-                try:
-                    ch.start_consuming()
-                except pika.exceptions.StreamLostError:
-                    if self._stop_event.is_set():
-                        logging.info(f"Stream lost during shutdown for queue {self.actual_queue_name}")
-                        break
-                    logging.warning(f"Stream lost for queue {self.actual_queue_name}, attempting to reconnect...")
-                    self._connect_with_retry()
-                    ch = self.channel
-                    if self.consumer_tag:
-                        ch.basic_consume(
-                            queue=self.actual_queue_name,
-                            on_message_callback=self._callback,
-                            auto_ack=self._auto_ack
-                        )
-                except Exception as e:
-                    if self._stop_event.is_set():
-                        logging.info(f"Consumer loop terminated for queue {self.actual_queue_name} during shutdown")
-                        break
-                    logging.error(f"Error during start_consuming for queue {self.actual_queue_name}: {e}", exc_info=True)
-                    raise
+            ch.start_consuming()
+        except KeyboardInterrupt:
+             logging.info(f"KeyboardInterrupt received, stopping consumer loop for {self.actual_queue_name}.")
+        except Exception as e:
+            logging.error(f"Error during start_consuming for queue {self.actual_queue_name}: {e}", exc_info=True)
+            raise # Reraise to signal failure to the calling thread
         finally:
             logging.info(f"Consumer loop terminated for queue '{self.actual_queue_name}'.")
 
     def stop(self):
         """Stops consuming and closes resources."""
-        self._stop_event.set()
         if self._channel and self._channel.is_open and self.consumer_tag:
             try:
                 logging.info(f"Attempting to cancel consumer for queue '{self.actual_queue_name}' (tag: {self.consumer_tag})")
@@ -196,7 +188,7 @@ class RabbitMQConsumer(RabbitMQBase):
             except Exception as e:
                 logging.error(f"Error cancelling consumer for {self.actual_queue_name}: {e}")
             finally:
-                self.consumer_tag = None
+                 self.consumer_tag = None
         super().stop()
 
 
