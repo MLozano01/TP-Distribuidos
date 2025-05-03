@@ -24,20 +24,24 @@ def initialize_config():
         config_params["logging_level"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"])
         config_params["rabbit_host"] = os.getenv('RABBIT_HOST', config["RABBITMQ"]["RABBIT_HOST"])
         
-        # Movies queue config
-        config_params["movies_queue"] = os.getenv('MOVIES_QUEUE', config["queues"]["movies_queue"])
-        config_params["movies_exchange"] = os.getenv('MOVIES_EXCHANGE', config["queues"]["movies_exchange"])
-        config_params["movies_routing_key"] = os.getenv('MOVIES_ROUTING_KEY', config["queues"]["movies_routing_key"])
+        # Input configuration
+        config_params["input_exchange"] = os.getenv('INPUT_EXCHANGE', config["input"]["server_exchange"])
+        config_params["input_routing_key"] = os.getenv('INPUT_ROUTING_KEY', config["input"]["server_routing_key"])
         
-        # Ratings queue config
-        config_params["ratings_exchange"] = os.getenv('RATINGS_EXCHANGE', config["queues"]["ratings_exchange"])
         
-        # Credits queue config
-        config_params["credits_exchange"] = os.getenv('CREDITS_EXCHANGE', config["queues"]["credits_exchange"])
+        # Output movies configuration
+        config_params["movies_queue"] = os.getenv('MOVIES_QUEUE', config["output_movies"]["queue"])
+        config_params["movies_exchange"] = os.getenv('MOVIES_EXCHANGE', config["output_movies"]["exchange"])
+        config_params["movies_routing_key"] = os.getenv('MOVIES_ROUTING_KEY', config["output_movies"]["routing_key"])
         
-        # Control exchanges
-        config_params["finished_file_exchange"] = os.getenv('FINISHED_FILE_EXCHANGE', config["control_exchanges"]["finished_file_exchange"])
-        config_params["finished_movies_exchange"] = os.getenv('FINISHED_MOVIES_EXCHANGE', config["control_exchanges"]["finished_movies_exchange"])
+        # Output ratings configuration
+        config_params["ratings_exchange"] = os.getenv('RATINGS_EXCHANGE', config["output_ratings"]["exchange"])
+        
+        # Output credits configuration
+        config_params["credits_exchange"] = os.getenv('CREDITS_EXCHANGE', config["output_credits"]["exchange"])
+        
+        # replicas_control configuration
+        config_params["replicas_exchange"] = os.getenv('FINISHED_FILE_EXCHANGE', config["replicas_control"]["replicas_exchange"])
 
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
