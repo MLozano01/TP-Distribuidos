@@ -47,7 +47,7 @@ AGGR_SENT_REPLICAS = 10
 AGGR_BUDGET_REPLICAS = 11
 
 
-def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, aggr_sent_replicas, aggr_budget_replicas):
+def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas):
     # Check for joiner config files existence
     required_joiner_configs = [JOINER_RATINGS_CONFIG_SOURCE, JOINER_CREDITS_CONFIG_SOURCE]
     for config_path in required_joiner_configs:
@@ -56,15 +56,15 @@ def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_re
             sys.exit(1)
 
     with open(FILE_NAME, 'w') as f:
-        f.write(create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, aggr_sent_replicas, aggr_budget_replicas))
+        f.write(create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas))
 
 
-def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, aggr_sent_replicas, aggr_budget_replicas):
+def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas):
     clients = join_clients(client_amount)
     server = create_server(client_amount)
     network = create_network()
     rabbit = create_rabbit()
-    filter_cont = create_filter()
+    filters = write_filters(f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas)
     transformer = create_transformer(transformer_replicas)
     aggregator = create_aggregators(aggr_sent_replicas, aggr_budget_replicas)
     reducer = create_reducer()
@@ -84,7 +84,7 @@ services:
   {rabbit}
   {clients}
   {server}
-  {filter_cont}
+  {filters}
   {transformer}
   {aggregator}
   {reducer}
@@ -179,10 +179,30 @@ def create_rabbit():
     """
     return rabbit
 
-def create_filter():
+def write_filters(filter_2000=1, filter_arg_spa=1, filter_arg=1, filter_single_country=1, filter_decade=1):
+    
+    filters = ""
+
+    for i in range(1, filter_2000 + 1):
+        filters += create_filter("filter_2000_movies", i, FILTER_MOVIES_BY_2000, filter_2000)
+    for i in range(1, filter_arg_spa + 1):
+        filters += create_filter("filter_arg_spa_movies", i, FILTER_MOVIES_BY_ARG_SPA, filter_arg_spa)
+    for i in range(1, filter_arg + 1):
+        filters += create_filter("filter_arg_movies", i, FILTER_MOVIES_BY_ARG, filter_arg)
+    for i in range(1, filter_single_country + 1):
+        filters += create_filter("filter_single_country_movies", i, FILTER_MOVIES_BY_SINGLE_COUNTRY, filter_single_country)
+    for i in range(1, filter_decade + 1):
+        filters += create_filter("filter_decade_movies", i, FILTER_MOVIES_DECADE, filter_decade)
+
+    return filters
+
+def create_filter(filter_name, filter_replica, filter_path, replica_count):
+    
+    filter_name = f"{filter_name}-{filter_replica}"
+    
     filter_cont = f"""
-  filter:
-    container_name: filter
+  {filter_name}:
+    container_name: {filter_name}
     image: filter:latest
     networks:
       - {NETWORK_NAME}
@@ -193,12 +213,10 @@ def create_filter():
     links:
       - rabbitmq
     volumes:
-      - ./filter/{CONFIG_FILE}:/{CONFIG_FILE}
-      - ./filter/filters/{FILTER_MOVIES_BY_2000}:/{FILTER_MOVIES_BY_2000}
-      - ./filter/filters/{FILTER_MOVIES_BY_ARG_SPA}:/{FILTER_MOVIES_BY_ARG_SPA}
-      - ./filter/filters/{FILTER_MOVIES_BY_ARG}:/{FILTER_MOVIES_BY_ARG}
-      - ./filter/filters/{FILTER_MOVIES_BY_SINGLE_COUNTRY}:/{FILTER_MOVIES_BY_SINGLE_COUNTRY}
-      - ./filter/filters/{FILTER_MOVIES_DECADE}:/{FILTER_MOVIES_DECADE}
+      - ./filter/filters/{filter_path}:{CONFIG_FILE_TARGET}
+    environment:
+      - FILTER_REPLICA_ID={filter_replica}
+      - FILTER_REPLICA_COUNT={replica_count}
     """
     return filter_cont
 
@@ -310,7 +328,6 @@ def create_joiner(service_base_name, replica_id, total_replicas, config_source_p
     """
     return joiner_yaml
 
-
 def parse_args(args, arg_to_parse):
     if len(args) <= arg_to_parse:
       return 1
@@ -326,7 +343,6 @@ def parse_args(args, arg_to_parse):
     
     return replicas
 
-
 def main():
     if len(sys.argv) < 2:
         print("Usage: python compose-generator.py <client_amount> [transformer_replicas] [joiner_ratings_replicas] [joiner_credits_replicas]")
@@ -336,12 +352,16 @@ def main():
     transformer_replicas = parse_args(sys.argv, TRANSFORMER_REPLICAS)
     joiner_ratings_replicas = parse_args(sys.argv, JOINER_RATINGS_REPLICAS)
     joiner_credits_replicas = parse_args(sys.argv, JOINER_CREDITS_REPLICAS)
-    
+    f_2000_replicas = parse_args(sys.argv, FILTER_2000_REPLICAS)
+    f_arg_spa_replicas = parse_args(sys.argv, FILTER_ARG_SPA_REPLICAS)
+    f_arg = parse_args(sys.argv, FILTER_ARG_REPLICAS)
+    f_single_country_replicas = parse_args(sys.argv, FILTER_SINGLE_COUNTRY_REPLICAS)
+    f_decade_replicas = parse_args(sys.argv, FILTER_DECADE_REPLICAS)
     aggr_sent_replicas = parse_args(sys.argv, AGGR_SENT_REPLICAS)
     aggr_budget_replicas = parse_args(sys.argv, AGGR_BUDGET_REPLICAS)
+    
+    docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas)
 
-
-    docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, aggr_sent_replicas, aggr_budget_replicas)
 
 if __name__ == "__main__":
     main()

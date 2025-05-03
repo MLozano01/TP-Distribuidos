@@ -1,46 +1,59 @@
-from multiprocessing import Process
+from multiprocessing import Process, Queue
 import logging
-import common.config_init
-from utils.utils import config_logger
 from common.filter import Filter
+from common.filter_communicator import FilterCommunicator
+
+logging.getLogger("pika").setLevel(logging.ERROR)
 
 
 class Controller:
-    def __init__(self, config):
-        self.all_filters = []
+    def __init__(self, config, communication_config):
+        self.filter = None
+        self.filter_communicator = None
         self.config = config
+        self.communication_config = communication_config
 
     def start(self):
         logging.info("Starting Filters")
 
-        for i in range(self.config["filter_num"]):
+        try:
 
-            filter_config = self.config[f"filter_{i}"]
+            comm_queue = Queue()
 
-            filter_path = filter_config.split(",")[0]
+            filter_name = self.config["filter_name"]
 
-            filter_config_params = common.config_init.config_filter(f'/{filter_path}.ini')
+            logging.info(f"Starting filter {filter_name}  with config {self.config}")
 
-            try:
-                logging.info(f"Starting filter {i} with config: {filter_config_params}")
+            filter_instance = Filter(comm_queue, **self.config)
 
-                filter_instance = Filter(**filter_config_params)
-
-                new_filter = Process(target=filter_instance.run, args=())
-                self.all_filters.append(new_filter)
-
-                new_filter.start()
-                logging.info(f"Filter {i} started with PID: {new_filter.pid}")
-
-            except KeyboardInterrupt:
-                logging.info("Filter stopped by user")
-            except Exception as e:
-                logging.error(f"Filter error: {e}")
+            self.filter = Process(target=filter_instance.run, args=())
         
-        for filt in self.all_filters:
-            filt.join()
+            self.filter.start()
+            logging.info(f"Filter {filter_name} started with PID: {self.filter.pid}")
+
+            communicator_instance = FilterCommunicator(self.communication_config, comm_queue)
+
+            self.filter_communicator = Process(target=communicator_instance.run, args=())
+            self.filter_communicator.start()
+            logging.info(f"Filter communicator started with PID: {self.filter_communicator.pid}")
+
+
+            self.filter.join()        
+            self.filter_communicator.join()
+
+        except KeyboardInterrupt:
+            logging.info("Filter stopped by user")
+        except Exception as e:
+            logging.error(f"Filter error: {e}")
+        
+
     
     def stop(self):
-        for filter in self.all_filters:
-            if filter.is_alive():
-                filter.terminate()
+        if self.filter:
+            self.filter.terminate()
+            self.filter.join()
+            logging.info("Filter process terminated")
+        else:
+            logging.warning("No filter process to terminate")
+        self.filter = None
+    

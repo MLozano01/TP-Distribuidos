@@ -55,8 +55,8 @@ services:
       - ./server/config.ini:/config.ini
     
   
-  filter:
-    container_name: filter
+  filter_2000_movies-1:
+    container_name: filter_2000_movies-1
     image: filter:latest
     networks:
       - tp_network
@@ -67,12 +67,163 @@ services:
     links:
       - rabbitmq
     volumes:
-      - ./filter/config.ini:/config.ini
-      - ./filter/filters/filter_2000_movies.ini:/filter_2000_movies.ini
-      - ./filter/filters/filter_Arg_Spa_movies.ini:/filter_Arg_Spa_movies.ini
-      - ./filter/filters/filter_Arg_movies.ini:/filter_Arg_movies.ini
-      - ./filter/filters/filter_single_country_movies.ini:/filter_single_country_movies.ini
-      - ./filter/filters/filter_decade_movies.ini:/filter_decade_movies.ini
+      - ./filter/filters/filter_2000_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=1
+      - FILTER_REPLICA_COUNT=2
+    
+  filter_2000_movies-2:
+    container_name: filter_2000_movies-2
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_2000_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=2
+      - FILTER_REPLICA_COUNT=2
+    
+  filter_arg_spa_movies-1:
+    container_name: filter_arg_spa_movies-1
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_Arg_Spa_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=1
+      - FILTER_REPLICA_COUNT=2
+    
+  filter_arg_spa_movies-2:
+    container_name: filter_arg_spa_movies-2
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_Arg_Spa_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=2
+      - FILTER_REPLICA_COUNT=2
+    
+  filter_arg_movies-1:
+    container_name: filter_arg_movies-1
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_Arg_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=1
+      - FILTER_REPLICA_COUNT=2
+    
+  filter_arg_movies-2:
+    container_name: filter_arg_movies-2
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_Arg_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=2
+      - FILTER_REPLICA_COUNT=2
+    
+  filter_single_country_movies-1:
+    container_name: filter_single_country_movies-1
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_single_country_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=1
+      - FILTER_REPLICA_COUNT=2
+    
+  filter_single_country_movies-2:
+    container_name: filter_single_country_movies-2
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_single_country_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=2
+      - FILTER_REPLICA_COUNT=2
+    
+  filter_decade_movies-1:
+    container_name: filter_decade_movies-1
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_decade_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=1
+      - FILTER_REPLICA_COUNT=2
+    
+  filter_decade_movies-2:
+    container_name: filter_decade_movies-2
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_decade_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=2
+      - FILTER_REPLICA_COUNT=2
     
   
   transformer:
