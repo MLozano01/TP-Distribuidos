@@ -1,8 +1,10 @@
-from multiprocessing import Process
+from multiprocessing import Process, Queue
 import logging
 from common.filter import Filter
 from common.filter_communicator import FilterCommunicator
-from multiprocessing import Queue
+
+logging.getLogger("pika").setLevel(logging.ERROR)
+
 
 class Controller:
     def __init__(self, config, communication_config):

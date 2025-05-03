@@ -2,8 +2,10 @@ from protocol.rabbit_protocol import RabbitMQ
 from common.aux import parse_filter_funct, movies_into_results
 import logging
 import json
-from protocol.protocol import Protocol, MOVIES_FILE_CODE, FileType
-from protocol import files_pb2
+from protocol.protocol import Protocol, FileType
+
+logging.getLogger("pika").setLevel(logging.ERROR)
+
 
 
 class Filter:
@@ -142,14 +144,13 @@ class Filter:
 
     def _publish_movie_finished_signal(self, msg):
         """Publishes the movie finished signal. If its to joiners it publishis to a specific fanout exchange, otherwise it publishes to the default key of the single sender queue."""
-        encoded_msg = self.protocol.create_finished_message(FileType.MOVIES)
        
-        self.comm_queue.put(encoded_msg)
-        logging.info(f"Published finished signal to communication channel")
+        self.comm_queue.put(msg.SerializeToString())
+        logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
 
         if self.comm_queue.get() == True:
             if self.publish_to_joiners:
-                self.finished_filter_arg_step_publisher.publish(encoded_msg)
+                self.finished_filter_arg_step_publisher.publish(msg.SerializeToString())
                 logging.info(f"Published movie finished signal to {self.finished_filter_arg_step_publisher.exchange}")
             else:
                 msg_to_send = msg.SerializeToString()

@@ -3,6 +3,8 @@ import logging
 from multiprocessing import Process
 from protocol.protocol import Protocol
 
+logging.getLogger("pika").setLevel(logging.ERROR)
+
 
 
 class FilterCommunicator:
@@ -23,8 +25,16 @@ class FilterCommunicator:
         """
         Initialize the communication queues based on the configuration.
         """
-        self.queue_communication = RabbitMQ(self.config["exchange_communication"], self.config['queue_communication_name'], self.config["routing_communication_key"], self.config["exc_communication_type"])
-        logging.info(f"Initialized communication queue")
+
+        name_one = self.config["queue_communication_name"] + "_1"
+        name_two = self.config["queue_communication_name"] + "_2"
+
+        key_one = self.config["routing_communication_key"] + "_1"
+        key_two = self.config["routing_communication_key"] + "_2"
+
+        self.queue_communication_1 = RabbitMQ(self.config["exchange_communication"], name_one, key_one, self.config["exc_communication_type"])
+        self.queue_communication_2 = RabbitMQ(self.config["exchange_communication"], name_two, key_two, self.config["exc_communication_type"])
+        logging.info(f"Initialized communication queues")
 
     def run(self):
         """
@@ -53,10 +63,13 @@ class FilterCommunicator:
 
             logging.info(f"Received finished signal from filter")
 
-            self.queue_communication.publish(data)
+            consume_process = Process(target=self.queue_communication_1.consume, args=(self.callback,))
+            consume_process.start()
 
-            self.queue_communication.consume(self.other_callback)
+            self.queue_communication_1.publish(data)
 
+            consume_process.join()
+            
             logging.info("Finished acking the other filters")
 
         except Exception as e:
@@ -69,7 +82,7 @@ class FilterCommunicator:
         Manage the communication between different filters.
         """
         try: 
-            self.queue_communication.consume(self.callback)
+            self.queue_communication_1.consume(self.callback)
         except Exception as e:
             logging.error(f"Error in managing inner communication: {e}")
 
@@ -82,8 +95,8 @@ class FilterCommunicator:
         
         if decoded_msg.finished:
             logging.info("Received finished signal from server on communication channel.")
-            msg = self.protocol.encode_movies_msg(decoded_msg)
-            self.queue_communication.publish(msg)
+            # msg = self.protocol.encode_movies_msg(decoded_msg)
+            self.queue_communication_2.publish(body)
         return
     
     def other_callback(self, ch, method, properties, body):
