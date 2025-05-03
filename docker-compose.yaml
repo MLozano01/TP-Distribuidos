@@ -32,9 +32,10 @@ services:
         condition: service_started
     volumes:
       - ./client/config.ini:/config.ini
-      - ./data/credits.csv:/credits_filtered.csv
-      - ./data/ratings_small.csv:/ratings_filtered.csv
-      - ./data/movies_metadata.csv:/movies_metadata_filtered.csv
+      - ./data/credits.csv:/credits.csv
+      - ./data/ratings_small.csv:/ratings.csv
+      - ./data/movies_metadata.csv:/movies_metadata.csv
+      - ./data/results_client1.json:/results.json
     
   server:
     container_name: server
@@ -89,9 +90,8 @@ services:
     deploy:
       replicas: 2
     
-  
-  aggregator:
-    container_name: aggregator
+  aggregator_sent:
+    container_name: aggregator_sent
     image: aggregator:latest
     networks:
       - tp_network
@@ -102,10 +102,22 @@ services:
     links:
       - rabbitmq
     volumes:
-      - ./aggregator/config.ini:/config.ini
-      - ./aggregator/aggregators/aggr_sent_revenue.ini:/aggr_sent_revenue.ini
-      - ./aggregator/aggregators/aggr_country_budget.ini:/aggr_country_budget.ini
-    
+      - ./aggregator/aggregators/aggr_sent_revenue.ini:/config.ini
+
+  aggregator_budget:
+    container_name: aggregator_budget
+    image: aggregator:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./aggregator/aggregators/aggr_country_budget.ini:/config.ini
+
   
   reducer:
     container_name: reducer

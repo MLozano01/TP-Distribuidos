@@ -1,21 +1,21 @@
 import logging
+from common.aggregator import Aggregator
 import common.config_init as config_init
 from utils.utils import config_logger
-import common.controller
 
 def main():
     config = config_init.initialize_config()
     config_logger(config["logging_level"])
 
     try: 
-        controller = common.controller.Controller(config)
-        controller.start()
+        aggregator_instance = Aggregator(**config)
+        aggregator_instance.run()
     except KeyboardInterrupt:
         logging.info("Aggregator stopped by user")
     except Exception as e:
         logging.error(f"Aggregator error: {e}")
     finally:
-        controller.stop()
+        aggregator_instance.stop()
         logging.info("Aggregator stopped")
 
     
