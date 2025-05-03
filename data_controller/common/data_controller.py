@@ -52,6 +52,7 @@ class DataController:
     def callback(self, ch, method, properties, body):
         logging.info(f"Received message, with routing key: {method.routing_key}")
         message_type, message = self.protocol.decode_client_msg(body, self.columns_needed)
+        logging.info(f"Received message from server of type: {message_type.name}")
         if not message_type or not message:
             logging.warning("Received invalid message from server")
             return

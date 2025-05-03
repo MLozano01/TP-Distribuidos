@@ -16,6 +16,13 @@ class Client:
         self.forward_queue = None
         self.result_queue = None
 
+        self.columns_needed = {
+            'movies': ["id", "title", "genres", "release_date", "overview", 
+                      "production_countries", "spoken_languages", "budget", "revenue"],
+            'ratings': ["movieId", "rating", "timestamp"],
+            'credits': ["id", "cast"]
+        }
+
     def run(self):
         self.data_controller = Process(target=self.handle_connection, args=[self.socket])
         self.data_controller.start()
@@ -59,6 +66,10 @@ class Client:
             closed_socket = recvall(conn, buffer, read_amount)
             if closed_socket:
                 return
+            
+            # JUST FOR DEBUGGING
+            type, msg = self.protocol.decode_client_msg(buffer, self.columns_needed)
+            logging.info(f"Received message from client of type: {type.name}")
             self._forward_to_data_controller(buffer)
 
     def _forward_to_data_controller(self, message):
