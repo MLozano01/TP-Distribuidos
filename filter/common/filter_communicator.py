@@ -1,6 +1,7 @@
 from protocol.rabbit_protocol import RabbitMQ
 import logging
 from multiprocessing import Process
+from protocol.protocol import Protocol
 
 
 
@@ -14,6 +15,9 @@ class FilterCommunicator:
         self.comm_queue = queue
         self.config = config
         self.queue_communication = None
+        self.protocol = Protocol()
+        self.filters_acked = 0
+
 
     def _settle_queues(self):
         """
@@ -33,9 +37,7 @@ class FilterCommunicator:
         gets_the_finished_notification = Process(target=self.manage_getting_finished_notification, args=())
 
         gets_the_finished.start()
-        logging.info(f"GETS_THE_FINISHED: {gets_the_finished.pid}")
         gets_the_finished_notification.start()
-        logging.info(f"GETS_THE_FINISHED_NOTIFICATION: {gets_the_finished_notification.pid}")
 
         gets_the_finished.join()
         gets_the_finished_notification.join()
@@ -46,18 +48,16 @@ class FilterCommunicator:
         Manage the inner communication between filters.
         """
         try:
+
             data = self.comm_queue.get()
 
-            logging.info(f"Received finished signal from filter: {data}")
+            logging.info(f"Received finished signal from filter")
 
             self.queue_communication.publish(data)
 
-            for i in range(self.config["filter_replicas_count"]):
-                self.queue_communication.consume(self.other_callback, "ack_finished")
+            self.queue_communication.consume(self.other_callback)
 
             logging.info("Finished acking the other filters")
-
-            self.comm_queue.put(True)
 
         except Exception as e:
             logging.error(f"Error in managing inner communication: {e}")
@@ -83,8 +83,7 @@ class FilterCommunicator:
         if decoded_msg.finished:
             logging.info("Received finished signal from server on communication channel.")
             msg = self.protocol.encode_movies_msg(decoded_msg)
-            self.queue_communication.publish(msg, routing_key="ack_finished")
-
+            self.queue_communication.publish(msg)
         return
     
     def other_callback(self, ch, method, properties, body):
@@ -92,3 +91,9 @@ class FilterCommunicator:
         Callback function to process incoming messages.
         """
         logging.info("RECEIVED A FILTER ACK")
+        self.filters_acked += 1
+        if self.filters_acked == self.config["filter_replicas_count"] - 1:
+            logging.info("All filters acked")
+            self.comm_queue.put(True)
+        else:
+            logging.info(f"Filter {self.filters_acked} acked")

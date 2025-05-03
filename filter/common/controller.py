@@ -2,8 +2,7 @@ from multiprocessing import Process
 import logging
 from common.filter import Filter
 from common.filter_communicator import FilterCommunicator
-import queue
-
+from multiprocessing import Queue
 
 class Controller:
     def __init__(self, config, communication_config):
@@ -17,9 +16,7 @@ class Controller:
 
         try:
 
-            logging.info(f"COMMUNICATION CONFIG {self.communication_config}")
-
-            comm_queue = queue.Queue()
+            comm_queue = Queue()
 
             filter_name = self.config["filter_name"]
 
@@ -32,7 +29,6 @@ class Controller:
             self.filter.start()
             logging.info(f"Filter {filter_name} started with PID: {self.filter.pid}")
 
-            # Initialize the filter communicator
             communicator_instance = FilterCommunicator(self.communication_config, comm_queue)
 
             self.filter_communicator = Process(target=communicator_instance.run, args=())
