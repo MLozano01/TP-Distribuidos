@@ -149,6 +149,7 @@ class Filter:
         logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
 
         if self.comm_queue.get() == True:
+            logging.info("Received SEND finished signal from communication channel.")
             if self.publish_to_joiners:
                 self.finished_filter_arg_step_publisher.publish(msg.SerializeToString())
                 logging.info(f"Published movie finished signal to {self.finished_filter_arg_step_publisher.exchange}")
@@ -158,6 +159,8 @@ class Filter:
                     msg_to_send = self.protocol.create_result({"movies": {}})
                 self.queue_snd_movies.publish(msg_to_send)
                 logging.info(f"Published movie finished signal to {self.queue_snd_movies.exchange}")
+
+        logging.info("FINISHED SENDING THE FINISH MESSAGE")
 
     def _check_finished(self):
         if self.comm_queue.get_nowait():

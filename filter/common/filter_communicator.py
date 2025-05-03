@@ -63,12 +63,12 @@ class FilterCommunicator:
 
             logging.info(f"Received finished signal from filter")
 
-            consume_process = Process(target=self.queue_communication_1.consume, args=(self.callback,))
+            consume_process = Process(target=self._manage_consume_pika, args=())
             consume_process.start()
 
             self.queue_communication_1.publish(data)
-
             consume_process.join()
+
             
             logging.info("Finished acking the other filters")
 
@@ -76,13 +76,19 @@ class FilterCommunicator:
             logging.error(f"Error in managing inner communication: {e}")
             self.comm_queue.put(False)
 
+    def _manage_consume_pika(self):
+        consumer_queue = RabbitMQ(self.config["exchange_communication"], self.config["queue_communication_name"] + "_2", self.config["routing_communication_key"] + "_2", self.config["exc_communication_type"])
+        consumer_queue.consume(self.other_callback)
+        logging.info("Finished acking the other filters")
+
 
     def manage_getting_finished_notification(self):
         """
         Manage the communication between different filters.
         """
         try: 
-            self.queue_communication_1.consume(self.callback)
+            consumer_queue = RabbitMQ(self.config["exchange_communication"], self.config["queue_communication_name"] + "_1", self.config["routing_communication_key"] + "_1", self.config["exc_communication_type"])
+            consumer_queue.consume(self.callback)
         except Exception as e:
             logging.error(f"Error in managing inner communication: {e}")
 
@@ -94,8 +100,7 @@ class FilterCommunicator:
         decoded_msg = self.protocol.decode_movies_msg(body)
         
         if decoded_msg.finished:
-            logging.info("Received finished signal from server on communication channel.")
-            # msg = self.protocol.encode_movies_msg(decoded_msg)
+            logging.info("Received finished signal from other filter!!.")
             self.queue_communication_2.publish(body)
         return
     
@@ -105,7 +110,7 @@ class FilterCommunicator:
         """
         logging.info("RECEIVED A FILTER ACK")
         self.filters_acked += 1
-        if self.filters_acked == self.config["filter_replicas_count"] - 1:
+        if self.filters_acked == self.config["filter_replicas_count"]:
             logging.info("All filters acked")
             self.comm_queue.put(True)
         else:
