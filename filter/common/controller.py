@@ -1,43 +1,51 @@
 from multiprocessing import Process
 import logging
-import common.config_init
-from utils.utils import config_logger
-from common.filter import Filter
+from common.filter import Filter, FilterCommunicator
+import queue
 
 
 class Controller:
-    def __init__(self, config):
-        self.all_filters = []
+    def __init__(self, config, communication_config):
+        self.filter = None
+        self.filter_communicator = None
         self.config = config
+        self.communication_config = communication_config
 
     def start(self):
         logging.info("Starting Filters")
 
         try:
 
+            comm_queue = queue.Queue()
+
             filter_name = self.config["filter_name"]
 
             logging.info(f"Starting filter {filter_name}  with config {self.config}")
 
-            filter_instance = Filter(**self.config)
+            filter_instance = Filter( comm_queue, **self.config)
 
-            new_filter = Process(target=filter_instance.run, args=())
-            self.all_filters.append(new_filter)
+            self.filter = Process(target=filter_instance.run, args=())
+        
+            self.filter.start()
+            logging.info(f"Filter {filter_name} started with PID: {self.filter.pid}")
 
-            new_filter.start()
-            logging.info(f"Filter {filter_name} started with PID: {new_filter.pid}")
+            # Initialize the filter communicator
+            self.filter_communicator = FilterCommunicator(self.communication_config, comm_queue)
 
         except KeyboardInterrupt:
             logging.info("Filter stopped by user")
         except Exception as e:
             logging.error(f"Filter error: {e}")
         
-        for filt in self.all_filters:
-            filt.join()
+        self.filter.join()        
+
     
     def stop(self):
-        for filter in self.all_filters:
-            if filter.is_alive():
-                filter.terminate()
-
+        if self.filter:
+            self.filter.terminate()
+            self.filter.join()
+            logging.info("Filter process terminated")
+        else:
+            logging.warning("No filter process to terminate")
+        self.filter = None
     

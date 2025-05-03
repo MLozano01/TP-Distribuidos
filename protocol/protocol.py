@@ -430,3 +430,17 @@ class Protocol:
     result = files_pb2.ResultBatch()
     result.ParseFromString(buffer)
     return result
+
+  def create_node_comm(self, info):
+    node_comm = files_pb2.NodeCommunication()
+
+    node_comm.client_id = info.get("client_id", 0)
+    node_comm.query_id = info.get("query_id", 0)
+    node_comm.is_finished = info.get("is_finished", False)
+      
+    return node_comm.SerializeToString()
+  
+  def decode_node_comm(self, buffer):
+    node_comm = files_pb2.NodeCommunication()
+    node_comm.ParseFromString(buffer)
+    return node_comm

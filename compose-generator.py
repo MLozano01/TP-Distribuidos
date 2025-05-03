@@ -41,7 +41,7 @@ FILTER_SINGLE_COUNTRY_REPLICAS = 8
 FILTER_DECADE_REPLICAS = 9
 
 
-def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000, f_arg_spa, f_arg, f_single_country, f_decade):
+def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas):
     # Check for joiner config files existence
     required_joiner_configs = [JOINER_RATINGS_CONFIG_SOURCE, JOINER_CREDITS_CONFIG_SOURCE]
     for config_path in required_joiner_configs:
@@ -50,15 +50,15 @@ def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_re
             sys.exit(1)
 
     with open(FILE_NAME, 'w') as f:
-        f.write(create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000, f_arg_spa, f_arg, f_single_country, f_decade))
+        f.write(create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas))
 
 
-def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000, f_arg_spa, f_arg, f_single_country, f_decade):
+def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas):
     clients = join_clients(client_amount)
     server = create_server(client_amount)
     network = create_network()
     rabbit = create_rabbit()
-    filters = write_filters(f_2000, f_arg_spa, f_arg, f_single_country, f_decade)
+    filters = write_filters(f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas)
     transformer = create_transformer(transformer_replicas)
     aggregator = create_aggregator()
     reducer = create_reducer()
@@ -170,19 +170,19 @@ def write_filters(filter_2000=1, filter_arg_spa=1, filter_arg=1, filter_single_c
     filters = ""
 
     for i in range(1, filter_2000 + 1):
-        filters += create_filter("filter_2000_movies", i, FILTER_MOVIES_BY_2000)
+        filters += create_filter("filter_2000_movies", i, FILTER_MOVIES_BY_2000, filter_2000)
     for i in range(1, filter_arg_spa + 1):
-        filters += create_filter("filter_arg_spa_movies", i, FILTER_MOVIES_BY_ARG_SPA)
+        filters += create_filter("filter_arg_spa_movies", i, FILTER_MOVIES_BY_ARG_SPA, filter_arg_spa)
     for i in range(1, filter_arg + 1):
-        filters += create_filter("filter_arg_movies", i, FILTER_MOVIES_BY_ARG)
+        filters += create_filter("filter_arg_movies", i, FILTER_MOVIES_BY_ARG, filter_arg)
     for i in range(1, filter_single_country + 1):
-        filters += create_filter("filter_single_country_movies", i, FILTER_MOVIES_BY_SINGLE_COUNTRY)
+        filters += create_filter("filter_single_country_movies", i, FILTER_MOVIES_BY_SINGLE_COUNTRY, filter_single_country)
     for i in range(1, filter_decade + 1):
-        filters += create_filter("filter_decade_movies", i, FILTER_MOVIES_DECADE)
+        filters += create_filter("filter_decade_movies", i, FILTER_MOVIES_DECADE, filter_decade)
 
     return filters
 
-def create_filter(filter_name, filter_replica, filter_path):
+def create_filter(filter_name, filter_replica, filter_path, replica_count):
     
     filter_name = f"{filter_name}-{filter_replica}"
     
@@ -200,6 +200,9 @@ def create_filter(filter_name, filter_replica, filter_path):
       - rabbitmq
     volumes:
       - ./filter/filters/{filter_path}:{CONFIG_FILE_TARGET}
+    environment:
+      - FILTER_REPLICA_ID={filter_replica}
+      - FILTER_REPLICA_COUNT={replica_count}
     """
     return filter_cont
 
@@ -323,13 +326,13 @@ def main():
     transformer_replicas = parse_args(sys.argv, TRANSFORMER_REPLICAS)
     joiner_ratings_replicas = parse_args(sys.argv, JOINER_RATINGS_REPLICAS)
     joiner_credits_replicas = parse_args(sys.argv, JOINER_CREDITS_REPLICAS)
-    f_2000 = parse_args(sys.argv, FILTER_2000_REPLICAS)
-    f_arg_spa = parse_args(sys.argv, FILTER_ARG_SPA_REPLICAS)
+    f_2000_replicas = parse_args(sys.argv, FILTER_2000_REPLICAS)
+    f_arg_spa_replicas = parse_args(sys.argv, FILTER_ARG_SPA_REPLICAS)
     f_arg = parse_args(sys.argv, FILTER_ARG_REPLICAS)
-    f_single_country = parse_args(sys.argv, FILTER_SINGLE_COUNTRY_REPLICAS)
-    f_decade = parse_args(sys.argv, FILTER_DECADE_REPLICAS)
+    f_single_country_replicas = parse_args(sys.argv, FILTER_SINGLE_COUNTRY_REPLICAS)
+    f_decade_replicas = parse_args(sys.argv, FILTER_DECADE_REPLICAS)
 
-    docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000, f_arg_spa, f_arg, f_single_country, f_decade)
+    docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas)
 
 if __name__ == "__main__":
     main()

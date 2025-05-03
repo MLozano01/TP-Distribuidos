@@ -180,5 +180,15 @@ message ResultBatch {
 
 // [END] ResultBatch messages
 
+// [START] NodeCommunication messages
+
+message NodeCommunication {
+  int32 client_id = 1;
+  int32 query_id = 2;
+  bool is_finished = 3;
+}
+
+// [END] NodeCommunication messages
+
 
 // [END messages]

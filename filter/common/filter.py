@@ -7,13 +7,14 @@ from protocol import files_pb2
 
 
 class Filter:
-    def __init__(self, **kwargs):
+    def __init__(self, comm_queue, **kwargs):
         self.protocol = Protocol()
         self.queue_rcv = None # For receiving movies data + finished signal
         self.queue_snd_movies_to_ratings_joiner = None
         self.queue_snd_movies_to_credits_joiner = None
         self.queue_snd_movies = None  # For publishing movies data
         self.finished_filter_arg_step_publisher = None # for notifying joiners
+        self.comm_queue = comm_queue
 
         for key, value in kwargs.items():
             setattr(self, key, value)
