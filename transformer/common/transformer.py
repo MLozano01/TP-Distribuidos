@@ -19,12 +19,7 @@ class Transformer:
         self._stop_event = threading.Event()
         self._finished_signal_received = False
         self._finished_message_body = None
-        
-        # New state variables for drain-and-finish pattern
-        self.finish_received = False
-        self.in_flight = 0
-        self.lock = threading.Lock()
-        
+        self.rabbit_host = kwargs.get('rabbit_host', 'localhost')
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -40,7 +35,6 @@ class Transformer:
     def _settle_connections(self):
         """Instantiate and setup RabbitMQ consumers and producer using wrapper classes."""
         try:
-            # Work channel for consuming movie tasks
             self.queue_rcv = RabbitMQConsumer(
                 host=self.rabbit_host,
                 exchange=self.exchange_rcv,
@@ -49,29 +43,19 @@ class Transformer:
                 routing_key=self.routing_rcv_key,
                 durable=True
             )
-            
-            # Set prefetch count to 1 for work channel
-            self.queue_rcv.channel.basic_qos(prefetch_count=1)
-            
-            # Producer for sending processed movies
             self.queue_snd = RabbitMQProducer(
                 host=self.rabbit_host,
                 exchange=self.exchange_snd,
                 exchange_type=self.exc_snd_type,
                 routing_key=self.routing_snd_key
             )
-            
-            # Control channel for finish signals
             self.control_consumer = RabbitMQConsumer(
                 host=self.rabbit_host,
                 exchange=self.control_exchange,
                 exchange_type="fanout",
-                queue_name='',  # Let RabbitMQ generate a unique queue name
-                routing_key='',  # Fanout ignores routing key
-                exclusive=True,
-                auto_delete=True
+                queue_name=None,
+                routing_key=''
             )
-            
             logging.info("RabbitMQ consumers and producer settled using rabbit_wrapper.")
         except Exception as e:
             logging.error(f"Fatal error during RabbitMQ connection setup: {e}", exc_info=True)
@@ -89,9 +73,8 @@ class Transformer:
                 logging.error("Not all required RabbitMQ connections were initialized. Aborting start.")
                 return
 
-            # Set up message consumption with manual acknowledgment
-            self.queue_rcv.consume(self._process_message, auto_ack=False)
-            self.control_consumer.consume(self._process_control_signal, auto_ack=True)
+            self.queue_rcv.consume(self._process_message)
+            self.control_consumer.consume(self._process_control_signal)
 
             data_thread = threading.Thread(target=self.queue_rcv.start_consuming, daemon=True)
             control_thread = threading.Thread(target=self.control_consumer.start_consuming, daemon=True)
@@ -100,8 +83,38 @@ class Transformer:
             control_thread.start()
 
             logging.info("Transformer started with data and control threads...")
+            # Wait for threads to complete naturally
+            logging.info("Main thread waiting for data and control threads to join...")
             data_thread.join()
+            logging.info("Data thread joined.")
+
+            # Explicitly stop the control consumer now that data processing is done
+            logging.info("Stopping control consumer...")
+            if self.control_consumer:
+                try:
+                    self.control_consumer.stop()
+                    logging.info("Control consumer stopped.")
+                except Exception as e_stop:
+                    logging.error(f"Error stopping control consumer: {e_stop}")
+            else:
+                logging.warning("Control consumer not initialized, cannot stop.")
+
+            # Now wait for the control thread to terminate
             control_thread.join()
+            logging.info("Control thread joined.")
+
+            # After both threads complete, check if we received the signal and forward it
+            if self._finished_signal_received and self._finished_message_body:
+                logging.info("All threads joined. Forwarding stored FINISHED signal...")
+                try:
+                    # Add delay if needed, though maybe less critical now
+                    # time.sleep(3)
+                    self.queue_snd.publish(self._finished_message_body)
+                    logging.info(f"Successfully SENT stored FINISHED signal to exchange '{self.queue_snd.exchange}' with key '{self.queue_snd.default_routing_key}'")
+                except Exception as e_pub:
+                    logging.error(f"Failed to publish stored FINISHED signal: {e_pub}", exc_info=True)
+            else:
+                logging.warning("Threads joined, but no FINISHED signal was processed or stored. No final signal sent.")
 
         except Exception as e:
             logging.error(f"Failed to start Transformer: {e}", exc_info=True)
@@ -184,27 +197,6 @@ class Transformer:
         except Exception as e:
             logging.error(f"Failed to send processed batch: {e}", exc_info=True)
 
-    def _maybe_propagate_finish(self):
-        """Check if we should propagate the finish signal."""
-        try:
-            # Get message count from work queue
-            queue_info = self.queue_rcv.channel.queue_declare(
-                queue=self.queue_rcv_name,
-                passive=True
-            )
-            message_count = queue_info.method.message_count
-            
-            if self.finish_received and self.in_flight == 0 and message_count == 0:
-                logging.info("All messages processed, propagating FINISHED signal...")
-                try:
-                    self.queue_snd.publish(self._finished_message_body)
-                    logging.info(f"Successfully propagated FINISHED signal to exchange '{self.queue_snd.exchange}'")
-                    
-                except Exception as e:
-                    logging.error(f"Failed to propagate FINISHED signal: {e}", exc_info=True)
-        except Exception as e:
-            logging.error(f"Error in _maybe_propagate_finish: {e}", exc_info=True)
-
     def _process_control_signal(self, ch, method, properties, body):
         """Callback function to process control signals (e.g., finished)."""
         if self._stop_event.is_set():
@@ -213,14 +205,28 @@ class Transformer:
         try:
             incoming_msg = self.protocol.decode_movies_msg(body)
 
-            if incoming_msg and incoming_msg.finished and not self.finish_received:
+            if incoming_msg and incoming_msg.finished and not self._finished_signal_received:
                 logging.warning("Received FINISHED signal via control channel.")
-                with self.lock:
-                    self.finish_received = True
-                    self._finished_message_body = body
-                    self._maybe_propagate_finish()
-            elif self.finish_received:
-                logging.info("Ignoring duplicate FINISHED signal on control channel.")
+                self._finished_signal_received = True
+
+                # Cancel the data consumer to stop receiving new messages
+                try:
+                    if self.queue_rcv and self.queue_rcv.consumer_tag:
+                        logging.info(f"Cancelling data consumer (tag: {self.queue_rcv.consumer_tag}) due to FINISHED signal.")
+                        self.queue_rcv.channel.basic_cancel(self.queue_rcv.consumer_tag)
+                        logging.info("Data consumer cancelled.")
+                    else:
+                        logging.warning("Data consumer (queue_rcv) or consumer_tag not available for cancellation.")
+                except Exception as e_cancel:
+                    logging.error(f"Error cancelling data consumer: {e_cancel}", exc_info=True)
+
+                # Store the finished message body, DO NOT forward yet
+                self._finished_message_body = body
+                logging.info("FINISHED signal received and data consumer cancelled. Signal stored.")
+
+                # Do NOT set self._stop_event here. Let threads finish naturally.
+            elif self._finished_signal_received:
+                 logging.info("Ignoring duplicate FINISHED signal on control channel.")
             else:
                 logging.info(f"Received non-finished or undecodable message on control channel. Ignoring.")
 
@@ -230,40 +236,38 @@ class Transformer:
     def _process_message(self, ch, method, properties, body):
         """Callback function to process received data messages"""
         try:
-            # Increment in-flight counter under lock
-            with self.lock:
-                self.in_flight += 1
-
             # Log reception of message
             logging.info(f"Received message batch on data channel (delivery_tag: {method.delivery_tag})")
             incoming_movies_msg = self.protocol.decode_movies_msg(body)
 
             if not incoming_movies_msg or not incoming_movies_msg.movies:
-                logging.warning("Received empty or invalid Protobuf movies batch structure. Skipping.")
-                ch.basic_ack(delivery_tag=method.delivery_tag)
-                return
+                 logging.warning("Received empty or invalid Protobuf movies batch structure. Skipping.")
+                 return
 
             processed_movies_list = []
             for incoming_movie in incoming_movies_msg.movies:
                 if self._validate_movie(incoming_movie):
                     processed_movie = self._enrich_movie(incoming_movie)
                     processed_movies_list.append(processed_movie)
+                    # Log successful processing of a movie
+                    logging.info(f"Processed Movie ID {processed_movie.id}: Sentiment='{processed_movie.sentiment}', Rate='{processed_movie.rate_revenue_budget:.4f}'")
 
-            if processed_movies_list:
+            if not processed_movies_list:
+                logging.info(f"No valid movies found in batch (delivery_tag: {method.delivery_tag}). Skipping send.")
+            else:
                 self._send_processed_batch(processed_movies_list)
 
-            # Acknowledge the message
-            ch.basic_ack(delivery_tag=method.delivery_tag)
 
         except Exception as e:
             logging.error(f"Error processing message batch (tag: {method.delivery_tag}): {e}", exc_info=True)
-            # Negative acknowledge the message in case of error
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-        finally:
-            # Decrement in-flight counter and check for finish
-            with self.lock:
-                self.in_flight -= 1
-                self._maybe_propagate_finish()
+            # Nack the message if processing fails to potentially requeue or dead-letter it
+            try:
+                if ch.is_open:
+                    logging.warning(f"NACKed message batch (tag: {method.delivery_tag}) due to processing error.")
+                else:
+                    logging.warning(f"Channel closed, cannot NACK message (tag: {method.delivery_tag}).")
+            except Exception as e_nack:
+                 logging.error(f"Failed to NACK message (tag: {method.delivery_tag}): {e_nack}")
 
     def stop(self):
         """Stop the filter, signal threads, and close the queues/connections."""
@@ -271,31 +275,23 @@ class Transformer:
             logging.info("Stopping Transformer...")
             self._stop_event.set()
 
-            # First stop the control consumer if it exists and hasn't been stopped already
-            if self.control_consumer and not (self.control_consumer == self.control_consumer and self._finished_signal_received):
-                try:
-                    logging.info("Stopping control consumer...")
-                    self.control_consumer.stop()
-                    logging.info("Control consumer stopped.")
-                except Exception as e:
-                    logging.error(f"Error stopping control consumer: {e}")
+            consumers = [self.queue_rcv, self.control_consumer]
+            for consumer in consumers:
+                # Check if this is the control consumer AND if the finished signal was received
+                if consumer == self.control_consumer and self._finished_signal_received:
+                     logging.debug("Skipping stop() for control_consumer in finally block as it was stopped explicitly.")
+                     continue # Skip stopping it again
 
-            # Then stop the data consumer
-            if self.queue_rcv:
-                try:
-                    logging.info("Stopping data consumer...")
-                    self.queue_rcv.stop()
-                    logging.info("Data consumer stopped.")
-                except Exception as e:
-                    logging.error(f"Error stopping data consumer: {e}")
+                if consumer:
+                    try:
+                        consumer.stop()
+                    except Exception as e:
+                        logging.error(f"Error stopping consumer {consumer}: {e}")
 
-            # Finally stop the producer
             if self.queue_snd:
                 try:
-                    logging.info("Stopping producer...")
                     self.queue_snd.stop()
-                    logging.info("Producer stopped.")
                 except Exception as e:
-                    logging.error(f"Error stopping producer: {e}")
+                        logging.error(f"Error stopping producer {self.queue_snd}: {e}")
 
             logging.info("Transformer Stopped")

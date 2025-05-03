@@ -9,7 +9,7 @@ from protocol.utils.socket_utils import recvall
 class Client:
     def __init__(self, client_sock, client_id):
         self.socket = client_sock
-        self.client_id = client_id  # Store the numeric client ID
+        self.client_id = client_id
         self.protocol = Protocol()
         self.data_controller = None
         self.result_controller = None

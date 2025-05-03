@@ -11,7 +11,7 @@ class Server:
         self.socket.listen(listen_backlog)
         self.running = True
         self.clients = []
-        self.next_client_id = 1  # Start client IDs from 1
+        self.next_client_id = 1
 
     def run(self):
         while self.running:
