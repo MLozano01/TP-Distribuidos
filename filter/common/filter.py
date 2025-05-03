@@ -151,7 +151,7 @@ class Filter:
         if self.comm_queue.get() == True:
             logging.info("Received SEND finished signal from communication channel.")
             if self.publish_to_joiners:
-                self.finished_filter_arg_step_publisher.publish(msg.SerializeToString())
+                self.finished_filter_arg_step_publisher.publish(self.protocol.create_finished_message(FileType.MOVIES))
                 logging.info(f"Published movie finished signal to {self.finished_filter_arg_step_publisher.exchange}")
             else:
                 msg_to_send = msg.SerializeToString()
