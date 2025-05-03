@@ -91,6 +91,7 @@ def join_clients(amount):
     return clients
 
 def create_client(id):
+    path_result = f"results_client{id}.json"
     client = f"""
   client{id}:
     container_name: client{id}
@@ -107,7 +108,11 @@ def create_client(id):
       - ./data/{CREDITS_DATASET}:/{CREDITS_DATASET}
       - ./data/{RATINGS_DATASET}:/{RATINGS_DATASET}
       - ./data/{MOVIES_DATASET}:/{MOVIES_DATASET}
+      - ./data/{path_result}:/results.json
     """ 
+    #creo archivo por cada cliente
+    with open(f"data/{path_result}", "w") as f:
+        pass
     return client
 
 def create_server(client_amount):
