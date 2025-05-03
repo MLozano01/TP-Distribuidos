@@ -7,22 +7,14 @@ from protocol.rabbit_wrapper import RabbitMQProducer, RabbitMQConsumer
 from protocol.utils.socket_utils import recvall
 
 class Client:
-    def __init__(self, client_sock):
+    def __init__(self, client_sock, client_id):
         self.socket = client_sock
+        self.client_id = client_id  # Store the numeric client ID
         self.protocol = Protocol()
         self.data_controller = None
         self.result_controller = None
         self.forward_queue = None
         self.result_queue = None
-        self.control_publisher = None
-        
-        # TODO for now is needed for message decoding but a method to just get type could work
-        self.columns_needed = {
-            'movies': ["id", "title", "genres", "release_date", "overview", 
-                      "production_countries", "spoken_languages", "budget", "revenue"],
-            'ratings': ["movieId", "rating", "timestamp"],
-            'credits': ["id", "cast"]
-        }
 
     def run(self):
         self.data_controller = Process(target=self.handle_connection, args=[self.socket])
@@ -56,14 +48,6 @@ class Client:
             routing_key="forward"
         )
         
-        # Initialize the control publisher for finish messages
-        self.control_publisher = RabbitMQProducer(
-            host='rabbitmq',
-            exchange="data_controller_control",
-            exchange_type="fanout",
-            routing_key=""
-        )
-        
         closed_socket = False
         while not closed_socket:
             read_amount = self.protocol.define_initial_buffer_size()
@@ -75,24 +59,12 @@ class Client:
             closed_socket = recvall(conn, buffer, read_amount)
             if closed_socket:
                 return
-            
-            try:
-                _, message = self.protocol.decode_client_msg(buffer, self.columns_needed)
-                if message and message.finished:
-                    # Publish finish signal to control exchange
-                    self.control_publisher.publish(buffer)
-                    logging.info("Published FINISHED signal to control exchange")
-                else:
-                    # Forward regular data message
-                    self._forward_to_data_controller(buffer)
-            except Exception as e:
-                logging.error(f"Error processing message: {e}")
-                # Still forward the message in case of decode error
-                self._forward_to_data_controller(buffer)
+            self._forward_to_data_controller(buffer)
 
     def _forward_to_data_controller(self, message):
         try:
-            self.forward_queue.publish(message)
+            # Include client ID in message properties
+            self.forward_queue.publish(message, properties={'headers': {'client_id': self.client_id}})
         except Exception as e:
             logging.error(f"Failed to forward message to data controller: {e}")
 
@@ -102,9 +74,7 @@ class Client:
 
     def result_controller_func(self, ch, method, properties, body):
         try:
-            # logging.info(f"got result: {body}")
             msg = self.protocol.create_client_result(body)
-            # logging.info(f"sending message: {msg}")
             self.socket.sendall(msg)
         except Exception as e:
             logging.error(f"Error processing message: {e}")

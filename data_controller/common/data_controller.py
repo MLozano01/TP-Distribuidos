@@ -7,6 +7,11 @@ from protocol import files_pb2
 from protocol.protocol import Protocol, FileType
 from protocol.rabbit_wrapper import RabbitMQConsumer, RabbitMQProducer
 from protocol.utils.parsing_proto_utils import is_date
+from .coordination_service import CoordinationService
+
+# Configure logging to reduce noise
+logging.getLogger('pika').setLevel(logging.WARNING)  # Reduce Pika logs to warnings and above
+logging.getLogger('root').setLevel(logging.INFO)     # Keep our logs at info level
 
 class DataController:
     def __init__(self, **kwargs):
@@ -15,6 +20,9 @@ class DataController:
         # Get replica information from environment
         self.replica_id = int(os.getenv('DATA_CONTROLLER_REPLICA_ID', '1'))
         self.replica_count = int(os.getenv('DATA_CONTROLLER_REPLICA_COUNT', '1'))
+        
+        # Initialize coordination service
+        self.coordination = CoordinationService(**kwargs)
         
         # Set attributes from kwargs
         for key, value in kwargs.items():
@@ -27,15 +35,6 @@ class DataController:
             'credits': ["id", "cast"]
         }
         
-        # Initialize state variables for drain-and-finish pattern
-        self.finish_received = {
-            FileType.MOVIES: False,
-            FileType.RATINGS: False,
-            FileType.CREDITS: False
-        }
-        self.in_flight = 0
-        self.lock = threading.Lock()
-        
         # Initialize RabbitMQ connections
         self._init_rabbitmq_connections()
 
@@ -43,22 +42,11 @@ class DataController:
         # Initialize work channel for data processing
         self.work_consumer = RabbitMQConsumer(
             host='rabbitmq',
-            exchange="server_to_data_controller",
+            exchange=self.input_exchange,
             exchange_type="direct",
             queue_name=f"forward_queue-{self.replica_id}",
-            routing_key="forward",
+            routing_key=self.input_routing_key,
             durable=True
-        )
-        
-        # Initialize control channel for finish signals
-        self.control_consumer = RabbitMQConsumer(
-            host='rabbitmq',
-            exchange="data_controller_control",
-            exchange_type="fanout",
-            queue_name='',  # Let RabbitMQ generate a unique queue name
-            routing_key='',  # Fanout ignores routing key
-            exclusive=True,
-            auto_delete=True
         )
         
         # Initialize publishers for different data types
@@ -82,21 +70,7 @@ class DataController:
             exchange_type="x-consistent-hash",
             routing_key=""  # Will be set per message
         )
-        
-        # Initialize control publishers
-        self.other_files_finished_publisher = RabbitMQProducer(
-            host='rabbitmq',
-            exchange=self.finished_file_exchange,
-            exchange_type="fanout",
-            routing_key=""
-        )
-        
-        self.movies_files_finished_publisher = RabbitMQProducer(
-            host='rabbitmq',
-            exchange=self.finished_movies_exchange,
-            exchange_type="fanout",
-            routing_key=""
-        )
+    
 
     def _setup_signal_handlers(self):
         signal.signal(signal.SIGTERM, self._handle_shutdown)
@@ -116,17 +90,11 @@ class DataController:
             
             # Start consuming on both channels
             self.work_consumer.consume(self._process_server_message, auto_ack=False)
-            self.control_consumer.consume(self._on_control_message, auto_ack=True)
-            
+
             # Start consuming in separate threads
             work_thread = threading.Thread(target=self.work_consumer.start_consuming)
-            control_thread = threading.Thread(target=self.control_consumer.start_consuming)
-            
             work_thread.start()
-            control_thread.start()
-            
             work_thread.join()
-            control_thread.join()
             
         except Exception as e:
             logging.error(f"Error in DataController {self.replica_id}: {e}")
@@ -136,6 +104,8 @@ class DataController:
     def stop(self):
         """Stop the DataController and close all connections"""
         logging.info(f"Stopping DataController {self.replica_id}...")
+        
+        self.coordination.stop()
         
         # Stop all consumers and producers
         for consumer in [self.work_consumer, self.control_consumer]:
@@ -153,19 +123,25 @@ class DataController:
     def _process_server_message(self, ch, method, properties, body):
         """Process messages received from the server"""
         try:
-            # Increment in-flight counter
-            with self.lock:
-                self.in_flight += 1
-            
             # Decode the message type and content
             message_type, message = self.protocol.decode_client_msg(body, self.columns_needed)
             if not message_type or not message:
                 logging.warning("Received invalid message from server")
                 return
             
+            # Get client ID from message properties
+            client_id = properties.headers.get('client_id')
+            if client_id is None:
+                logging.error("Received message without client_id in headers")
+                return
+            
+            # Update in-flight count in coordination service
+            self.coordination.update_in_flight(client_id, message_type, 1)
+            
             # Process the message based on its type
             if message.finished:
-                self._handle_finished_message(message_type, message)
+                logging.info(f"Received finished signal for type {message_type.name} from client {client_id}")
+                self._handle_finished_message(message_type, message, client_id)
             else:
                 self._handle_data_message(message_type, message)
             
@@ -177,72 +153,36 @@ class DataController:
             # Negative acknowledge the message in case of error
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
         finally:
-            # Decrement in-flight counter and check for finish
-            with self.lock:
-                self.in_flight -= 1
-                self._maybe_propagate_finish(message_type)
+            # Update in-flight count in coordination service
+            self.coordination.update_in_flight(client_id, message_type, -1)
 
-    def _on_control_message(self, ch, method, properties, body):
-        """Handle control messages"""
-        message_type, message = self.protocol.decode_client_msg(body, self.columns_needed)
-        if message and message.finished:
-            with self.lock:
-                self.finish_received[message_type] = True
-                self._maybe_propagate_finish(message_type)
-
-    def _maybe_propagate_finish(self, message_type):
-        """Check if we should propagate the finish signal for a specific message type"""
+    def _handle_finished_message(self, message_type, msg, client_id):
+        """Handle finished messages with coordination"""
         try:
-            # Get message count from work queue
-            queue_info = self.work_consumer.channel.queue_declare(
-                queue=f"forward_queue-{self.replica_id}",
-                passive=True
+            # Let the coordination service handle everything
+            finish_msg = self.coordination.handle_finish_signal(
+                message_type,
+                msg,
+                client_id
             )
-            message_count = queue_info.method.message_count
             
-            if self.finish_received[message_type] and self.in_flight == 0 and message_count == 0:
-                # Propagate finish based on message type
+            if finish_msg is not None:
+                # Publish to the appropriate output queue
                 if message_type == FileType.MOVIES:
-                    self.movies_files_finished_publisher.publish(
-                        self.protocol.create_finished_message(message_type)
-                    )
+                    self.movies_files_finished_publisher.publish(finish_msg)
+                    logging.info(f"Published finish signal for MOVIES to output queue")
                 elif message_type in [FileType.RATINGS, FileType.CREDITS]:
-                    self.other_files_finished_publisher.publish(
-                        self.protocol.create_finished_message(message_type)
-                    )
+                    self.other_files_finished_publisher.publish(finish_msg)
+                    logging.info(f"Published finish signal for {message_type.name} to output queue")
                 
+                # Clean up the finish signal tracking
+                self.coordination.cleanup_finish_signal(client_id, message_type)
                 
         except Exception as e:
-            logging.error(f"Error in _maybe_propagate_finish: {e}")
-
-    def _handle_finished_message(self, message_type, msg):
-        if message_type in [FileType.RATINGS, FileType.CREDITS]:
-            self._handle_ratings_or_credits_finished(message_type)
-        elif message_type == FileType.MOVIES:
-            self._handle_movies_finished(msg)
-        else:
-            logging.warning(f"Received finished signal for unhandled type: {message_type.name}")
-
-    def _handle_ratings_or_credits_finished(self, message_type):
-        logging.info(f"Received finished signal for type {message_type.name}. Publishing type code to control exchange...")
-        try:
-            time.sleep(3)
-            self.other_files_finished_publisher.publish(
-                self.protocol.create_finished_message(message_type)
-            )
-            logging.info(f"Published finish signal message for {message_type.name}")
-        except Exception as e:
-            logging.error(f"Failed to publish finish signal message: {e}")
-
-    def _handle_movies_finished(self, msg):
-        logging.info("Received finished signal for type MOVIES. Forwarding full message to data exchange...")
-        try:
-            self.movies_files_finished_publisher.publish(msg.SerializeToString())
-            logging.info("Forwarded full MOVIES finished message")
-        except Exception as e:
-            logging.error(f"Failed to forward full MOVIES finished message: {e}")
+            logging.error(f"Error handling finished message: {e}", exc_info=True)
 
     def _handle_data_message(self, message_type, msg):
+        # logging.info(f"Received data message for type {message_type.name}")
         if message_type == FileType.MOVIES:
             self.filter_movies(msg)
         elif message_type == FileType.RATINGS:

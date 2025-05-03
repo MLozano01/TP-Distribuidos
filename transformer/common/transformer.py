@@ -19,7 +19,6 @@ class Transformer:
         self._stop_event = threading.Event()
         self._finished_signal_received = False
         self._finished_message_body = None
-        self.rabbit_host = kwargs.get('rabbit_host', 'localhost')
         
         # New state variables for drain-and-finish pattern
         self.finish_received = False
