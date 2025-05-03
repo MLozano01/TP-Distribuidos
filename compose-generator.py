@@ -60,6 +60,12 @@ def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_re
 
 
 def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas):
+    print(f"Creating:")
+    print(f"  Clients: {client_amount}")
+    print(f"  Transformers: {transformer_replicas}")
+    print(f"  Joiners: {joiner_ratings_replicas} (ratings) - {joiner_credits_replicas} (credits)")
+    print(f"  Filters: {f_2000_replicas} (2000) - {f_arg_spa_replicas} (arg/spa) - {f_arg} (arg) - {f_single_country_replicas} (1 country) - {f_decade_replicas} (decade)")
+    print(f"  Aggregators: {aggr_sent_replicas} (sent) - {aggr_budget_replicas} (budget)")
     clients = join_clients(client_amount)
     server = create_server(client_amount)
     network = create_network()
@@ -244,13 +250,19 @@ def create_reducer():
 
 
 def create_aggregators(replicas_sent, replicas_budget):
-    aggregators = f"""{create_aggregator("aggregator_sent", AGGR_SENT_BY_REV, replicas_sent)}
-  {create_aggregator("aggregator_budget", AGGR_COUNTRY_BUDGET, replicas_budget)}"""
+    aggregators = ""
+    for i in range(1, replicas_sent + 1):
+        aggregators += create_aggregator("aggregator_sent", AGGR_SENT_BY_REV, i, replicas_sent)
+    for i in range(1, replicas_budget + 1):
+        aggregators += create_aggregator("aggregator_budget", AGGR_COUNTRY_BUDGET, i, replicas_budget)
+    
     return aggregators
 
-def create_aggregator(name, file, replicas=1):
+def create_aggregator(name, file, id, replicas=1):
+  aggr_name = f"{name}-{id}"
   aggr_cont = f"""
-  {name}:
+  {aggr_name}:
+    container_name: {aggr_name}
     image: aggregator:latest
     networks:
       - {NETWORK_NAME}
@@ -262,15 +274,10 @@ def create_aggregator(name, file, replicas=1):
       - rabbitmq
     volumes:
       - ./aggregator/aggregators/{file}:/{CONFIG_FILE}
+    environment:
+      - AGGR_REPLICA_ID={id}
+      - AGGR_REPLICA_COUNT={replicas}
     """
-  if replicas > 1:
-    aggr_cont += f"""deploy:
-      replicas: {replicas}
-    """
-  else:
-    lines = aggr_cont.strip().split('\n')
-    lines.insert(1, f"    container_name: {name}")
-    aggr_cont = "\n".join(lines) + "\n"
 
   return aggr_cont
 
@@ -359,7 +366,7 @@ def main():
     f_decade_replicas = parse_args(sys.argv, FILTER_DECADE_REPLICAS)
     aggr_sent_replicas = parse_args(sys.argv, AGGR_SENT_REPLICAS)
     aggr_budget_replicas = parse_args(sys.argv, AGGR_BUDGET_REPLICAS)
-    
+
     docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas)
 
 
