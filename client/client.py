@@ -4,7 +4,8 @@ import logging
 
 from protocol.protocol import Protocol, FileType
 from protocol.utils.socket_utils import recvall
-
+from google.protobuf.json_format import MessageToJson
+import json
 
 class Client:
   def __init__(self, server_port, id, max_batch_size):
@@ -70,8 +71,9 @@ class Client:
 
   def receive_results(self):
     protocol = Protocol()
-    closed_socket = False
-    while not closed_socket:
+    results = [None] * 5
+    cant_results = 0
+    while cant_results < 5:
       read_amount = protocol.define_initial_buffer_size()
       buffer = bytearray()
       closed_socket = recvall(self.client_socket, buffer, read_amount)
@@ -84,3 +86,23 @@ class Client:
       
       _, msg = protocol.decode_msg(buffer)
       logging.info(f"RESULT {msg}")
+      if msg.query_id == 1:
+        if not len(msg.result_row):
+          cant_results += 1
+          continue
+        if not results[msg.query_id-1]:
+          results[msg.query_id-1] = msg
+        else:
+          results[msg.query_id-1].result_row.extend(msg.result_row)
+      else:
+        results[msg.query_id-1] = msg
+        cant_results += 1
+    
+    self.write_results(results)
+
+  def write_results(self, results):
+    serialized_results = [json.loads(MessageToJson(result, preserving_proto_field_name=True)) for result in results]
+
+    result_string = json.dumps(serialized_results, indent=2)
+    with open("results.json", "w") as file:
+      file.write(result_string)
