@@ -4,11 +4,11 @@ from utils.utils import config_logger
 import common.controller
 
 def main():
-    config = config_init.initialize_config()
+    config, comms = config_init.config_filter()
     config_logger(config["logging_level"])
 
     try: 
-        controller = common.controller.Controller(config)
+        controller = common.controller.Controller(config, comms)
         controller.start()
     except KeyboardInterrupt:
         logging.info("Filter stopped by user")

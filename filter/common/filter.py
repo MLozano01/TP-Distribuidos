@@ -2,18 +2,21 @@ from protocol.rabbit_protocol import RabbitMQ
 from common.aux import parse_filter_funct, movies_into_results
 import logging
 import json
-from protocol.protocol import Protocol, MOVIES_FILE_CODE, FileType
-from protocol import files_pb2
+from protocol.protocol import Protocol, FileType
+
+logging.getLogger("pika").setLevel(logging.ERROR)
+
 
 
 class Filter:
-    def __init__(self, **kwargs):
+    def __init__(self, comm_queue, **kwargs):
         self.protocol = Protocol()
         self.queue_rcv = None # For receiving movies data + finished signal
         self.queue_snd_movies_to_ratings_joiner = None
         self.queue_snd_movies_to_credits_joiner = None
         self.queue_snd_movies = None  # For publishing movies data
         self.finished_filter_arg_step_publisher = None # for notifying joiners
+        self.comm_queue = comm_queue
 
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -50,6 +53,8 @@ class Filter:
             logging.error("Receiver queue not initialized. Filter cannot run.")
             return
         self.queue_rcv.consume(self.callback)
+        self._check_finished()
+
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
@@ -64,14 +69,14 @@ class Filter:
 
     def filter(self, decoded_msg):
         try:
-            result = parse_filter_funct(decoded_msg, self.filter_by, self.file_name)
+            result = parse_filter_funct(decoded_msg, self.filter_by)
             
             if result:
                 if self.publish_to_joiners:
                     self._publish_individually_by_movie_id(result, self.protocol)
                 else:
                     if hasattr(self, 'queue_snd_movies') and self.queue_snd_movies:
-                            logging.info(f"Publishing batch of {len(result)} filtered '{self.file_name}' messages with routing key: '{self.queue_snd_movies.key}' to exchange '{self.queue_snd_movies.exchange}' ({self.queue_snd_movies.exc_type}).")
+                            logging.info(f"Publishing batch of {len(result)} filtered messages with routing key: '{self.queue_snd_movies.key}' to exchange '{self.queue_snd_movies.exchange}' ({self.queue_snd_movies.exc_type}).")
                             if self.queue_snd_movies.key == "results":
 
                                 movies_res = movies_into_results(result)
@@ -83,7 +88,7 @@ class Filter:
                     else:
                             logging.error("Single sender queue not initialized for non-sharded publish.")
             else:
-                logging.info(f"No {self.file_name} matched the filter criteria.")
+                logging.info(f"No matched the filter criteria.")
 
         except Exception as e:
             logging.error(f"Error processing message: {e}")
@@ -99,7 +104,7 @@ class Filter:
 
         exchange_ratings = self.queue_snd_movies_to_ratings_joiner.exchange
         exchange_credits = self.queue_snd_movies_to_credits_joiner.exchange
-        logging.info(f"Publishing {len(result_list)} filtered '{self.file_name}' messages individually by movie_id to exchanges '{exchange_ratings}' and '{exchange_credits}'.")
+        logging.info(f"Publishing {len(result_list)} filtered messages individually by movie_id to exchanges '{exchange_ratings}' and '{exchange_credits}'.")
 
         published_count = 0
         for movie in result_list:
@@ -139,15 +144,27 @@ class Filter:
 
     def _publish_movie_finished_signal(self, msg):
         """Publishes the movie finished signal. If its to joiners it publishis to a specific fanout exchange, otherwise it publishes to the default key of the single sender queue."""
-        if self.publish_to_joiners:
-            self.finished_filter_arg_step_publisher.publish(self.protocol.create_finished_message(FileType.MOVIES))
-            logging.info(f"Published movie finished signal to {self.finished_filter_arg_step_publisher.exchange}")
-        else:
-            msg_to_send = msg.SerializeToString()
-            if self.queue_snd_movies.key == "results":
-                msg_to_send = self.protocol.create_result({"movies": {}})
-            self.queue_snd_movies.publish(msg_to_send)
-            logging.info(f"Published movie finished signal to {self.queue_snd_movies.exchange}")
+       
+        self.comm_queue.put(msg.SerializeToString())
+        logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
+
+        if self.comm_queue.get() == True:
+            logging.info("Received SEND finished signal from communication channel.")
+            if self.publish_to_joiners:
+                self.finished_filter_arg_step_publisher.publish(self.protocol.create_finished_message(FileType.MOVIES))
+                logging.info(f"Published movie finished signal to {self.finished_filter_arg_step_publisher.exchange}")
+            else:
+                msg_to_send = msg.SerializeToString()
+                if self.queue_snd_movies.key == "results":
+                    msg_to_send = self.protocol.create_result({"movies": {}})
+                self.queue_snd_movies.publish(msg_to_send)
+                logging.info(f"Published movie finished signal to {self.queue_snd_movies.exchange}")
+
+        logging.info("FINISHED SENDING THE FINISH MESSAGE")
+
+    def _check_finished(self):
+        if self.comm_queue.get_nowait():
+            self.comm_queue.put(True)
 
     def end_filter(self):
         """End the filter and close the queue."""

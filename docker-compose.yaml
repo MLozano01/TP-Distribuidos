@@ -32,9 +32,10 @@ services:
         condition: service_started
     volumes:
       - ./client/config.ini:/config.ini
-      - ./data/credits.csv:/credits_filtered.csv
-      - ./data/ratings_small.csv:/ratings_filtered.csv
-      - ./data/movies_metadata.csv:/movies_metadata_filtered.csv
+      - ./data/credits.csv:/credits.csv
+      - ./data/ratings_small.csv:/ratings.csv
+      - ./data/movies_metadata.csv:/movies_metadata.csv
+      - ./data/results_client1.json:/results.json
     
   server:
     container_name: server
@@ -54,8 +55,8 @@ services:
       - ./server/config.ini:/config.ini
     
   
-  filter:
-    container_name: filter
+  filter_2000_movies-1:
+    container_name: filter_2000_movies-1
     image: filter:latest
     networks:
       - tp_network
@@ -66,12 +67,78 @@ services:
     links:
       - rabbitmq
     volumes:
-      - ./filter/config.ini:/config.ini
-      - ./filter/filters/filter_2000_movies.ini:/filter_2000_movies.ini
-      - ./filter/filters/filter_Arg_Spa_movies.ini:/filter_Arg_Spa_movies.ini
-      - ./filter/filters/filter_Arg_movies.ini:/filter_Arg_movies.ini
-      - ./filter/filters/filter_single_country_movies.ini:/filter_single_country_movies.ini
-      - ./filter/filters/filter_decade_movies.ini:/filter_decade_movies.ini
+      - ./filter/filters/filter_2000_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=1
+      - FILTER_REPLICA_COUNT=1
+    
+  filter_arg_spa_movies-1:
+    container_name: filter_arg_spa_movies-1
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_Arg_Spa_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=1
+      - FILTER_REPLICA_COUNT=1
+    
+  filter_arg_movies-1:
+    container_name: filter_arg_movies-1
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_Arg_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=1
+      - FILTER_REPLICA_COUNT=1
+    
+  filter_single_country_movies-1:
+    container_name: filter_single_country_movies-1
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_single_country_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=1
+      - FILTER_REPLICA_COUNT=1
+    
+  filter_decade_movies-1:
+    container_name: filter_decade_movies-1
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_decade_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=1
+      - FILTER_REPLICA_COUNT=1
     
   
   transformer:
@@ -90,8 +157,8 @@ services:
       replicas: 2
     
   
-  aggregator:
-    container_name: aggregator
+  aggregator_sent-1:
+    container_name: aggregator_sent-1
     image: aggregator:latest
     networks:
       - tp_network
@@ -102,9 +169,27 @@ services:
     links:
       - rabbitmq
     volumes:
-      - ./aggregator/config.ini:/config.ini
-      - ./aggregator/aggregators/aggr_sent_revenue.ini:/aggr_sent_revenue.ini
-      - ./aggregator/aggregators/aggr_country_budget.ini:/aggr_country_budget.ini
+      - ./aggregator/aggregators/aggr_sent_revenue.ini:/config.ini
+    environment:
+      - AGGR_REPLICA_ID=1
+      - AGGR_REPLICA_COUNT=1
+    
+  aggregator_budget-1:
+    container_name: aggregator_budget-1
+    image: aggregator:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./aggregator/aggregators/aggr_country_budget.ini:/config.ini
+    environment:
+      - AGGR_REPLICA_ID=1
+      - AGGR_REPLICA_COUNT=1
     
   
   reducer:
