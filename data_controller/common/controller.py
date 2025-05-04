@@ -32,21 +32,18 @@ class Controller:
             self.data_controller.start()
             logging.info(f"DataController started with PID: {self.data_controller.pid}")
 
-            movies_communicator_instance = DataControllerCommunicator(self.movies_communication_config, movie_comm_queue)
-            credits_communicator_instance = DataControllerCommunicator(self.credits_communication_config, credits_comm_queue)
-            ratings_communicator_instance = DataControllerCommunicator(self.ratings_communication_config, ratings_comm_queue)
+            movies_communicator_instance = DataControllerCommunicator(self.movies_communication_config, movie_comm_queue, "MOVIES")
+            credits_communicator_instance = DataControllerCommunicator(self.credits_communication_config, credits_comm_queue, "CREDITS")
+            ratings_communicator_instance = DataControllerCommunicator(self.ratings_communication_config, ratings_comm_queue, "RATINGS")
 
             self.movies_data_controller_communicator = Process(target=movies_communicator_instance.run, args=())
             self.movies_data_controller_communicator.start()
-            logging.info(f"DataController movies communicator started with PID: {self.movies_data_controller_communicator.pid}")
 
             self.credits_data_controller_communicator = Process(target=credits_communicator_instance.run, args=())
             self.credits_data_controller_communicator.start()
-            logging.info(f"DataController credits communicator started with PID: {self.credits_data_controller_communicator.pid}")
 
             self.ratings_data_controller_communicator = Process(target=ratings_communicator_instance.run, args=())
             self.ratings_data_controller_communicator.start()
-            logging.info(f"DataController ratings communicator started with PID: {self.ratings_data_controller_communicator.pid}")
 
 
             self.data_controller.join()        

@@ -10,8 +10,8 @@ from protocol.utils.parsing_proto_utils import is_date
 from .aux import filter_movies, filter_ratings, filter_credits
 
 # Configure logging to reduce noise
-logging.getLogger('pika').setLevel(logging.WARNING)  # Reduce Pika logs to warnings and above
-logging.getLogger('root').setLevel(logging.INFO)     # Keep our logs at info level
+logging.getLogger('pika').setLevel(logging.WARNING)
+logging.getLogger('RabbitMQ').setLevel(logging.WARNING)
 
 class DataController:
     def __init__(self, movies_comm_queue, credits_comm_queue, ratings_comm_queue, **kwargs):
@@ -50,9 +50,8 @@ class DataController:
         self.check_finished()
 
     def callback(self, ch, method, properties, body):
-        logging.info(f"Received message, with routing key: {method.routing_key}")
         message_type, message = self.protocol.decode_client_msg(body, self.columns_needed)
-        logging.info(f"Received message from server of type: {message_type.name}")
+        #logging.info(f"Received message from server of type: {message_type.name}")
         if not message_type or not message:
             logging.warning("Received invalid message from server")
             return
@@ -94,21 +93,22 @@ class DataController:
 
     def publish_movies(self, movies_csv):
         movies_pb = filter_movies(movies_csv)
-        logging.info(f"Forwarding movies")
+        #logging.info(f"Forwarding movies")
         if movies_pb:
             self.movies_publisher.publish(movies_pb.SerializeToString())
 
     def publish_ratings(self, ratings_csv):
         ratings_by_movie = filter_ratings(ratings_csv)
-        logging.info(f"Forwarding ratings")
+        #logging.info(f"Forwarding ratings")
         for movie_id, batch in ratings_by_movie.items():
+            #logging.info(f"Forwarding rating of {movie_id}")
             self.ratings_publisher.publish(batch.SerializeToString(), routing_key=str(movie_id))
 
     def publish_credits(self, credits_csv):
         credits_by_movie = filter_credits(credits_csv)
-        logging.info(f"Forwarding credits")
+        #logging.info(f"Forwarding credits")
         for movie_id, batch in credits_by_movie.items():
-            logging.info(f"Forwarding credit of {movie_id}")
+            #logging.info(f"Forwarding credit of {movie_id}")
             self.credits_publisher.publish(batch.SerializeToString(), routing_key=str(movie_id))
 
     def stop(self):
