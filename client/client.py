@@ -1,4 +1,5 @@
 from multiprocessing import Process
+import signal
 import socket
 import logging
 
@@ -14,8 +15,17 @@ class Client:
     self.max_batch_size = int(max_batch_size)
     self.protocol = Protocol()
     self.client_socket = None
+    self.continue_running = True
+  
+  def graceful_exit(self, _sig, _frame):
+    logging.info("Graceful exit")
+    if (self.client_socket):
+      self.client_socket.close()
+    self.continue_running = False
 
   def run(self):
+    signal.signal(signal.SIGTERM, self.graceful_exit)
+    signal.signal(signal.SIGINT, self.graceful_exit)
     try:
       self.client_socket = socket.create_connection(('server', self.server_port))
       
@@ -32,9 +42,13 @@ class Client:
       logging.info(f"An unexpected error occurred: {err}")
 
     finally:
+      self.continue_running = False
       if self.client_socket:
         self.client_socket.close()
         logging.info("Connection closed")
+      if results_process.is_alive():
+        results_process.terminate()
+        results_process.join()
   
   
   def send_data(self, path, type):
@@ -73,16 +87,25 @@ class Client:
     protocol = Protocol()
     results = [None] * 5
     cant_results = 0
-    while cant_results < 5:
+    while self.continue_running and cant_results < 5:
       read_amount = protocol.define_initial_buffer_size()
       buffer = bytearray()
-      closed_socket = recvall(self.client_socket, buffer, read_amount)
-      if closed_socket:
-        return
-      read_amount = protocol.define_buffer_size(buffer)
-      closed_socket = recvall(self.client_socket, buffer, read_amount)
-      if closed_socket:
-        return
+      try:
+        closed_socket = recvall(self.client_socket, buffer, read_amount)
+        if closed_socket:
+          return
+        read_amount = protocol.define_buffer_size(buffer)
+        closed_socket = recvall(self.client_socket, buffer, read_amount)
+        if closed_socket:
+          return
+      except socket.error as err:
+        logging.info(f"A socket error occurred: {err}")
+        self.continue_running = False
+        break
+      except Exception as err:
+        logging.info(f"An unexpected error occurred: {err}")
+        self.continue_running = False
+        break
       
       _, msg = protocol.decode_msg(buffer)
       logging.info(f"RESULT {msg}")
@@ -101,7 +124,9 @@ class Client:
     self.write_results(results)
 
   def write_results(self, results):
-    serialized_results = [json.loads(MessageToJson(result, preserving_proto_field_name=True)) for result in results]
+    logging.info("Writing results")
+    results_filtered = list(filter(lambda x: x!= None,results))
+    serialized_results = [json.loads(MessageToJson(result, preserving_proto_field_name=True)) for result in results_filtered]
 
     result_string = json.dumps(serialized_results, indent=2)
     with open("results.json", "w") as file:
