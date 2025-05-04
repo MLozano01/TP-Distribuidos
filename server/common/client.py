@@ -29,8 +29,6 @@ class Client:
             self.forward_queue.stop()
         if self.result_queue:
             self.result_queue.stop()
-        if self.control_publisher:
-            self.control_publisher.stop()
         
         if self.data_controller.is_alive():
             self.data_controller.terminate()

@@ -22,7 +22,7 @@ class Server:
                 client = Client(conn)
                 
                 self.clients.append(client)
-                logging.info(f"Client {client.client_id} added")
+                logging.info(f"Client added")
                 client.run()
                 
             except Exception as e:
