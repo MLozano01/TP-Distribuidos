@@ -1,5 +1,6 @@
 from protocol import files_pb2
 from protocol.utils.parsing_proto_utils import is_date
+import logging
 
 def filter_movies(movies_csv):
     movies_pb = files_pb2.MoviesCSV()
@@ -30,8 +31,12 @@ def filter_movies(movies_csv):
 
 def filter_ratings(ratings_csv):
     ratings_by_movie = dict()
+    total_ratings = len(ratings_csv.ratings)
+    filtered_out = 0
+    
     for rating in ratings_csv.ratings:
         if not rating.movieId or rating.movieId < 0 or not rating.rating or rating.rating < 0:
+            filtered_out += 1
             continue
 
         rating_pb = files_pb2.RatingCSV()
@@ -44,12 +49,16 @@ def filter_ratings(ratings_csv):
         ratings_pb.ratings.append(rating_pb)
         # ratings_by_movie[rating.movieId] = ratings_pb
 
+    logging.info(f"Filtered {filtered_out} out of {total_ratings} ratings. Remaining: {len(ratings_by_movie)}")
     return ratings_by_movie
 
 def filter_credits(credits_csv):
     credits_by_movie = dict()
+    total_credits = len(credits_csv.credits)
+    filtered_out = 0
     for credit in credits_csv.credits:
         if not credit.id or credit.id < 0 or not len(credit.cast):
+            filtered_out += 1
             continue
 
         names = map(lambda cast: cast.name, credit.cast)
@@ -67,4 +76,5 @@ def filter_credits(credits_csv):
         credits_pb.credits.append(credit_pb)
         # credits_by_movie[credit.id] = credits_pb
 
+    logging.info(f"Filtered {filtered_out} out of {total_credits} credits. Remaining: {len(credits_by_movie)}")
     return credits_by_movie 
