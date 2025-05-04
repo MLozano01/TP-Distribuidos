@@ -104,7 +104,7 @@ class DataControllerCommunicator:
         decoded_msg = self.protocol.decode_movies_msg(body)
         
         if decoded_msg.finished:
-            logger.info(f"Received {self.type} finished from replica data controller. Answering ACK")
+            logger.info(f"Received {self.type} finished from replica data controller.")
             self.queue_communication_2.publish(body)
         return
     
@@ -114,7 +114,7 @@ class DataControllerCommunicator:
         """
         logger.debug("RECEIVED A DATA CONTROLLER ACK")
         self.data_controllers_acked += 1
-        if self.data_controllers_acked == self.config["data_controller_replicas_count"] - 1:
+        if self.data_controllers_acked == self.config["data_controller_replicas_count"]:
             logger.info(f"All data controllers acked {self.type}")
             self.comm_queue.put(True)
         else:
