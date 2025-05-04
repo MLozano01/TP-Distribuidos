@@ -33,7 +33,7 @@ class DataControllerCommunicator:
 
         self.queue_communication_1 = RabbitMQ(self.config["exchange_communication"], name_one, key_one, self.config["exc_communication_type"])
         self.queue_communication_2 = RabbitMQ(self.config["exchange_communication"], name_two, key_two, self.config["exc_communication_type"])
-        logging.info(f"Initialized communication queues")
+        logging.debug(f"Initialized communication queues")
 
 
     def run(self):
@@ -60,7 +60,7 @@ class DataControllerCommunicator:
 
             data = self.comm_queue.get()
 
-            logging.info(f"Received finished signal from data controller")
+            logging.debug(f"Received finished signal from data controller")
 
             consume_process = Process(target=self._manage_consume_pika, args=())
             consume_process.start()
@@ -70,7 +70,7 @@ class DataControllerCommunicator:
             self.queue_communication_1.publish(data)
             consume_process.join()
             
-            logging.info("Finished acking the other data controller")
+            logging.debug("Received finished acks of the other data controller")
 
         except Exception as e:
             logging.error(f"Error in managing inner communication: {e}")
@@ -79,7 +79,7 @@ class DataControllerCommunicator:
     def _manage_consume_pika(self):
         consumer_queue = RabbitMQ(self.config["exchange_communication"], self.config["queue_communication_name"] + "_2", self.config["routing_communication_key"] + "_2", self.config["exc_communication_type"])
         consumer_queue.consume(self.other_callback)
-        logging.info("Finished acking the other data controller")
+        logging.debug("Finished acking the other data controller")
 
 
     def manage_getting_finished_notification(self):
@@ -96,7 +96,7 @@ class DataControllerCommunicator:
         """
         Callback function to process incoming messages.
         """
-        logging.info(f"Received message on communication channel with routing key: {method.routing_key}")
+        logging.debug(f"Received message on communication channel with routing key: {method.routing_key}")
         decoded_msg = self.protocol.decode_movies_msg(body)
         
         if decoded_msg.finished:
@@ -108,10 +108,10 @@ class DataControllerCommunicator:
         """
         Callback function to process incoming messages.
         """
-        logging.info("RECEIVED A DATA CONTROLLER ACK")
+        logging.debug("RECEIVED A DATA CONTROLLER ACK")
         self.data_controllers_acked += 1
         if self.data_controllers_acked == self.config["data_controller_replicas_count"]:
-            logging.info("All data controllers acked")
+            logging.debug("All data controllers acked")
             self.comm_queue.put(True)
         else:
-            logging.info(f"Data controller {self.data_controllers_acked} acked")
+            logging.debug(f"Data controller {self.data_controllers_acked} acked")

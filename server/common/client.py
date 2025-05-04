@@ -3,7 +3,6 @@ import socket
 import logging
 from protocol.protocol import Protocol
 from protocol.rabbit_protocol import RabbitMQ
-from protocol.rabbit_wrapper import RabbitMQProducer, RabbitMQConsumer
 from protocol.utils.socket_utils import recvall
 
 class Client:
@@ -48,13 +47,8 @@ class Client:
 
     def handle_connection(self, conn: socket.socket):
         # Initialize the forward queue for data messages
-        self.forward_queue = RabbitMQProducer(
-            host='rabbitmq',
-            exchange="server_to_data_controller",
-            exchange_type="direct",
-            routing_key="forward"
-        )
-        
+        self.forward_queue = RabbitMQ("server_to_data_controller", "", "forward", "direct")
+    
         closed_socket = False
         while not closed_socket:
             read_amount = self.protocol.define_initial_buffer_size()
@@ -75,7 +69,8 @@ class Client:
     def _forward_to_data_controller(self, message):
         try:
             logging.info(f"Forwarding message to data controller")
-            self.forward_queue.publish(message)
+            # Convert bytearray to bytes before sending
+            self.forward_queue.publish(bytes(message))
         except Exception as e:
             logging.error(f"Failed to forward message to data controller: {e}")
 

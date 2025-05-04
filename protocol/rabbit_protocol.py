@@ -21,7 +21,7 @@ class RabbitMQ:
             channel = connection.channel()
             channel.exchange_declare(exchange=self.exchange, exchange_type=self.exc_type, durable=True)
 
-            logging.info(f"Channel created with exchange {self.exchange} of type {self.exc_type}")
+            logging.debug(f"Channel created with exchange {self.exchange} of type {self.exc_type}")
 
             return channel
         except Exception as e:
@@ -63,7 +63,7 @@ class RabbitMQ:
             self.channel.queue_bind(exchange=self.exchange, queue=self.q_name, routing_key=self.key)
             self.channel.basic_consume(queue=self.q_name, on_message_callback=callback, auto_ack=True)
 
-            logging.info(f"Waiting for messages in {self.q_name}, with routing_key {self.key}. To exit press CTRL+C")
+            logging.debug(f"Waiting for messages in {self.q_name}, with routing_key {self.key}. To exit press CTRL+C")
 
             self.channel.start_consuming()
 

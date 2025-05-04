@@ -111,6 +111,7 @@ class DataController:
         credits_by_movie = filter_credits(credits_csv)
         logging.info(f"Forwarding credits")
         for movie_id, batch in credits_by_movie.items():
+            logging.info(f"Forwarding credit of {movie_id}")
             self.credits_publisher.publish(batch.SerializeToString(), routing_key=str(movie_id))
 
     def stop(self):
