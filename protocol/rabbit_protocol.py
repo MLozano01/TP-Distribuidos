@@ -2,6 +2,7 @@ import pika
 import time
 import logging
 
+rabbit_logger = logging.getLogger("RabbitMQ")
 
 class RabbitMQ:
     def __init__(self, exchange, q_name, key, exc_type):
@@ -21,17 +22,17 @@ class RabbitMQ:
             channel = connection.channel()
             channel.exchange_declare(exchange=self.exchange, exchange_type=self.exc_type, durable=True)
 
-            logging.debug(f"Channel created with exchange {self.exchange} of type {self.exc_type}")
+            rabbit_logger.debug(f"Channel created with exchange {self.exchange} of type {self.exc_type}")
 
             return channel
         except Exception as e:
-            logging.error(f"Failed to create channel: {e}")
+            rabbit_logger.error(f"Failed to create channel: {e}")
             if 'connection' in locals():
                 connection.close()
-                logging.info("Connection closed")
+                rabbit_logger.info("Connection closed")
             if 'channel' in locals():
                 channel.close()
-                logging.info("Channel closed")
+                rabbit_logger.info("Channel closed")
 
     def publish(self, message, routing_key=None):
         """Used to publish messages to the queue.
@@ -48,7 +49,7 @@ class RabbitMQ:
                                     delivery_mode=2,
                                 ))
 
-            logging.info(f"Sent message with routing key: {key_to_use}") # Log the actual key used
+            rabbit_logger.info(f"Sent message with routing key: {key_to_use}") # Log the actual key used
         except Exception as e:
             logging.error(f"Failed to send message: {e}")
             raise e
@@ -65,15 +66,15 @@ class RabbitMQ:
             self.channel.queue_bind(exchange=self.exchange, queue=self.q_name, routing_key=key_to_use)
             self.channel.basic_consume(queue=self.q_name, on_message_callback=callback, auto_ack=True)
 
-            logging.debug(f"Waiting for messages in {self.q_name}, with routing_key {self.key}. To exit press CTRL+C")
+            rabbit_logger.debug(f"Waiting for messages in {self.q_name}, with routing_key {self.key}. To exit press CTRL+C")
 
             self.channel.start_consuming()
 
         except KeyboardInterrupt:
-            logging.info("Exiting...")
+            rabbit_logger.info("Exiting...")
 
         except Exception as e:
-            logging.error(f"Failed to consume from {self.q_name}: {e}")
+            rabbit_logger.error(f"Failed to consume from {self.q_name}: {e}")
             raise e
 
     def close_channel(self):
@@ -81,7 +82,7 @@ class RabbitMQ:
         if self.channel.is_open:
             self.channel.stop_consuming()
             self.channel.close()
-            logging.info("Stopped consuming messages")
+            rabbit_logger.info("Stopped consuming messages")
         else:
-            logging.info("Channel is already closed")
-        logging.info("Channel closed")
+            rabbit_logger.info("Channel is already closed")
+        rabbit_logger.info("Channel closed")
