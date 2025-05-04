@@ -19,6 +19,8 @@ class Transformer:
         self._stop_event = threading.Event()
         self._finished_signal_received = False
         self._finished_message_body = None
+        self.buffered_movies = []
+        self.analyzer_ready = threading.Event()
         self.rabbit_host = kwargs.get('rabbit_host', 'localhost')
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -66,21 +68,22 @@ class Transformer:
         """Start the Transformer with separate threads for data and control messages."""
         self._setup_signal_handlers()
         try:
-            self._initialize_sentiment_analyzer()
             self._settle_connections()
+            
 
             if not all([self.queue_rcv, self.queue_snd, self.control_consumer]):
                 logging.error("Not all required RabbitMQ connections were initialized. Aborting start.")
                 return
 
             self.queue_rcv.consume(self._process_message)
-            self.control_consumer.consume(self._process_control_signal)
-
             data_thread = threading.Thread(target=self.queue_rcv.start_consuming, daemon=True)
-            control_thread = threading.Thread(target=self.control_consumer.start_consuming, daemon=True)
-
             data_thread.start()
+
+            self.control_consumer.consume(self._process_control_signal)
+            control_thread = threading.Thread(target=self.control_consumer.start_consuming, daemon=True)
             control_thread.start()
+
+            self._initialize_sentiment_analyzer()
 
             logging.info("Transformer started with data and control threads...")
             # Wait for threads to complete naturally
@@ -129,6 +132,7 @@ class Transformer:
                 'sentiment-analysis',
                 model='distilbert-base-uncased-finetuned-sst-2-english',
             )
+            self.analyzer_ready.set()
             logging.info("Sentiment analysis model initialized successfully.")
         except Exception as e:
             logging.error(f"Failed to initialize sentiment analysis model: {e}", exc_info=True)
@@ -149,9 +153,9 @@ class Transformer:
             revenue_val = movie.revenue
             is_budget_valid = budget_val is not None and float(budget_val) > 0
             is_revenue_valid = revenue_val is not None and float(revenue_val) > 0
-            if not (is_budget_valid and is_revenue_valid):
+            if not (is_budget_valid and is_revenue_valid and movie.overview):
                 movie_id = movie.id if movie.id else 'UNKNOWN_PROTO_ID'
-                logging.debug(f"Skipping movie ID {movie_id} due to zero/missing/invalid budget or revenue.")
+                logging.debug(f"Skipping movie ID {movie_id} due to zero/missing/invalid budget, revenue or overview.")
                 return False
             return True
         except (ValueError, TypeError):
@@ -220,6 +224,23 @@ class Transformer:
                 except Exception as e_cancel:
                     logging.error(f"Error cancelling data consumer: {e_cancel}", exc_info=True)
 
+
+                logging.info(f"Processing pending movies batches: {len(self.buffered_movies)}")
+                if not self.analyzer_ready.is_set():
+                    self.analyzer_ready.wait()
+                for movie_batch in self.buffered_movies:
+                    processed_movies_list = []
+                    for movie in movie_batch.movies:
+                        processed_movie = self._process_movie(movie)
+                        if processed_movie:
+                            processed_movies_list.append(processed_movie)
+
+                    if not processed_movies_list:
+                        logging.info("No valid movies found in batch. Skipping send.")
+                    else:
+                        self._send_processed_batch(processed_movies_list)
+                self.buffered_movies = []
+
                 # Store the finished message body, DO NOT forward yet
                 self._finished_message_body = body
                 logging.info("FINISHED signal received and data consumer cancelled. Signal stored.")
@@ -233,6 +254,14 @@ class Transformer:
         except Exception as e:
             logging.error(f"Error processing control signal: {e}", exc_info=True)
 
+    def _process_movie(self, incoming_movie):
+        if self._validate_movie(incoming_movie):
+            processed_movie = self._enrich_movie(incoming_movie)
+            # Log successful processing of a movie
+            logging.info(f"Processed Movie ID {processed_movie.id}: Sentiment='{processed_movie.sentiment}', Rate='{processed_movie.rate_revenue_budget:.4f}'")
+            return processed_movie
+        return None
+
     def _process_message(self, ch, method, properties, body):
         """Callback function to process received data messages"""
         try:
@@ -243,14 +272,15 @@ class Transformer:
             if not incoming_movies_msg or not incoming_movies_msg.movies:
                  logging.warning("Received empty or invalid Protobuf movies batch structure. Skipping.")
                  return
-
+            if not self.sentiment_analyzer:
+                logging.warning("Buffering batch")
+                self.buffered_movies.append(incoming_movies_msg)
+                return
             processed_movies_list = []
             for incoming_movie in incoming_movies_msg.movies:
-                if self._validate_movie(incoming_movie):
-                    processed_movie = self._enrich_movie(incoming_movie)
+                processed_movie = self._process_movie(incoming_movie)
+                if processed_movie:
                     processed_movies_list.append(processed_movie)
-                    # Log successful processing of a movie
-                    logging.info(f"Processed Movie ID {processed_movie.id}: Sentiment='{processed_movie.sentiment}', Rate='{processed_movie.rate_revenue_budget:.4f}'")
 
             if not processed_movies_list:
                 logging.info(f"No valid movies found in batch (delivery_tag: {method.delivery_tag}). Skipping send.")
