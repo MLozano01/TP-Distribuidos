@@ -39,10 +39,10 @@ def filter_ratings(ratings_csv):
         rating_pb.movieId = rating.movieId
         rating_pb.rating = rating.rating
 
-        ratings_by_movie.setdefault(rating.movieId, files_pb2.RatingsCSV())
-        ratings_pb = ratings_by_movie[rating.movieId]
+        ratings_pb = ratings_by_movie.setdefault(rating.movieId, files_pb2.RatingsCSV())
+        # ratings_pb = ratings_by_movie[rating.movieId]
         ratings_pb.ratings.append(rating_pb)
-        ratings_by_movie[rating.movieId] = ratings_pb
+        # ratings_by_movie[rating.movieId] = ratings_pb
 
     return ratings_by_movie
 
@@ -62,9 +62,9 @@ def filter_credits(credits_csv):
             cast_pb = credit_pb.cast.add()
             cast_pb.name = name
 
-        credits_by_movie.setdefault(credit.id, files_pb2.CreditsCSV())
-        credits_pb = credits_by_movie[credit.id]
+        credits_pb = credits_by_movie.setdefault(credit.id, files_pb2.CreditsCSV())
+        # credits_pb = credits_by_movie[credit.id]
         credits_pb.credits.append(credit_pb)
-        credits_by_movie[credit.id] = credits_pb
+        # credits_by_movie[credit.id] = credits_pb
 
     return credits_by_movie 
