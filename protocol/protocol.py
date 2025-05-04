@@ -151,7 +151,7 @@ class Protocol:
       
         data[self.current_headers[index]] += cleaned
       except Exception as e:
-        logging.info(f"Line with more columns that disclosed")
+        # logging.info(f"Line with more columns that disclosed")
         return dict()
     
     return data

@@ -6,21 +6,13 @@ from protocol.rabbit_protocol import RabbitMQ
 from protocol.utils.socket_utils import recvall
 
 class Client:
-    def __init__(self, client_sock, client_id):
+    def __init__(self, client_sock):
         self.socket = client_sock
-        self.client_id = client_id
         self.protocol = Protocol()
         self.data_controller = None
         self.result_controller = None
         self.forward_queue = None
         self.result_queue = None
-
-        self.columns_needed = {
-            'movies': ["id", "title", "genres", "release_date", "overview", 
-                      "production_countries", "spoken_languages", "budget", "revenue"],
-            'ratings': ["movieId", "rating", "timestamp"],
-            'credits': ["id", "cast"]
-        }
 
     def run(self):
         self.data_controller = Process(target=self.handle_connection, args=[self.socket])
@@ -61,15 +53,10 @@ class Client:
             if closed_socket:
                 return
             
-            # JUST FOR DEBUGGING
-            type, msg = self.protocol.decode_client_msg(buffer, self.columns_needed)
-            logging.info(f"Received message from client of type: {type.name}")
             self._forward_to_data_controller(buffer)
 
     def _forward_to_data_controller(self, message):
         try:
-            logging.info(f"Forwarding message to data controller")
-            # Convert bytearray to bytes before sending
             self.forward_queue.publish(bytes(message))
         except Exception as e:
             logging.error(f"Failed to forward message to data controller: {e}")
