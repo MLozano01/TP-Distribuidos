@@ -66,6 +66,7 @@ def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replica
     print(f"  Joiners: {joiner_ratings_replicas} (ratings) - {joiner_credits_replicas} (credits)")
     print(f"  Filters: {f_2000_replicas} (2000) - {f_arg_spa_replicas} (arg/spa) - {f_arg} (arg) - {f_single_country_replicas} (1 country) - {f_decade_replicas} (decade)")
     print(f"  Aggregators: {aggr_sent_replicas} (sent) - {aggr_budget_replicas} (budget)")
+    print(f"  Data controllers: {data_controller_replicas}")
     clients = join_clients(client_amount)
     server = create_server(client_amount)
     network = create_network()
