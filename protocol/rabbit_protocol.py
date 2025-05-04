@@ -5,11 +5,13 @@ import logging
 rabbit_logger = logging.getLogger("RabbitMQ")
 
 class RabbitMQ:
-    def __init__(self, exchange, q_name, key, exc_type):
+    def __init__(self, exchange, q_name, key, exc_type, auto_ack=True, prefetch_count=None):
         self.exchange = exchange
         self.q_name = q_name
         self.key = key
         self.exc_type = exc_type
+        self.auto_ack = auto_ack
+        self.prefetch_count = prefetch_count
         self.channel = self.create_channel()
 
 
@@ -62,9 +64,10 @@ class RabbitMQ:
             key_to_use = routing_key if routing_key is not None else self.key
 
             self.channel.queue_declare(queue=self.q_name, durable=True)
-
+            if self.prefetch_count is not None:
+                self.channel.basic_qos(prefetch_count=self.prefetch_count)
             self.channel.queue_bind(exchange=self.exchange, queue=self.q_name, routing_key=key_to_use)
-            self.channel.basic_consume(queue=self.q_name, on_message_callback=callback, auto_ack=True)
+            self.channel.basic_consume(queue=self.q_name, on_message_callback=callback, auto_ack=self.auto_ack)
 
             rabbit_logger.debug(f"Waiting for messages in {self.q_name}, with routing_key {self.key}. To exit press CTRL+C")
 
