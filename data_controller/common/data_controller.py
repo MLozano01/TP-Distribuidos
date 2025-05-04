@@ -69,21 +69,18 @@ class DataController:
 
         if message_type == FileType.MOVIES:
             self.movies_comm_queue.put(msg_to_send)
-            logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
             if self.movies_comm_queue.get() == True:
-                logging.info("Received SEND finished signal from MOVIES communication channel.")
+                logging.info("Propagating finished MOVIES downstream")
                 self.movies_publisher.publish(msg_to_send)
         elif message_type == FileType.RATINGS:
             self.ratings_comm_queue.put(msg_to_send)
-            logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
             if self.ratings_comm_queue.get() == True:
-                logging.info("Received SEND finished signal from RATINGS communication channel.")
+                logging.info("Propagating finished RATINGS downstream")
                 self.ratings_publisher.publish(msg_to_send)
         elif message_type == FileType.CREDITS:
             self.credits_comm_queue.put(msg_to_send)
-            logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
             if self.credits_comm_queue.get() == True:
-                logging.info("Received SEND finished signal from CREDITS communication channel.")
+                logging.info("Propagating finished CREDITS downstream")
                 self.credits_publisher.publish(msg_to_send)
 
 
