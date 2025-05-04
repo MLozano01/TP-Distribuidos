@@ -141,7 +141,8 @@ services:
       - FILTER_REPLICA_COUNT=1
     
   
-  transformer:
+  transformer-1:
+    container_name: transformer-1
     image: transformer:latest
     networks:
       - tp_network
@@ -153,8 +154,26 @@ services:
       - rabbitmq
     volumes:
       - ./transformer/config.ini:/config.ini
-    deploy:
-      replicas: 2
+    environment:
+      - TRANSFORMER_REPLICA_ID=1
+      - TRANSFORMER_REPLICAS_COUNT=2
+    
+  transformer-2:
+    container_name: transformer-2
+    image: transformer:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./transformer/config.ini:/config.ini
+    environment:
+      - TRANSFORMER_REPLICA_ID=2
+      - TRANSFORMER_REPLICAS_COUNT=2
     
   
   aggregator_sent-1:
