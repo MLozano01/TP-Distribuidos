@@ -4,9 +4,10 @@ from protocol.rabbit_protocol import RabbitMQ
 import logging
 from protocol.protocol import Protocol
 
+logging.getLogger("pika").setLevel(logging.ERROR)
 
 class Aggregator:
-    def __init__(self, **kwargs):
+    def __init__(self, comm_queue, **kwargs):
         self.queue_rcv = None
         self.queue_snd = None
         for key, value in kwargs.items():
@@ -14,6 +15,7 @@ class Aggregator:
         self.is_alive = True
         self.protocol = Protocol()
         self.current_finished_msg_amount = 0
+        self.comm_queue = comm_queue
 
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type)
@@ -23,6 +25,7 @@ class Aggregator:
         """Start the aggregator to consume messages from the queue."""
         self._settle_queues()
         self.queue_rcv.consume(self.callback)
+        self._check_finished()
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
@@ -47,10 +50,21 @@ class Aggregator:
             return
     
     def publish_finished_msg(self, decoded_msg):
-        self.queue_snd.publish(decoded_msg.SerializeToString())
-        logging.info(f"Published finished signal")
+        msg = decoded_msg.SerializeToString()
+        self.comm_queue.put(msg)
+        logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
 
+        if self.comm_queue.get() == True:
+            logging.info("Received SEND finished signal from communication channel.")
+           
+            self.queue_snd.publish(msg)
+            logging.info(f"Published finished signal to {self.queue_snd.exchange}")
 
+        logging.info("FINISHED SENDING THE FINISH MESSAGE")
+
+    def _check_finished(self):
+        if self.comm_queue.get_nowait():
+            self.comm_queue.put(True)
 
     def end_aggregator(self):
         """End the aggregator and close the queue."""

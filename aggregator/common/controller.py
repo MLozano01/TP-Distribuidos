@@ -1,48 +1,54 @@
-from multiprocessing import Process
+from multiprocessing import Process, Queue
 import logging
 from common.aggregator import Aggregator
-import common.config_init
+from common.aggr_communicator import AggregatorCommunicator
+
+logging.getLogger("pika").setLevel(logging.ERROR)
 
 
 class Controller:
-    def __init__(self, config):
-        self.all_aggregators = []
+    def __init__(self, config, communication_config):
+        self.aggregator = None
+        self.aggregator_communicator = None
         self.config = config
+        self.communication_config = communication_config
 
     def start(self):
-        logging.info("Starting aggrs")
+        logging.info("Starting Aggregator")
 
-        logging.info(f"Starting {self.config['aggr_num']} aggregators")
+        try:
 
-        for i in range(self.config["aggr_num"]):
+            comm_queue = Queue()
 
-            aggr_config = self.config[f"aggr_{i}"]
 
-            aggr_path = aggr_config.split(",")[0]
+            aggregator_instance = Aggregator(comm_queue, **self.config)
 
-            aggr_config_params = common.config_init.config_aggregator(f'/{aggr_path}.ini')
+            self.aggregator = Process(target=aggregator_instance.run, args=())
+        
+            self.aggregator.start()
 
-            try:
-                aggr_instance = Aggregator(**aggr_config_params)
+            communicator_instance = AggregatorCommunicator(self.communication_config, comm_queue)
 
-                new_aggr = Process(target=aggr_instance.run, args=())
-                self.all_aggregators.append(new_aggr)
+            self.aggregator_communicator = Process(target=communicator_instance.run, args=())
+            self.aggregator_communicator.start()
+            logging.info(f"Aggregator communicator started with PID: {self.aggregator_communicator.pid}")
 
-                new_aggr.start()
-                logging.info(f"Aggr {i} started with PID: {new_aggr.pid}")
 
-            except KeyboardInterrupt:
-                logging.info("Aggr stopped by user")
-                self.stop()
-            except Exception as e:
-                logging.error(f"Aggr error: {e}")
-                self.stop()
-            # finally:
+            self.aggregator.join()        
+            self.aggregator_communicator.join()
 
-        for aggr in self.all_aggregators:
-            aggr.join()
+        except KeyboardInterrupt:
+            logging.info("Aggregator stopped by user")
+        except Exception as e:
+            logging.error(f"Aggregator error: {e}")
+        
+
     
     def stop(self):
-        for aggr in self.all_aggregators:
-            if aggr.is_alive():
-                aggr.terminate()
+        if self.aggregator:
+            self.aggregator.terminate()
+            logging.info("Aggregator process terminated")
+        else:
+            logging.warning("No aggregator process to terminate")
+        self.aggregator = None
+    

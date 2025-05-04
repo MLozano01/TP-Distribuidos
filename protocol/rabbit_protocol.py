@@ -54,13 +54,15 @@ class RabbitMQ:
             raise e
 
 
-    def consume(self, callback):
+    def consume(self, callback, routing_key=None):
         """The callback function is defined by the different nodes."""
 
         try:
+            key_to_use = routing_key if routing_key is not None else self.key
+
             self.channel.queue_declare(queue=self.q_name, durable=True)
 
-            self.channel.queue_bind(exchange=self.exchange, queue=self.q_name, routing_key=self.key)
+            self.channel.queue_bind(exchange=self.exchange, queue=self.q_name, routing_key=key_to_use)
             self.channel.basic_consume(queue=self.q_name, on_message_callback=callback, auto_ack=True)
 
             logging.debug(f"Waiting for messages in {self.q_name}, with routing_key {self.key}. To exit press CTRL+C")
