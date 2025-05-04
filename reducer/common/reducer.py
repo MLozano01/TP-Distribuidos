@@ -5,6 +5,7 @@ import logging
 import json
 from protocol.protocol import Protocol
 
+logging.getLogger("pika").setLevel(logging.ERROR)
 
 class Reducer:
     def __init__(self, **kwargs):
