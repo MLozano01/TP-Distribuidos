@@ -7,7 +7,8 @@ from protocol import files_pb2
 from protocol.utils.parsing_proto_utils import *
 from protocol.protocol import Protocol
 from protocol.rabbit_wrapper import RabbitMQConsumer, RabbitMQProducer
-import time
+
+logging.getLogger('pika').setLevel(logging.WARNING)
 
 class Transformer:
     def __init__(self, **kwargs):
