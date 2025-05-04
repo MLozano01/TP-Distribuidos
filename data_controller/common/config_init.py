@@ -49,7 +49,7 @@ def initialize_config():
         ratings_comm_name = os.getenv('RATINGS_QUEUE_COMMUNICATION', config["replicas_control"]["ratings_queue_communication"])
 
         env_id = os.getenv('DATA_CONTROLLER_REPLICA_ID')
-        movies_communication_config["queue_communication_name"] = f"{movies_comm_name}_{movies_comm_name}" if env_id else movies_comm_name
+        movies_communication_config["queue_communication_name"] = f"{movies_comm_name}_{env_id}" if env_id else movies_comm_name
         movies_communication_config["routing_communication_key"] = os.getenv('ROUTING_KEY_COMMUNICATION', config["replicas_control"]["movies_routing_key_communication"])
         movies_communication_config["exchange_communication"] = os.getenv('EXCHANGE_COMMUNICATION', config["replicas_control"]["movies_exchange_communication"])
         movies_communication_config["exc_communication_type"] = os.getenv('TYPE_COMMUNICATION', config["replicas_control"]["TYPE_COMMUNICATION"])
