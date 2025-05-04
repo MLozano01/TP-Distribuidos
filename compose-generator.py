@@ -45,7 +45,7 @@ FILTER_SINGLE_COUNTRY_REPLICAS = 8
 FILTER_DECADE_REPLICAS = 9
 AGGR_SENT_REPLICAS = 10
 AGGR_BUDGET_REPLICAS = 11
-
+DATA_CONTROLLER_REPLICAS = 12
 
 def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas, data_controller_replicas):
     # Check for joiner config files existence
@@ -371,11 +371,6 @@ def parse_args(args, arg_to_parse):
     if len(args) <= arg_to_parse:
       return 1
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: python compose-generator.py <client_amount> [transformer_replicas] [joiner_ratings_replicas] [joiner_credits_replicas] [data_controller_replicas]")
-        sys.exit(1)
-
     try:
         replicas = int(args[arg_to_parse])
         if replicas < 1:
@@ -390,7 +385,7 @@ def main():
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python compose-generator.py <client_amount> [transformer_replicas] [joiner_ratings_replicas] [joiner_credits_replicas]")
+        print("Usage: python compose-generator.py <client_amount> [transformer_replicas] [joiner_ratings_replicas] [joiner_credits_replicas] [filter_2000_replicas] [filter_arg_spa_replicas] [filter_arg_replicas] [filter_single_country_replicas] [filter_decade_replicas] [aggr_sent_replicas] [aggr_budget_replicas] [data_controller_replicas]")
         sys.exit(1)
 
     client_amount = parse_args(sys.argv, CLIENT_AMOUNT)
@@ -404,6 +399,7 @@ def main():
     f_decade_replicas = parse_args(sys.argv, FILTER_DECADE_REPLICAS)
     aggr_sent_replicas = parse_args(sys.argv, AGGR_SENT_REPLICAS)
     aggr_budget_replicas = parse_args(sys.argv, AGGR_BUDGET_REPLICAS)
+    data_controller_replicas = parse_args(sys.argv, DATA_CONTROLLER_REPLICAS)
 
     docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas, data_controller_replicas)
 
