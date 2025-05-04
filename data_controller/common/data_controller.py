@@ -35,6 +35,8 @@ class DataController:
             'credits': ["id", "cast"]
         }
         
+        # Setup signal handler for SIGTERM
+        signal.signal(signal.SIGTERM, self._handle_shutdown)
 
     def _settle_queues(self):
         self.work_consumer = RabbitMQ(
@@ -130,9 +132,47 @@ class DataController:
     def stop(self):
         """Stop the DataController and close all connections"""
         logging.info(f"Stopping DataController {self.replica_id}...")
-        # TODO: Implement
-        logging.info(f"DataController {self.replica_id} stopped")
+        
+        # Close work consumer connection
+        if self.work_consumer:
+            try:
+                self.work_consumer.close_channel()
+                logging.info("Work consumer channel closed")
+            except Exception as e:
+                logging.error(f"Error closing work consumer channel: {e}")
+        
+        # Close movies publisher connection
+        if self.movies_publisher:
+            try:
+                self.movies_publisher.close_channel()
+                logging.info("Movies publisher channel closed")
+            except Exception as e:
+                logging.error(f"Error closing movies publisher channel: {e}")
+        
+        # Close ratings publisher connection
+        if self.ratings_publisher:
+            try:
+                self.ratings_publisher.close_channel()
+                logging.info("Ratings publisher channel closed")
+            except Exception as e:
+                logging.error(f"Error closing ratings publisher channel: {e}")
+        
+        # Close credits publisher connection
+        if self.credits_publisher:
+            try:
+                self.credits_publisher.close_channel()
+                logging.info("Credits publisher channel closed")
+            except Exception as e:
+                logging.error(f"Error closing credits publisher channel: {e}")
+        
+        logging.info(f"DataController {self.replica_id} stopped successfully")
 
     def _check_finished(self):
         if self.comm_queue.get_nowait():
             self.comm_queue.put(True)
+
+    def _handle_shutdown(self, signum, frame):
+        """Handle shutdown signals"""
+        logging.info(f"DataController received signal {signum}. Shutting down gracefully...")
+        self.stop()
+        logging.info("DataController shutdown complete.")

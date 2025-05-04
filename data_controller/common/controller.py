@@ -63,17 +63,56 @@ class Controller:
         
 
     def _handle_shutdown(self, signum, frame):
+        """Handle shutdown signals"""
         logging.info(f"Received signal {signum}. Shutting down gracefully...")
-        self.stop()
-        logging.info("Shutdown complete.")
+        try:
+            # First stop the data controller which will close its connections
+            if self.data_controller:
+                logging.info("Stopping DataController process...")
+                self.data_controller.terminate()
+                try:
+                    self.data_controller.join(timeout=5)  # Wait up to 5 seconds
+                    if self.data_controller.is_alive():
+                        logging.warning("DataController did not terminate gracefully, forcing...")
+                        self.data_controller.kill()
+                except Exception as e:
+                    logging.error(f"Error waiting for DataController to terminate: {e}")
+                logging.info("DataController process stopped")
+            
+            # Then stop all communicators
+            communicators = [
+                (self.movies_data_controller_communicator, "Movies"),
+                (self.credits_data_controller_communicator, "Credits"),
+                (self.ratings_data_controller_communicator, "Ratings")
+            ]
+            
+            for comm, name in communicators:
+                if comm:
+                    logging.info(f"Stopping {name} communicator process...")
+                    comm.terminate()
+                    try:
+                        comm.join(timeout=5)  # Wait up to 5 seconds
+                        if comm.is_alive():
+                            logging.warning(f"{name} communicator did not terminate gracefully, forcing...")
+                            comm.kill()
+                    except Exception as e:
+                        logging.error(f"Error waiting for {name} communicator to terminate: {e}")
+                    logging.info(f"{name} communicator process stopped")
+            
+            # Clear references
+            self.data_controller = None
+            self.movies_data_controller_communicator = None
+            self.credits_data_controller_communicator = None
+            self.ratings_data_controller_communicator = None
+            
+            logging.info("All processes stopped successfully")
+        except Exception as e:
+            logging.error(f"Error during shutdown: {e}")
+        finally:
+            logging.info("Shutdown complete.")
+            os._exit(0)  # Force exit after cleanup
 
-    
-    def stop(self): # TODO COMPLETE
-        if self.data_controller:
-            self.data_controller.terminate()
-            self.data_controller.join()
-            logging.info("DataController process terminated")
-        else:
-            logging.warning("No DataController process to terminate")
-        self.data_controller = None
+    def stop(self):
+        """Stop all processes gracefully"""
+        self._handle_shutdown(signal.SIGTERM, None)
     

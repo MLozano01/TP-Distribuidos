@@ -3,6 +3,8 @@ import logging
 from multiprocessing import Process
 from protocol.protocol import Protocol
 import time
+import threading
+import signal
 
 logging.getLogger("pika").setLevel(logging.ERROR)
 
@@ -23,7 +25,9 @@ class DataControllerCommunicator:
         self.type = type
 
         logger.info(f"Initialized {self.type} communicator with: {self.config['data_controller_replicas_count']} replicas count")
-
+        
+        # Setup signal handler for SIGTERM
+        signal.signal(signal.SIGTERM, self._handle_shutdown)
 
     def _settle_queues(self):
         """
@@ -119,3 +123,31 @@ class DataControllerCommunicator:
             self.comm_queue.put(True)
         else:
             logger.info(f"Data controller {self.type} ack number: {self.data_controllers_acked} received")
+
+    def stop(self):
+        """Stop the DataControllerCommunicator and close all connections"""
+        logging.info(f"Stopping {self.type} DataControllerCommunicator...")
+        
+        # Close queue communication 1 connection
+        if hasattr(self, 'queue_communication_1'):
+            try:
+                self.queue_communication_1.close_channel()
+                logging.info(f"{self.type} queue communication 1 channel closed")
+            except Exception as e:
+                logging.error(f"Error closing {self.type} queue communication 1 channel: {e}")
+        
+        # Close queue communication 2 connection
+        if hasattr(self, 'queue_communication_2'):
+            try:
+                self.queue_communication_2.close_channel()
+                logging.info(f"{self.type} queue communication 2 channel closed")
+            except Exception as e:
+                logging.error(f"Error closing {self.type} queue communication 2 channel: {e}")
+        
+        logging.info(f"{self.type} DataControllerCommunicator stopped successfully")
+
+    def _handle_shutdown(self, signum, frame):
+        """Handle shutdown signals"""
+        logger.info(f"{self.type} DataControllerCommunicator received signal {signum}. Shutting down gracefully...")
+        self.stop()
+        logger.info(f"{self.type} DataControllerCommunicator shutdown complete.")
