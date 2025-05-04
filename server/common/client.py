@@ -55,7 +55,7 @@ class Client:
 
     def _forward_to_data_controller(self, message):
         try:
-            self.forward_queue.publish(bytes(message))
+            self.forward_queue.publish(message)
         except Exception as e:
             logging.error(f"Failed to forward message to data controller: {e}")
 
