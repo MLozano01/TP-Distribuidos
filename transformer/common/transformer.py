@@ -82,9 +82,7 @@ class Transformer:
                     logging.error("Not all required RabbitMQ connections were initialized. Aborting start.")
                     return
                 
-                self.data_thread = threading.Thread(target=self.start_consuming, daemon=True)
-                self.data_thread.start()
-
+    
                 gets_the_finished = threading.Thread(target=self.manage_getting_finished, args=())
 
                 gets_the_finished_notification = threading.Thread(target=self.manage_getting_finished_notification, args=())
@@ -93,18 +91,15 @@ class Transformer:
                 gets_the_finished_notification.start()
 
                 self._initialize_sentiment_analyzer()
+                self.queue_rcv.consume(self.callback)
 
                 gets_the_finished.join()
                 gets_the_finished_notification.join()
-                self.data_thread.join()
 
         except Exception as e:
             logging.error(f"Failed to start Transformer: {e}", exc_info=True)
         finally:
             self.stop()
-
-    def start_consuming(self):
-        self.queue_rcv.consume(self.callback)
 
 
     def _initialize_sentiment_analyzer(self):

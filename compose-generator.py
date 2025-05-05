@@ -113,6 +113,7 @@ def create_client(id):
   client{id}:
     container_name: client{id}
     image: client:latest
+    profiles: [clients]
     environment:
       - CLI_ID={id}
     networks:

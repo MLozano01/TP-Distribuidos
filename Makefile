@@ -24,8 +24,16 @@ docker-image:
 .PHONY: docker-image
 
 docker-compose-up: docker-image
-	docker compose -f docker-compose.yaml up --build
+	docker compose --profile "*" -f docker-compose.yaml up --build
 .PHONY: docker-compose-up
+
+docker-compose-up-system:
+	docker compose -f docker-compose.yaml up --build -d
+.PHONY: docker-compose-up-system
+
+docker-compose-up-clients:
+	docker compose --profile clients -f docker-compose.yaml up -d
+.PHONY: docker-compose-up-clients
 
 docker-compose-down:
 	docker compose -f docker-compose.yaml stop -t 1
