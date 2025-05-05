@@ -15,8 +15,6 @@ class Reducer:
             setattr(self, key, value)
         self.is_alive = True
         self.partial_result = {}
-        self.received_finished_msg_amount = 0
-        logging.info(f"Expecting {self.expected_finished_msg_amount} finished messages based on config.")
 
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type)
@@ -39,21 +37,18 @@ class Reducer:
             msg = protocol.decode_movies_msg(bytes(data))
 
             if msg.finished:
-                self.received_finished_msg_amount += 1
-                logging.info(f"Finished msg ({self.received_finished_msg_amount}/{self.expected_finished_msg_amount}) received on query_id {self.query_id}")
-                if self.received_finished_msg_amount >= self.expected_finished_msg_amount:
-                    logging.info(f"ALL Finished msg received on query_id {self.query_id}")
-                    result = parse_final_result(self.reduce_by, self.partial_result)
-                    res_proto = protocol.create_result(result)
+                logging.info(f"ALL Finished msg received on query_id {self.query_id}")
+                result = parse_final_result(self.reduce_by, self.partial_result, msg.client_id)
+                res_proto = protocol.create_result(result)
 
-                    self.queue_snd.publish(res_proto)
+                self.queue_snd.publish(res_proto)
 
-                    res_decoded = protocol.decode_result(res_proto)
-                    logging.info(f"Final result: {res_decoded}")
+                res_decoded = protocol.decode_result(res_proto)
+                logging.info(f"Final result: {res_decoded}")
 
                 return
 
-            self.partial_result = parse_reduce_funct(data, self.reduce_by, self.partial_result)
+            self.partial_result = parse_reduce_funct(data, self.reduce_by, self.partial_result, msg.client_id)
 
         except json.JSONDecodeError as e:
             logging.error(f"Failed to decode JSON: {e}")

@@ -3,6 +3,7 @@ from common.aux import parse_filter_funct, movies_into_results
 import logging
 import json
 from protocol.protocol import Protocol, FileType
+from multiprocessing import Empty
 
 logging.getLogger("pika").setLevel(logging.ERROR)
 
@@ -53,7 +54,7 @@ class Filter:
             logging.error("Receiver queue not initialized. Filter cannot run.")
             return
         self.queue_rcv.consume(self.callback)
-        self._check_finished()
+        self._check_finished(None)
 
 
     def callback(self, ch, method, properties, body):
@@ -65,6 +66,9 @@ class Filter:
             logging.info("Received MOVIES finished signal from server on data channel.")
             self._publish_movie_finished_signal(decoded_msg)
             return
+        
+        self._check_finished(decoded_msg.client_id)
+
         self.filter(decoded_msg)
 
     def filter(self, decoded_msg):
@@ -162,9 +166,18 @@ class Filter:
 
         logging.info("FINISHED SENDING THE FINISH MESSAGE")
 
-    def _check_finished(self):
-        if self.comm_queue.get_nowait():
-            self.comm_queue.put(True)
+    def _check_finished(self, client_id):
+        if client_id:
+            try:
+                client_finished = self.comm_queue.get_nowait()
+                self.comm_queue.put(client_finished == client_id)
+                logging.info(f"Got finished for {client_finished} and working on {client_id}.")
+            except Empty:
+                pass
+        else:
+            if self.comm_queue.get_nowait():
+                self.comm_queue.put(True)
+                logging.info("Finished with everything.")
 
     def end_filter(self):
         """End the filter and close the queue."""

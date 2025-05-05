@@ -104,7 +104,13 @@ class FilterCommunicator:
         
         if decoded_msg.finished:
             logging.info("Received finished signal from other filter!!.")
-            self.queue_communication_2.publish(body)
+            self.comm_queue.put(decoded_msg.client_id)
+            is_finished = self.comm_queue.get()
+            if is_finished:
+                logging.info("Filter was done with the client!!.")
+                self.queue_communication_2.publish(body)
+            else:
+                raise Exception("Failed to send finished signal to other filter")
         return
     
     def other_callback(self, ch, method, properties, body):
