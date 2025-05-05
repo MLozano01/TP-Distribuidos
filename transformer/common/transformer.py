@@ -14,7 +14,7 @@ import time
 logging.getLogger("pika").setLevel(logging.ERROR)
 
 class Transformer:
-    def __init__(self, communication_config, **kwargs):
+    def __init__(self, comm_queue, **kwargs):
         self.sentiment_analyzer = None
         self.queue_rcv = None
         self.queue_snd = None
@@ -22,16 +22,9 @@ class Transformer:
         self._stop_event = threading.Event()
         self._finished_signal_received = False
         self._finished_message_body = None
-        self.buffered_movies = None
-        self.analyzer_ready = threading.Event()
-        self.rabbit_host = kwargs.get('rabbit_host', 'localhost')
-        self.comm_queue = None
+        self.comm_queue = comm_queue
         self.data_thread = None
 
-        self.communication_config = communication_config
-        self.queue_communication_1 = None
-        self.queue_communication_2 = None
-        self.transformers_acked = 0
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -72,34 +65,21 @@ class Transformer:
         """Start the Transformer with separate threads for data and control messages."""
         self._setup_signal_handlers()
         try:
-            with Manager() as manager:
-                comm_queue = Queue()
-                self.comm_queue = comm_queue
-                self._settle_queues()
-                self.buffered_movies = manager.list()
+            comm_queue = Queue()
+            self.comm_queue = comm_queue
+            self._settle_queues()
 
-                if not all([self.queue_rcv, self.queue_snd]):
-                    logging.error("Not all required RabbitMQ connections were initialized. Aborting start.")
-                    return
-                
-    
-                gets_the_finished = threading.Thread(target=self.manage_getting_finished, args=())
+            if not all([self.queue_rcv, self.queue_snd]):
+                logging.error("Not all required RabbitMQ connections were initialized. Aborting start.")
+                return
+            
 
-                gets_the_finished_notification = threading.Thread(target=self.manage_getting_finished_notification, args=())
-
-                gets_the_finished.start()
-                gets_the_finished_notification.start()
-
-                self._initialize_sentiment_analyzer()
-                self.queue_rcv.consume(self.callback)
-
-                gets_the_finished.join()
-                gets_the_finished_notification.join()
+            self._initialize_sentiment_analyzer()
+            self.queue_rcv.consume(self.callback)
 
         except Exception as e:
             logging.error(f"Failed to start Transformer: {e}", exc_info=True)
-        finally:
-            self.stop()
+        
 
 
     def _initialize_sentiment_analyzer(self):
@@ -110,7 +90,6 @@ class Transformer:
                 'sentiment-analysis',
                 model='distilbert-base-uncased-finetuned-sst-2-english',
             )
-            self.analyzer_ready.set()
             logging.info("Sentiment analysis model initialized successfully.")
         except Exception as e:
             logging.error(f"Failed to initialize sentiment analysis model: {e}", exc_info=True)
@@ -180,26 +159,6 @@ class Transformer:
             logging.error(f"Failed to send processed batch: {e}", exc_info=True)
 
 
-    def process_pending(self):
-        logging.info(f"Processing pending movies batches: {len(self.buffered_movies)}")
-        if not self.analyzer_ready.is_set():
-            logging.info("Waiting for analyzer")
-            self.analyzer_ready.wait()
-        logging.info("Starting buffer processing")
-        for movie_batch in self.buffered_movies:
-            batch = self.protocol.decode_movies_msg(movie_batch)
-            processed_movies_list = []
-            for movie in batch.movies:
-                processed_movie = self._process_movie(movie)
-                if processed_movie:
-                    processed_movies_list.append(processed_movie)
-
-            if not processed_movies_list:
-                logging.info("No valid movies found in batch. Skipping send.")
-            else:
-                self._send_processed_batch(processed_movies_list)
-        self.buffered_movies[:] = []
-
     def _publish_movie_finished_signal(self, msg):
         self.comm_queue.put(msg.SerializeToString())
         logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
@@ -225,10 +184,6 @@ class Transformer:
         try:
             if not incoming_movies_msg or not incoming_movies_msg.movies:
                 logging.warning("Received empty or invalid Protobuf movies batch structure. Skipping.")
-                return
-            if not self.sentiment_analyzer:
-                logging.info("Buffering batch")
-                self.buffered_movies.append(incoming_movies_msg.SerializeToString())
                 return
             logging.info("processing batch")
             processed_movies_list = []
@@ -267,73 +222,3 @@ class Transformer:
             if self.data_thread and self.data_thread.is_alive():
                 self.data_thread.terminate()
             logging.info("Transformer Stopped")
-
-
-
-    ## comunication section:
-    def manage_getting_finished(self):
-        """
-        Manage the inner communication between transformers.
-        """
-        try:
-
-            data = self.comm_queue.get()
-
-            logging.info(f"Received finished signal from transformer")
-
-            consume_process = Process(target=self._manage_consume_pika, args=())
-            consume_process.start()
-
-            time.sleep(0.5)  # Ensure the consumer is ready before publishing
-
-            comm_queue_1 = self._create_comm_queue(1)
-            comm_queue_1.publish(data)
-            consume_process.join()
-
-            
-            logging.info("Finished acking the other transformers")
-
-        except Exception as e:
-            logging.error(f"Error in managing inner communication: {e}")
-            self.comm_queue.put(False)
-    def _manage_consume_pika(self):
-        consumer_queue = self._create_comm_queue(2)
-        consumer_queue.consume(self.other_callback)
-        logging.info("Finished acking the other transformers")
-
-
-    def manage_getting_finished_notification(self):
-        """
-        Manage the communication between different transformers.
-        """
-        try: 
-            consumer_queue = self._create_comm_queue(1)
-            consumer_queue.consume(self.callback_comm)
-        except Exception as e:
-            logging.error(f"Error in managing inner communication: {e}")
-
-    def callback_comm(self, ch, method, properties, body):
-        """
-        Callback function to process incoming messages.
-        """
-        logging.info(f"Received message on communication channel with routing key: {method.routing_key}")
-        decoded_msg = self.protocol.decode_movies_msg(body)
-        
-        if decoded_msg.finished:
-            logging.info("Received finished signal from other transformer!!.")
-            self.process_pending()
-            consumer_queue = self._create_comm_queue(2)
-            consumer_queue.publish(body)
-        return
-    
-    def other_callback(self, ch, method, properties, body):
-        """
-        Callback function to process incoming messages.
-        """
-        logging.info("RECEIVED A TRANSFORMER ACK")
-        self.transformers_acked += 1
-        if self.transformers_acked == self.communication_config["transformer_replicas_count"]:
-            logging.info("All transformers acked")
-            self.comm_queue.put(True)
-        else:
-            logging.info(f"Transformer {self.transformers_acked} acked")
