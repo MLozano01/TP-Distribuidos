@@ -179,6 +179,7 @@ message Result {
 message ResultBatch {
   int32 query_id = 1;
   repeated Result result_row = 2;
+  int32 client_id = 3;
 }
 
 // [END] ResultBatch messages
