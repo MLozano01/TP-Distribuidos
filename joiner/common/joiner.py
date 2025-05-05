@@ -31,7 +31,6 @@ class Joiner:
         # RabbitMQ Connections
         self.movies_consumer = None
         self.other_consumer = None
-        self.movies_control_consumer = None # Listens for Movies signal from Filter
         self.output_producer = None
 
         # Stop event for graceful shutdown
@@ -71,14 +70,6 @@ class Joiner:
                 routing_key=consistent_hash_binding_key # Use fixed weight "1"
                 # durable=True by default
             )
-            # Movies Control Consumer (Fanout Queue for MOVIES finished signal from Filter)
-            self.movies_control_consumer = RabbitMQConsumer(
-                 host=host,
-                 exchange="filter_arg_step_finished",
-                 exchange_type="fanout",
-                 queue_name=None,
-                 routing_key=''
-            )
 
             # --- Producer ---
             self.output_producer = RabbitMQProducer(
@@ -104,7 +95,6 @@ class Joiner:
 
             # Check if connections were successfully settled
             if not all([self.movies_consumer, self.other_consumer, 
-                        self.movies_control_consumer, 
                         self.output_producer]):
                  logging.error("Not all required RabbitMQ connections were initialized. Aborting start.")
                  return
@@ -113,13 +103,11 @@ class Joiner:
             # Note: auto_ack=True used as requested
             self.movies_consumer.consume(self._process_movie_message, auto_ack=True)
             self.other_consumer.consume(self._process_other_message, auto_ack=True)
-            self.movies_control_consumer.consume(self._process_movies_control_signal, auto_ack=True)
 
             # Start consumers in separate threads by calling start_consuming
             threads = []
             threads.append(threading.Thread(target=self.movies_consumer.start_consuming, daemon=True))
             threads.append(threading.Thread(target=self.other_consumer.start_consuming, daemon=True))
-            threads.append(threading.Thread(target=self.movies_control_consumer.start_consuming, daemon=True))
 
             for t in threads:
                 t.start()
@@ -142,12 +130,22 @@ class Joiner:
         if self._stop_event.is_set(): return
         try:
             movies_msg = self.protocol.decode_movies_msg(body)
-            if not movies_msg or not movies_msg.movies:
-                logging.warning("Received empty or invalid movie batch.")
+
+            if not movies_msg or not movies_msg.client_id:
+                logging.warning("Received empty or invalid movie message.")
+                return
+
+            client_id = movies_msg.client_id
+            # Handle finished signal
+            if movies_msg.finished:
+                self._handle_movies_finished_signal(client_id)
+                return
+            
+            if not movies_msg.movies:
+                logging.warning("Received empty movie batch.")
                 return
 
             with self._lock:
-                client_id = movies_msg.client_id
                 if client_id not in self.movies_buffer:
                     self.movies_buffer[client_id] = {}
                 
@@ -471,52 +469,22 @@ class Joiner:
 
             logging.info("Joiner Stopped")
 
-    def _process_movies_control_signal(self, ch, method, properties, body):
-        """Callback for the MOVIE control channel (from Filter). Expects full message."""
-        if self._stop_event.is_set(): return
-        processed_signal = False
-        log_msg = ""
-        trigger_processing = False
-        try:
-            if not body or len(body) < (CODE_LENGTH + INT_LENGTH):
-                logging.warning(f"Received invalid message on movie control channel (too short): {len(body)} bytes")
-                return
-            
-            # Extract payload and decode as MoviesCSV
-            # We assume the filter correctly sends only movie signals here
-            protobuf_payload = body[CODE_LENGTH + INT_LENGTH:]
-            decoded_msg = self.protocol.decode_movies_msg(protobuf_payload)
-
-            if not decoded_msg:
-                logging.error("Failed to decode movies message from control channel")
-                return
-
-            client_id = decoded_msg.client_id
-            if decoded_msg.finished:
-                with self._lock:
-                    if client_id not in self.movies_eof_received:
-                        self.movies_eof_received.add(client_id)
-                        processed_signal = True
-                        log_msg = f"Processed MOVIES finished signal for client {client_id} via movie control channel."
-                        # Check if other stream finished for this client
-                        if client_id in self.other_eof_received:
-                            trigger_processing = True
-                    else:
-                        log_msg = f"Duplicate MOVIES finished signal for client {client_id} via movie control channel."
+    def _handle_movies_finished_signal(self, client_id):
+        """Helper method to handle movies finished signal."""
+        should_trigger_processing = False
+        with self._lock:
+            if client_id not in self.movies_eof_received:
+                self.movies_eof_received.add(client_id)
+                logging.info(f"Processed MOVIES finished signal for client {client_id}.")
+                if client_id in self.other_eof_received:
+                    should_trigger_processing = True
             else:
-                log_msg = f"Unexpected non-finished message on movie control channel for client {client_id}."
+                logging.info(f"Duplicate MOVIES finished signal for client {client_id}.")
 
-            # Log outcome
-            if processed_signal: logging.info(log_msg)
-            else: logging.info(log_msg)
+        if should_trigger_processing:
+            logging.info(f"Both EOF signals received for client {client_id}. Triggering final processing.")
+            self._trigger_final_processing(client_id)
 
-            # Trigger outside lock if needed
-            if trigger_processing:
-                logging.warning(f"Both EOF signals received for client {client_id}. Triggering final processing.")
-                self._trigger_final_processing(client_id)
-
-        except Exception as e:
-            logging.error(f"Error processing movie control signal: {e}", exc_info=True)
 
     def _trigger_final_processing(self, client_id):
         if self.other_data_type == "RATINGS":

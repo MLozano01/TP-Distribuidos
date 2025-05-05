@@ -16,7 +16,6 @@ class Filter:
         self.queue_snd_movies_to_ratings_joiner = None
         self.queue_snd_movies_to_credits_joiner = None
         self.queue_snd_movies = None  # For publishing movies data
-        self.finished_filter_arg_step_publisher = None # for notifying joiners
         self.comm_queue = comm_queue
 
         for key, value in kwargs.items():
@@ -34,13 +33,8 @@ class Filter:
 
         # Setup DATA sender(s) based on publish_to_joiners flag
         if self.publish_to_joiners:
-            self.queue_snd_movies_to_ratings_joiner = RabbitMQ(self.exchange_snd_ratings, None, None, self.exc_snd_type_ratings)
-            logging.info(f"Initialized ratings sender: exchange={self.queue_snd_movies_to_ratings_joiner.exchange}, type={self.queue_snd_movies_to_ratings_joiner.exc_type}")
-
-            self.queue_snd_movies_to_credits_joiner = RabbitMQ(self.exchange_snd_credits, None, None, self.exc_snd_type_credits)
-            logging.info(f"Initialized credits sender: exchange={self.queue_snd_movies_to_credits_joiner.exchange}, type={self.queue_snd_movies_to_credits_joiner.exc_type}")
-
-            self.finished_filter_arg_step_publisher = RabbitMQ("filter_arg_step_finished", None, "", "fanout")
+            self.queue_snd_movies_to_ratings_joiner = RabbitMQ(self.exchange_snd_ratings, None, "", self.exc_snd_type_ratings)
+            self.queue_snd_movies_to_credits_joiner = RabbitMQ(self.exchange_snd_credits, None, "", self.exc_snd_type_credits)
 
         else:
             self.queue_snd_movies = RabbitMQ(self.exchange_snd, self.queue_snd_name, self.routing_snd_key, self.exc_snd_type)
@@ -151,8 +145,9 @@ class Filter:
         if self.comm_queue.get() == True:
             logging.info("Received SEND finished signal from communication channel.")
             if self.publish_to_joiners:
-                self.finished_filter_arg_step_publisher.publish(self.protocol.create_finished_message(FileType.MOVIES, msg.client_id))
-                logging.info(f"Published movie finished signal to {self.finished_filter_arg_step_publisher.exchange}")
+                self.queue_snd_movies_to_ratings_joiner.publish(self.protocol.create_movie_finished_msg(msg.client_id))
+                self.queue_snd_movies_to_credits_joiner.publish(self.protocol.create_movie_finished_msg(msg.client_id))
+                logging.info(f"Published movie finished signal for client {msg.client_id} to both joiners.")
             else:
                 msg_to_send = msg.SerializeToString()
                 if self.queue_snd_movies.key == "results":
