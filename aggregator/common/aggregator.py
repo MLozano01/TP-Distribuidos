@@ -5,7 +5,7 @@ import logging
 from protocol.protocol import Protocol
 
 logging.getLogger("pika").setLevel(logging.ERROR)
-logging.getLogger("RabbitMQ").setLevel(logging.DEBUG)
+logging.getLogger("RabbitMQ").setLevel(logging.ERROR)
 class Aggregator:
     def __init__(self, comm_queue, **kwargs):
         self.queue_rcv = None

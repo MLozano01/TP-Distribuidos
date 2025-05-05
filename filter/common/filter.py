@@ -5,7 +5,7 @@ import json
 from protocol.protocol import Protocol, FileType
 
 logging.getLogger("pika").setLevel(logging.ERROR)
-logging.getLogger("RabbitMQ").setLevel(logging.DEBUG)
+logging.getLogger("RabbitMQ").setLevel(logging.ERROR)
 
 
 

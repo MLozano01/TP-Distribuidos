@@ -367,6 +367,18 @@ class Protocol:
     message.extend(len_msg.to_bytes(INT_LENGTH, byteorder='big'))
     message.extend(data)
     return message
+  
+  def create_movie_finished_msg(self, client_id):
+    movies_pb = files_pb2.MoviesCSV()
+    movies_pb.finished = True
+    movies_pb.client_id = client_id
+    return movies_pb.SerializeToString()
+  
+  def create_actor_participations_finished_msg(self, client_id):
+    actor_participations_pb = files_pb2.ActorParticipationsBatch()
+    actor_participations_pb.finished = True
+    actor_participations_pb.client_id = client_id
+    return actor_participations_pb.SerializeToString()
 
   def create_movie_list(self, movies, client_id):
     movies_pb = files_pb2.MoviesCSV()

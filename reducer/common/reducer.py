@@ -37,7 +37,7 @@ class Reducer:
         try:
             protocol = Protocol()
 
-            msg = protocol.decode_movies_msg(bytes(data))
+            msg = protocol.decode_movies_msg(data)
 
             if msg.finished:
                 self.received_finished_msg_amount += 1

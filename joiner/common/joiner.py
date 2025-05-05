@@ -292,7 +292,11 @@ class Joiner:
                 self._send_movie_batch(processed_movies_batch, client_id)
                 total_movies_sent += len(processed_movies_batch)
                 processed_movies_batch.clear()
-            # --- End Batching Modification ---
+
+            # Send finished message after all batches   
+            logging.info(f"Sending finished message for client {client_id} after processing {total_movies_sent} movies")
+            finished_msg = self.protocol.create_movie_finished_msg(client_id)
+            self.output_producer.publish(finished_msg)
 
             # Cleanup processed movies/ratings for this client
             for mid in joined_ids:
@@ -360,6 +364,11 @@ class Joiner:
                 self._send_actor_participations_batch(participations_batch, client_id)
                 total_participations_sent += len(participations_batch)
                 participations_batch.clear()
+
+            # Send finished message after all batches
+            logging.info(f"Sending finished message for client {client_id} after processing {total_participations_sent} participations")
+            finished_msg = self.protocol.create_actor_participations_finished_msg(client_id)
+            self.output_producer.publish(finished_msg)
 
             # Cleanup processed movies/credits for this client
             for mid in processed_movie_ids:
