@@ -4,6 +4,7 @@ import logging
 
 def filter_movies(movies_csv):
     movies_pb = files_pb2.MoviesCSV()
+    movies_pb.client_id = movies_csv.client_id
     for movie in movies_csv.movies:
         if not movie.id or movie.id < 0 or not movie.release_date:
             continue
@@ -45,11 +46,10 @@ def filter_ratings(ratings_csv):
         rating_pb.rating = rating.rating
 
         ratings_pb = ratings_by_movie.setdefault(rating.movieId, files_pb2.RatingsCSV())
-        # ratings_pb = ratings_by_movie[rating.movieId]
+        ratings_pb.client_id = ratings_csv.client_id
         ratings_pb.ratings.append(rating_pb)
-        # ratings_by_movie[rating.movieId] = ratings_pb
 
-    logging.info(f"Filtered {filtered_out} out of {total_ratings} ratings. Remaining: {len(ratings_by_movie)}")
+    logging.debug(f"Filtered {filtered_out} out of {total_ratings} ratings. Remaining: {len(ratings_by_movie)}")
     return ratings_by_movie
 
 def filter_credits(credits_csv):
@@ -72,9 +72,8 @@ def filter_credits(credits_csv):
             cast_pb.name = name
 
         credits_pb = credits_by_movie.setdefault(credit.id, files_pb2.CreditsCSV())
-        # credits_pb = credits_by_movie[credit.id]
+        credits_pb.client_id = credits_csv.client_id
         credits_pb.credits.append(credit_pb)
-        # credits_by_movie[credit.id] = credits_pb
 
-    logging.info(f"Filtered {filtered_out} out of {total_credits} credits. Remaining: {len(credits_by_movie)}")
+    logging.debug(f"Filtered {filtered_out} out of {total_credits} credits. Remaining: {len(credits_by_movie)}")
     return credits_by_movie 

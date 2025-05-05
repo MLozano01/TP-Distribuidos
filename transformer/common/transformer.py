@@ -184,14 +184,14 @@ class Transformer:
         movie.rate_revenue_budget = self._calculate_rate(movie.revenue, movie.budget)
         return movie
 
-    def _send_processed_batch(self, processed_movies):
+    def _send_processed_batch(self, processed_movies, client_id):
         """Creates the outgoing MoviesCSV message and publishes it."""
         if not processed_movies:
             logging.debug("No movies suitable for sending after processing and filtering.")
             return
 
         try:
-            outgoing_movies_msg = self.protocol.create_movie_list(processed_movies)
+            outgoing_movies_msg = self.protocol.create_movie_list(processed_movies, client_id)
             logging.debug(f"Sending {len(processed_movies)} processed movies")
             self.queue_snd.publish(outgoing_movies_msg)
             logging.info(f"Successfully SENT batch of {len(processed_movies)} movies to exchange '{self.queue_snd.exchange}' with key '{self.queue_snd.default_routing_key}'")
@@ -256,7 +256,7 @@ class Transformer:
             if not processed_movies_list:
                 logging.info(f"No valid movies found in batch (delivery_tag: {method.delivery_tag}). Skipping send.")
             else:
-                self._send_processed_batch(processed_movies_list)
+                self._send_processed_batch(processed_movies_list, incoming_movies_msg.client_id)
 
 
         except Exception as e:

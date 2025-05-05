@@ -6,8 +6,9 @@ from protocol.rabbit_protocol import RabbitMQ
 from protocol.utils.socket_utils import recvall
 
 class Client:
-    def __init__(self, client_sock):
+    def __init__(self, client_sock, client_id):
         self.socket = client_sock
+        self.client_id = client_id
         self.protocol = Protocol()
         self.data_controller = None
         self.result_controller = None
@@ -55,7 +56,9 @@ class Client:
 
     def _forward_to_data_controller(self, message):
         try:
-            self.forward_queue.publish(message)
+            # Add client ID to the message
+            message_with_client_id = self.protocol.add_client_id(message, self.client_id)
+            self.forward_queue.publish(message_with_client_id)
         except Exception as e:
             logging.error(f"Failed to forward message to data controller: {e}")
 

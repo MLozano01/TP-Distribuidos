@@ -6,6 +6,7 @@ from protocol.protocol import Protocol, FileType
 from multiprocessing import Empty
 
 logging.getLogger("pika").setLevel(logging.ERROR)
+logging.getLogger("RabbitMQ").setLevel(logging.ERROR)
 
 
 
@@ -59,7 +60,7 @@ class Filter:
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
-        logging.info(f"Received message, with routing key: {method.routing_key}")
+        logging.debug(f"Received message, with routing key: {method.routing_key}")
         decoded_msg = self.protocol.decode_movies_msg(body)
             
         if decoded_msg.finished:
@@ -74,21 +75,20 @@ class Filter:
     def filter(self, decoded_msg):
         try:
             result = parse_filter_funct(decoded_msg, self.filter_by)
-            
+            client_id = decoded_msg.client_id
             if result:
                 if self.publish_to_joiners:
-                    self._publish_individually_by_movie_id(result, self.protocol)
+                    self._publish_individually_by_movie_id(result, client_id)
                 else:
                     if hasattr(self, 'queue_snd_movies') and self.queue_snd_movies:
                             logging.info(f"Publishing batch of {len(result)} filtered messages with routing key: '{self.queue_snd_movies.key}' to exchange '{self.queue_snd_movies.exchange}' ({self.queue_snd_movies.exc_type}).")
                             if self.queue_snd_movies.key == "results":
-
                                 movies_res = movies_into_results(result)
                                 res = self.protocol.create_result(movies_res)
                                 self.queue_snd_movies.publish(res)
                                 return
 
-                            self.queue_snd_movies.publish(self.protocol.create_movie_list(result))
+                            self.queue_snd_movies.publish(self.protocol.create_movie_list(result, client_id))
                     else:
                             logging.error("Single sender queue not initialized for non-sharded publish.")
             else:
@@ -98,7 +98,7 @@ class Filter:
             logging.error(f"Error processing message: {e}")
             return
 
-    def _publish_individually_by_movie_id(self, result_list, protocol):
+    def _publish_individually_by_movie_id(self, result_list, client_id):
         """Helper function to publish filtered movies individually to BOTH exchanges."""
         # Check if both senders were initialized successfully using correct attribute names
         if not hasattr(self, 'queue_snd_movies_to_ratings_joiner') or not self.queue_snd_movies_to_ratings_joiner or \
@@ -117,7 +117,7 @@ class Filter:
                     logging.warning(f"Skipping movie with missing ID: {movie.title}")
                     continue
 
-                single_movie_batch_bytes = protocol.create_movie_list([movie])
+                single_movie_batch_bytes = self.protocol.create_movie_list([movie], client_id)
                 pub_routing_key = str(movie.id) # Explicit routing key
 
                 published_to_ratings = False
@@ -155,7 +155,7 @@ class Filter:
         if self.comm_queue.get() == True:
             logging.info("Received SEND finished signal from communication channel.")
             if self.publish_to_joiners:
-                self.finished_filter_arg_step_publisher.publish(self.protocol.create_finished_message(FileType.MOVIES))
+                self.finished_filter_arg_step_publisher.publish(self.protocol.create_finished_message(FileType.MOVIES, msg.client_id))
                 logging.info(f"Published movie finished signal to {self.finished_filter_arg_step_publisher.exchange}")
             else:
                 msg_to_send = msg.SerializeToString()

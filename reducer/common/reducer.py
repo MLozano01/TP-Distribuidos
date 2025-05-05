@@ -5,7 +5,8 @@ import logging
 import json
 from protocol.protocol import Protocol
 
-logging.getLogger("pika").setLevel(logging.ERROR)
+logging.getLogger("pika").setLevel(logging.ERROR)   
+logging.getLogger("RabbitMQ").setLevel(logging.DEBUG)
 
 class Reducer:
     def __init__(self, **kwargs):
@@ -27,14 +28,14 @@ class Reducer:
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
-        logging.info(f"Received message, with routing key: {method.routing_key}")
+        logging.debug(f"Received message, with routing key: {method.routing_key}")
         self.reducer(body)
 
     def reducer(self, data):
         try:
             protocol = Protocol()
 
-            msg = protocol.decode_movies_msg(bytes(data))
+            msg = protocol.decode_movies_msg(data)
 
             if msg.finished:
                 logging.info(f"ALL Finished msg received on query_id {self.query_id}")
