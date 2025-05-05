@@ -72,7 +72,7 @@ def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replica
     network = create_network()
     rabbit = create_rabbit()
     filters = write_filters(f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas)
-    transformer = create_transformer(transformer_replicas)
+    transformer = create_transformers(transformer_replicas)
     aggregator = create_aggregators(aggr_sent_replicas, aggr_budget_replicas)
     reducer = create_reducer()
     
@@ -120,6 +120,7 @@ def create_client(id):
   client{id}:
     container_name: client{id}
     image: client:latest
+    profiles: [clients]
     environment:
       - CLI_ID={id}
     networks:
@@ -288,9 +289,18 @@ def create_aggregator(name, file, id, replicas=1):
 
   return aggr_cont
 
-def create_transformer(replicas=1):
+def create_transformers(replicas):
+    transformers = ""
+    for i in range(1, replicas + 1):
+        transformers += create_transformer(i, replicas)
+    
+    return transformers
+
+def create_transformer(id, replicas=1):
+    transformer_name = f"transformer-{id}"
     transformer_yaml = f"""
-  transformer:
+  {transformer_name}:
+    container_name: {transformer_name}
     image: transformer:latest
     networks:
       - {NETWORK_NAME}
@@ -302,18 +312,10 @@ def create_transformer(replicas=1):
       - rabbitmq
     volumes:
       - ./transformer/{CONFIG_FILE}:/{CONFIG_FILE}
+    environment:
+      - TRANSFORMER_REPLICA_ID={id}
+      - TRANSFORMER_REPLICAS_COUNT={replicas}
     """
-
-    if replicas > 1:
-        transformer_yaml += f"""deploy:
-      replicas: {replicas}
-    """
-    # If replicas is 1, add back the container_name
-    else: # Handles replicas == 1 case
-         lines = transformer_yaml.strip().split('\n')
-         lines.insert(1, f"    container_name: transformer")
-         transformer_yaml = "\n".join(lines) + "\n"
-
     return transformer_yaml
 
 def create_joiner(service_base_name, replica_id, total_replicas, config_source_path):
