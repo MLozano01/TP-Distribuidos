@@ -1,7 +1,9 @@
-
 import socket
 import logging
 from common.client import Client
+
+logging.getLogger('pika').setLevel(logging.WARNING)
+logging.getLogger('RabbitMQ').setLevel(logging.WARNING)
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -10,17 +12,19 @@ class Server:
         self.socket.listen(listen_backlog)
         self.running = True
         self.clients = []
+        self.next_client_id = 1
 
     def run(self):
-
         while self.running:
             try:
                 conn, addr = self.socket.accept()
                 logging.info(f"Connection accepted from {addr}")
                 
-                client = Client(conn)
+                client = Client(conn, self.next_client_id)
+                self.next_client_id += 1
+                
                 self.clients.append(client)
-                logging.info(f"Client added")
+                logging.info(f"Client {client.client_id} added")
                 client.run()
                 
             except Exception as e:

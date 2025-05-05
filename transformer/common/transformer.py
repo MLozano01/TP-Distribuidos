@@ -9,7 +9,8 @@ from protocol.rabbit_protocol import RabbitMQ
 from protocol.utils.parsing_proto_utils import *
 from protocol.protocol import Protocol
 from protocol.rabbit_wrapper import RabbitMQConsumer, RabbitMQProducer
-import time
+
+logging.getLogger('pika').setLevel(logging.WARNING)
 
 logging.getLogger("pika").setLevel(logging.ERROR)
 
@@ -144,14 +145,14 @@ class Transformer:
         movie.rate_revenue_budget = self._calculate_rate(movie.revenue, movie.budget)
         return movie
 
-    def _send_processed_batch(self, processed_movies):
+    def _send_processed_batch(self, processed_movies, client_id):
         """Creates the outgoing MoviesCSV message and publishes it."""
         if not processed_movies:
             logging.debug("No movies suitable for sending after processing and filtering.")
             return
 
         try:
-            outgoing_movies_msg = self.protocol.create_movie_list(processed_movies)
+            outgoing_movies_msg = self.protocol.create_movie_list(processed_movies, client_id)
             logging.debug(f"Sending {len(processed_movies)} processed movies")
             self.queue_snd.publish(outgoing_movies_msg)
             logging.info(f"Successfully SENT batch of {len(processed_movies)} movies to exchange '{self.queue_snd.exchange}'")
@@ -195,8 +196,8 @@ class Transformer:
             if not processed_movies_list:
                 logging.info(f"No valid movies found in batch. Skipping send.")
             else:
-                self._send_processed_batch(processed_movies_list)
-            
+                self._send_processed_batch(processed_movies_list, incoming_movies_msg.client_id)
+
 
         except Exception as e:
             logging.error(f"Error processing message batch: {e}", exc_info=True)

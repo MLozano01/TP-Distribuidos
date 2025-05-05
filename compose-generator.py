@@ -45,9 +45,9 @@ FILTER_SINGLE_COUNTRY_REPLICAS = 8
 FILTER_DECADE_REPLICAS = 9
 AGGR_SENT_REPLICAS = 10
 AGGR_BUDGET_REPLICAS = 11
+DATA_CONTROLLER_REPLICAS = 12
 
-
-def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas):
+def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas, data_controller_replicas):
     # Check for joiner config files existence
     required_joiner_configs = [JOINER_RATINGS_CONFIG_SOURCE, JOINER_CREDITS_CONFIG_SOURCE]
     for config_path in required_joiner_configs:
@@ -56,16 +56,17 @@ def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_re
             sys.exit(1)
 
     with open(FILE_NAME, 'w') as f:
-        f.write(create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas))
+        f.write(create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas, data_controller_replicas))
 
 
-def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas):
+def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas, data_controller_replicas):
     print(f"Creating:")
     print(f"  Clients: {client_amount}")
     print(f"  Transformers: {transformer_replicas}")
     print(f"  Joiners: {joiner_ratings_replicas} (ratings) - {joiner_credits_replicas} (credits)")
     print(f"  Filters: {f_2000_replicas} (2000) - {f_arg_spa_replicas} (arg/spa) - {f_arg} (arg) - {f_single_country_replicas} (1 country) - {f_decade_replicas} (decade)")
     print(f"  Aggregators: {aggr_sent_replicas} (sent) - {aggr_budget_replicas} (budget)")
+    print(f"  Data controllers: {data_controller_replicas}")
     clients = join_clients(client_amount)
     server = create_server(client_amount)
     network = create_network()
@@ -75,6 +76,11 @@ def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replica
     aggregator = create_aggregators(aggr_sent_replicas, aggr_budget_replicas)
     reducer = create_reducer()
     
+    # Create data controller services
+    data_controller_services = ""
+    for i in range(1, data_controller_replicas + 1):
+        data_controller_services += create_data_controller(i, data_controller_replicas)
+
     # Loop to create multiple joiner services
     joiner_ratings_services = ""
     for i in range(1, joiner_ratings_replicas + 1):
@@ -91,6 +97,7 @@ services:
   {clients}
   {server}
   {filters}
+  {data_controller_services}
   {transformer}
   {aggregator}
   {reducer}
@@ -187,7 +194,7 @@ def create_rabbit():
     return rabbit
 
 def write_filters(filter_2000=1, filter_arg_spa=1, filter_arg=1, filter_single_country=1, filter_decade=1):
-    
+
     filters = ""
 
     for i in range(1, filter_2000 + 1):
@@ -204,9 +211,9 @@ def write_filters(filter_2000=1, filter_arg_spa=1, filter_arg=1, filter_single_c
     return filters
 
 def create_filter(filter_name, filter_replica, filter_path, replica_count):
-    
+
     filter_name = f"{filter_name}-{filter_replica}"
-    
+
     filter_cont = f"""
   {filter_name}:
     container_name: {filter_name}
@@ -256,7 +263,7 @@ def create_aggregators(replicas_sent, replicas_budget):
         aggregators += create_aggregator("aggregator_sent", AGGR_SENT_BY_REV, i, replicas_sent)
     for i in range(1, replicas_budget + 1):
         aggregators += create_aggregator("aggregator_budget", AGGR_COUNTRY_BUDGET, i, replicas_budget)
-    
+
     return aggregators
 
 def create_aggregator(name, file, id, replicas=1):
@@ -337,26 +344,53 @@ def create_joiner(service_base_name, replica_id, total_replicas, config_source_p
     """
     return joiner_yaml
 
+def create_data_controller(replica_id, total_replicas):
+    """Creates a unique data controller service definition for docker compose up."""
+    service_name = f"data-controller-{replica_id}"
+    container_name = service_name
+
+    data_controller_yaml = f"""
+  {service_name}:
+    container_name: {container_name}
+    image: data-controller:latest
+    networks:
+      - {NETWORK_NAME}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./data_controller/{CONFIG_FILE}:/{CONFIG_FILE}
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATA_CONTROLLER_REPLICA_ID={replica_id}
+      - DATA_CONTROLLER_REPLICA_COUNT={total_replicas}
+    """
+    return data_controller_yaml
+
 def parse_args(args, arg_to_parse):
     if len(args) <= arg_to_parse:
       return 1
+
     try:
         replicas = int(args[arg_to_parse])
         if replicas < 1:
             print("Argument must be 1 or greater.")
             sys.exit(1)
-        
+
     except ValueError:
         print("Argument must be an integer.")
         sys.exit(1)
-    
+
     return replicas
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python compose-generator.py <client_amount> [transformer_replicas] [joiner_ratings_replicas] [joiner_credits_replicas]")
+        print("Usage: python compose-generator.py <client_amount> [transformer_replicas] [joiner_ratings_replicas] [joiner_credits_replicas] [filter_2000_replicas] [filter_arg_spa_replicas] [filter_arg_replicas] [filter_single_country_replicas] [filter_decade_replicas] [aggr_sent_replicas] [aggr_budget_replicas] [data_controller_replicas]")
         sys.exit(1)
-    
+
     client_amount = parse_args(sys.argv, CLIENT_AMOUNT)
     transformer_replicas = parse_args(sys.argv, TRANSFORMER_REPLICAS)
     joiner_ratings_replicas = parse_args(sys.argv, JOINER_RATINGS_REPLICAS)
@@ -368,8 +402,9 @@ def main():
     f_decade_replicas = parse_args(sys.argv, FILTER_DECADE_REPLICAS)
     aggr_sent_replicas = parse_args(sys.argv, AGGR_SENT_REPLICAS)
     aggr_budget_replicas = parse_args(sys.argv, AGGR_BUDGET_REPLICAS)
+    data_controller_replicas = parse_args(sys.argv, DATA_CONTROLLER_REPLICAS)
 
-    docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas)
+    docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas, data_controller_replicas)
 
 
 if __name__ == "__main__":
