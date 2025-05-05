@@ -21,7 +21,11 @@ class AggregatorCommunicator:
         self.protocol = Protocol()
         self.aggr_acked = 0
 
-
+    def _create_comm_queue(self, number):
+        name = self.config["queue_communication_name"] + f"_{number}"
+        key = self.config["routing_communication_key"] + f"_{number}"
+        return RabbitMQ(self.config["exchange_communication"], name, key, self.config["exc_communication_type"])
+     
     def _settle_queues(self):
         """
         Initialize the communication queues based on the configuration.
@@ -69,7 +73,8 @@ class AggregatorCommunicator:
 
             time.sleep(0.5)  # Ensure the consumer is ready before publishing
 
-            self.queue_communication_1.publish(data)
+            comm_queue_1 = self._create_comm_queue(1)
+            comm_queue_1.publish(data)
             consume_process.join()
 
             
@@ -104,7 +109,8 @@ class AggregatorCommunicator:
         
         if decoded_msg.finished:
             logging.info("Received finished signal from other aggregator!!.")
-            self.queue_communication_2.publish(body)
+            comm_queue_2 = self._create_comm_queue(2)
+            comm_queue_2.publish(body)
         return
     
     def other_callback(self, ch, method, properties, body):

@@ -44,18 +44,15 @@ class Transformer:
         self.stop()
         logging.info("Shutdown complete.")
 
+    def _create_comm_queue(self, number):
+        name = self.communication_config["queue_communication_name"] + f"_{number}"
+        key = self.communication_config["routing_communication_key"] + f"_{number}"
+        return RabbitMQ(self.communication_config["exchange_communication"], name, key, self.communication_config["exc_communication_type"])
+        
 
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type)
         self.queue_snd = RabbitMQ(self.exchange_snd, self.queue_snd_name, self.routing_snd_key, self.exc_snd_type)
-        
-
-        name_one = self.communication_config["queue_communication_name"] + "_1"
-        name_two = self.communication_config["queue_communication_name"] + "_2"
-        key_one = self.communication_config["routing_communication_key"] + "_1"
-        key_two = self.communication_config["routing_communication_key"] + "_2"
-        self.queue_communication_1 = RabbitMQ(self.communication_config["exchange_communication"], name_one, key_one, self.communication_config["exc_communication_type"])
-        self.queue_communication_2 = RabbitMQ(self.communication_config["exchange_communication"], name_two, key_two, self.communication_config["exc_communication_type"])
         
         logging.info("RabbitMQ queues started")
     
@@ -206,7 +203,7 @@ class Transformer:
                 logging.info("No valid movies found in batch. Skipping send.")
             else:
                 self._send_processed_batch(processed_movies_list)
-        self.buffered_movies = []
+        self.buffered_movies[:] = []
 
     def _publish_movie_finished_signal(self, msg):
         self.comm_queue.put(msg.SerializeToString())
@@ -294,7 +291,8 @@ class Transformer:
 
             time.sleep(0.5)  # Ensure the consumer is ready before publishing
 
-            self.queue_communication_1.publish(data)
+            comm_queue_1 = self._create_comm_queue(1)
+            comm_queue_1.publish(data)
             consume_process.join()
 
             
@@ -304,7 +302,8 @@ class Transformer:
             logging.error(f"Error in managing inner communication: {e}")
             self.comm_queue.put(False)
     def _manage_consume_pika(self):
-        self.queue_communication_2.consume(self.other_callback)
+        consumer_queue = self._create_comm_queue(2)
+        consumer_queue.consume(self.other_callback)
         logging.info("Finished acking the other transformers")
 
 
@@ -313,7 +312,8 @@ class Transformer:
         Manage the communication between different transformers.
         """
         try: 
-            self.queue_communication_1.consume(self.callback_comm)
+            consumer_queue = self._create_comm_queue(1)
+            consumer_queue.consume(self.callback_comm)
         except Exception as e:
             logging.error(f"Error in managing inner communication: {e}")
 
@@ -327,7 +327,8 @@ class Transformer:
         if decoded_msg.finished:
             logging.info("Received finished signal from other transformer!!.")
             self.process_pending()
-            self.queue_communication_2.publish(body)
+            consumer_queue = self._create_comm_queue(2)
+            consumer_queue.publish(body)
         return
     
     def other_callback(self, ch, method, properties, body):

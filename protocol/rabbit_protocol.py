@@ -16,7 +16,7 @@ class RabbitMQ:
         """Used to create a channel for the queue."""
 
         try:
-            connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
+            connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq', heartbeat=500))
 
             channel = connection.channel()
             channel.exchange_declare(exchange=self.exchange, exchange_type=self.exc_type, durable=True)
