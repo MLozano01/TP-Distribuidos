@@ -51,7 +51,6 @@ class DataController:
         self.ratings_publisher = RabbitMQ(self.ratings_exchange, "", "", "x-consistent-hash")
         self.credits_publisher = RabbitMQ(self.credits_exchange, "", "", "x-consistent-hash")
 
-
     def run(self):
         """Start the DataController with message consumption"""
         self._settle_queues()
@@ -61,7 +60,6 @@ class DataController:
     def callback(self, ch, method, properties, body):
         try:
             message_type, message = self.protocol.decode_client_msg(body, self.columns_needed)
-            logging.info(f"Received message from server of type: {message_type.name}")
             if not message_type or not message:
                 logging.warning("Received invalid message from server")
                 ch.basic_ack(delivery_tag=method.delivery_tag)  # Acknowledge invalid messages
@@ -82,24 +80,24 @@ class DataController:
     def _handle_finished_message(self, message_type, msg):
         """Handle finished messages with coordination"""
         logging.info(f"Received {message_type.name} finished signal from server.")
+        client_id = msg.client_id
         msg_to_send = msg.SerializeToString()
 
         if message_type == FileType.MOVIES:
             self.movies_comm_queue.put(msg_to_send)
             if self.movies_comm_queue.get() == True:
-                logging.info("Propagating finished MOVIES downstream")
+                logging.info(f"Propagating finished MOVIES of client {client_id} downstream")
                 self.movies_publisher.publish(msg_to_send)
         elif message_type == FileType.RATINGS:
             self.ratings_comm_queue.put(msg_to_send)
             if self.ratings_comm_queue.get() == True:
-                logging.info("Propagating finished RATINGS downstream")
+                logging.info(f"Propagating finished RATINGS of client {client_id} downstream")
                 self.ratings_publisher.publish(msg_to_send)
         elif message_type == FileType.CREDITS:
             self.credits_comm_queue.put(msg_to_send)
             if self.credits_comm_queue.get() == True:
-                logging.info("Propagating finished CREDITS downstream")
+                logging.info(f"Propagating finished CREDITS of client {client_id} downstream")
                 self.credits_publisher.publish(msg_to_send)
-
 
     def _handle_data_message(self, message_type, msg):
         if message_type == FileType.MOVIES:
@@ -111,22 +109,17 @@ class DataController:
 
     def publish_movies(self, movies_csv):
         movies_pb = filter_movies(movies_csv)
-        #logging.info(f"Forwarding movies")
         if movies_pb:
             self.movies_publisher.publish(movies_pb.SerializeToString())
 
     def publish_ratings(self, ratings_csv):
         ratings_by_movie = filter_ratings(ratings_csv)
-        #logging.info(f"Forwarding ratings")
         for movie_id, batch in ratings_by_movie.items():
-            #logging.info(f"Forwarding rating of {movie_id}")
             self.ratings_publisher.publish(batch.SerializeToString(), routing_key=str(movie_id))
 
     def publish_credits(self, credits_csv):
         credits_by_movie = filter_credits(credits_csv)
-        #logging.info(f"Forwarding credits")
         for movie_id, batch in credits_by_movie.items():
-            #logging.info(f"Forwarding credit of {movie_id}")
             self.credits_publisher.publish(batch.SerializeToString(), routing_key=str(movie_id))
 
     def stop(self):

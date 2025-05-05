@@ -78,10 +78,11 @@ class Protocol:
     msg = code.to_bytes(CODE_LENGTH, byteorder='big')
     return self.create_bytes(END_FILE_CODE, msg)
 
-  def create_finished_message(self, type):
+  def create_finished_message(self, type, client_id):
       """Creates and serializes a 'finished' message for the given type."""
       msg = self.__file_classes[type]
       msg.finished = True
+      msg.client_id = client_id
 
       serialized_msg = msg.SerializeToString()
       code = self.__type_codes.get(type)
@@ -97,28 +98,55 @@ class Protocol:
     return message
 
 
+  def add_client_id(self, message, client_id):
+    """Adds client ID to the message to call before forwarding to the distributed system."""
+    code = int.from_bytes(message[:CODE_LENGTH], byteorder='big')
+    length = int.from_bytes(message[CODE_LENGTH:CODE_LENGTH + INT_LENGTH], byteorder='big')
+    data = message[CODE_LENGTH + INT_LENGTH:]
+    
+    # Add client ID to the data
+    client_id_bytes = client_id.to_bytes(INT_LENGTH, byteorder='big')
+    new_data = client_id_bytes + data
+    
+    # Create new message with updated length
+    new_message = bytearray()
+    new_message.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
+    new_message.extend((length + INT_LENGTH).to_bytes(INT_LENGTH, byteorder='big'))
+    new_message.extend(new_data)
+    
+    return new_message
+
   def decode_client_msg(self, msg_buffer, columns):
     code = int.from_bytes(msg_buffer[:CODE_LENGTH], byteorder='big')
-
-    msg = msg_buffer[CODE_LENGTH + INT_LENGTH::]
+    length = int.from_bytes(msg_buffer[CODE_LENGTH:CODE_LENGTH + INT_LENGTH], byteorder='big')
+    
+    # Extract client ID
+    client_id = int.from_bytes(msg_buffer[CODE_LENGTH + INT_LENGTH:CODE_LENGTH + 2*INT_LENGTH], byteorder='big')
+    msg = msg_buffer[CODE_LENGTH + 2*INT_LENGTH:]
+    
     if code == END_FILE_CODE:
       file_code = int.from_bytes(msg[:CODE_LENGTH], byteorder='big')
       file_type = self.__codes_to_types[file_code]
       msg_finished = self.__file_classes[file_type]
       msg_finished.finished = True
+      msg_finished.client_id = client_id
       return file_type, msg_finished
 
     file_type = self.__codes_to_types[code]
-    return file_type, self.lines_to_batch(msg, columns, file_type)
-  
-  def lines_to_batch(self, line_bytes, columns, file_type):
-    lines = files_pb2.CSVBatch()
-    lines.ParseFromString(line_bytes)
+    # First decode the CSV batch without client_id
+    csv_batch = files_pb2.CSVBatch()
+    csv_batch.ParseFromString(msg)
     
+    # Then process the batch and add client_id to the final message
+    batch = self.lines_to_batch(csv_batch, columns, file_type)
+    batch.client_id = client_id
+    return file_type, batch
+
+  def lines_to_batch(self, csv_batch, columns, file_type):
     ProtoClass = type(self.__file_classes[file_type])
     data_csv = ProtoClass()
 
-    for line in lines.rows:
+    for line in csv_batch.rows:
       data = self.parse_line(line, file_type)
       line_parsed = None
       is_added = False
@@ -340,12 +368,13 @@ class Protocol:
     message.extend(data)
     return message
 
-  def create_movie_list(self, movies):
+  def create_movie_list(self, movies, client_id):
     movies_pb = files_pb2.MoviesCSV()
 
     for movie in movies:
       movies_pb.movies.append(movie)
 
+    movies_pb.client_id = client_id
     movies_pb_str = movies_pb.SerializeToString()
     return movies_pb_str
 
@@ -367,12 +396,12 @@ class Protocol:
     aggr.ParseFromString(buffer)
     return aggr
 
-  def create_actor_participations_batch(self, participations):
+  def create_actor_participations_batch(self, participations, client_id):
       """Creates and serializes an ActorParticipationsBatch message."""
-      batch_pb = files_pb2.ActorParticipationsBatch()
-      # participations should be a list of ActorParticipation objects
-      batch_pb.participations.extend(participations)
-      return batch_pb.SerializeToString()
+      batch = files_pb2.ActorParticipationsBatch()
+      batch.participations.extend(participations)
+      batch.client_id = client_id
+      return batch.SerializeToString()
 
   def create_finished_actor_participations_msg(self):
       """Creates and serializes an ActorParticipationsBatch message with finished=True."""

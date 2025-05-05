@@ -5,7 +5,8 @@ import logging
 import json
 from protocol.protocol import Protocol
 
-logging.getLogger("pika").setLevel(logging.ERROR)
+logging.getLogger("pika").setLevel(logging.ERROR)   
+logging.getLogger("RabbitMQ").setLevel(logging.DEBUG)
 
 class Reducer:
     def __init__(self, **kwargs):
@@ -29,7 +30,7 @@ class Reducer:
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
-        logging.info(f"Received message, with routing key: {method.routing_key}")
+        logging.debug(f"Received message, with routing key: {method.routing_key}")
         self.reducer(body)
 
     def reducer(self, data):
@@ -42,7 +43,7 @@ class Reducer:
                 self.received_finished_msg_amount += 1
                 logging.info(f"Finished msg ({self.received_finished_msg_amount}/{self.expected_finished_msg_amount}) received on query_id {self.query_id}")
                 if self.received_finished_msg_amount >= self.expected_finished_msg_amount:
-                    logging.info(f"ALL Finished msg received on query_id {self.query_id}")
+                    logging.info(f"ALL Finished msg received on query_id {self.query_id} for client {msg.client_id}")
                     result = parse_final_result(self.reduce_by, self.partial_result)
                     res_proto = protocol.create_result(result)
 
