@@ -7,7 +7,8 @@ from protocol.rabbit_wrapper import RabbitMQConsumer, RabbitMQProducer
 from protocol import files_pb2 # Import files_pb2 to access new message types
 
 # Define batch size for outgoing messages
-BATCH_SIZE = 20000
+BATCH_SIZE = 60000
+logging.getLogger("pika").setLevel(logging.ERROR)
 
 class Joiner:
     def __init__(self, **kwargs):
@@ -31,7 +32,6 @@ class Joiner:
         # RabbitMQ Connections
         self.movies_consumer = None
         self.other_consumer = None
-        self.control_consumer = None # Listens for Ratings/Credits signals from Server
         self.movies_control_consumer = None # Listens for Movies signal from Filter
         self.output_producer = None
 
@@ -63,7 +63,6 @@ class Joiner:
                 routing_key=consistent_hash_binding_key # Use fixed weight "1"
                 # durable=True by default
             )
-            logging.info(f"Movies Consumer on exchange: {self.movies_consumer.exchange}")
             # Other Data Consumer (Consistent Hash Queue)
             self.other_consumer = RabbitMQConsumer(
                 host=host,
@@ -72,15 +71,6 @@ class Joiner:
                 queue_name=self.config['queue_other_name'],
                 routing_key=consistent_hash_binding_key # Use fixed weight "1"
                 # durable=True by default
-            )
-            logging.info(f"Other Consumer on exchange: {self.other_consumer.exchange}")
-            # Control Consumer (Fanout Queue for RATINGS/CREDITS finished signals from Server)
-            self.control_consumer = RabbitMQConsumer(
-                host=host,
-                exchange="server_finished_file_exchange", # Unified exchange name from config
-                exchange_type="fanout", # Should be fanout
-                queue_name=None, # Let RabbitMQ generate a unique queue name
-                routing_key='' # Fanout ignores routing key
             )
             # Movies Control Consumer (Fanout Queue for MOVIES finished signal from Filter)
             self.movies_control_consumer = RabbitMQConsumer(
@@ -99,8 +89,6 @@ class Joiner:
                 routing_key=self.config['routing_key_output'] # Default routing key
                 # Producer declares exchange but not queue by default
             )
-            logging.info(f"Output Producer on exchange: {self.output_producer.exchange}")
-            logging.info("RabbitMQ connections settled using rabbit_wrapper classes.")
 
         except Exception as e:
              logging.error(f"Fatal error during RabbitMQ connection setup: {e}", exc_info=True)
@@ -117,7 +105,7 @@ class Joiner:
 
             # Check if connections were successfully settled
             if not all([self.movies_consumer, self.other_consumer, 
-                        self.control_consumer, self.movies_control_consumer, 
+                        self.movies_control_consumer, 
                         self.output_producer]):
                  logging.error("Not all required RabbitMQ connections were initialized. Aborting start.")
                  return
@@ -126,15 +114,13 @@ class Joiner:
             # Note: auto_ack=True used as requested
             self.movies_consumer.consume(self._process_movie_message, auto_ack=True)
             self.other_consumer.consume(self._process_other_message, auto_ack=True)
-            self.control_consumer.consume(self._process_other_control_signal, auto_ack=True) # Renamed callback
-            self.movies_control_consumer.consume(self._process_movies_control_signal, auto_ack=True) # New callback
+            self.movies_control_consumer.consume(self._process_movies_control_signal, auto_ack=True)
 
             # Start consumers in separate threads by calling start_consuming
             threads = []
             threads.append(threading.Thread(target=self.movies_consumer.start_consuming, daemon=True))
             threads.append(threading.Thread(target=self.other_consumer.start_consuming, daemon=True))
-            threads.append(threading.Thread(target=self.control_consumer.start_consuming, daemon=True))
-            threads.append(threading.Thread(target=self.movies_control_consumer.start_consuming, daemon=True)) # New thread
+            threads.append(threading.Thread(target=self.movies_control_consumer.start_consuming, daemon=True))
 
             for t in threads:
                 t.start()
@@ -164,7 +150,7 @@ class Joiner:
             with self._lock:
                 for movie in movies_msg.movies:
                     self.movies_buffer[movie.id] = movie
-                    logging.info(f"Buffered movie ID {movie.id}")
+                    #logging.info(f"Buffered movie ID {movie.id}")
 
         except Exception as e:
             logging.error(f"Error processing movie message: {e}", exc_info=True)
@@ -196,6 +182,22 @@ class Joiner:
                 logging.error(f"Unsupported OTHER_DATA_TYPE: {self.other_data_type}")
                 return
 
+            # Check if this is a finished signal
+            if other_msg and other_msg.finished:
+                should_trigger_processing = False
+                with self._lock:
+                    if not self.other_eof_received:
+                        self.other_eof_received = True
+                        logging.info(f"Processed {self.other_data_type} finished signal via data channel.")
+                        if self.movies_eof_received:
+                            should_trigger_processing = True
+                    else:
+                        logging.info(f"Duplicate {self.other_data_type} finished signal via data channel.")
+                
+                if should_trigger_processing:
+                    self._trigger_final_processing()
+                return
+
             # Original data processing logic
             if not other_msg or not data_list:
                  logging.warning(f"Received empty or invalid {self.other_data_type} batch.")
@@ -208,11 +210,6 @@ class Joiner:
                          logging.warning(f"Could not extract movie ID using field '{movie_id_field}' from {self.other_data_type} item.")
                          continue
 
-                    # TODO LATER if EOF MOVIES ARRIVED only match other with buffered movie id. Optimization: If movie_id not in movies_buffer, discard this item
-                    # if movie_id not in self.movies_buffer:
-                        #logging.info(f"Discarding {self.other_data_type} for movie ID {movie_id} as it's not in movies_buffer.")
-                      #  continue
-
                     if is_ratings:
                         # Get current sum and count, default to (0.0, 0)
                         current_sum, current_count = self.other_buffer.get(movie_id, (0.0, 0))
@@ -221,14 +218,12 @@ class Joiner:
                         new_count = current_count + 1
                         # Store the updated tuple
                         self.other_buffer[movie_id] = (new_sum, new_count)
-                        logging.info(f"Buffered movie ID {movie_id} with sum: {new_sum} and count: {new_count}")
-                    # --- Modification End ---
+                        #logging.info(f"Buffered movie ID {movie_id} with sum: {new_sum} and count: {new_count}")
                     else: # Handle Credits (buffering the object)
                         if movie_id not in self.other_buffer:
                             self.other_buffer[movie_id] = []
                         self.other_buffer[movie_id].append(item)
-                        logging.info(f"Buffered {self.other_data_type} data for movie ID {movie_id}")
-
+                        #logging.info(f"Buffered {self.other_data_type} data for movie ID {movie_id}")
         except Exception as e:
             logging.error(f"Error processing {self.other_data_type} message: {e}", exc_info=True)
             # Consider if this error should trigger a shutdown
@@ -456,7 +451,7 @@ class Joiner:
 
             # Stop consumers and producer (which closes channels/connections)
             consumers = [self.movies_consumer, self.other_consumer, 
-                         self.control_consumer, self.movies_control_consumer]
+                         self.movies_control_consumer]
             for consumer in consumers:
                  if consumer: consumer.stop()
             if self.output_producer: self.output_producer.stop()
@@ -464,100 +459,47 @@ class Joiner:
             logging.info("Joiner Stopped")
 
     def _process_movies_control_signal(self, ch, method, properties, body):
-         """Callback for the MOVIE control channel (from Filter). Expects full message."""
-         if self._stop_event.is_set(): return
-         processed_signal = False
-         log_msg = ""
-         trigger_processing = False
-         try:
-             if not body or len(body) < (CODE_LENGTH + INT_LENGTH):
-                 logging.warning(f"Received invalid message on movie control channel (too short): {len(body)} bytes")
-                 return
-             
-             # Extract payload and decode as MoviesCSV
-             # We assume the filter correctly sends only movie signals here
-             protobuf_payload = body[CODE_LENGTH + INT_LENGTH:]
-             decoded_msg = self.protocol.decode_movies_msg(protobuf_payload)
+        """Callback for the MOVIE control channel (from Filter). Expects full message."""
+        if self._stop_event.is_set(): return
+        processed_signal = False
+        log_msg = ""
+        trigger_processing = False
+        try:
+            if not body or len(body) < (CODE_LENGTH + INT_LENGTH):
+                logging.warning(f"Received invalid message on movie control channel (too short): {len(body)} bytes")
+                return
+            
+            # Extract payload and decode as MoviesCSV
+            # We assume the filter correctly sends only movie signals here
+            protobuf_payload = body[CODE_LENGTH + INT_LENGTH:]
+            decoded_msg = self.protocol.decode_movies_msg(protobuf_payload)
 
-             if decoded_msg and decoded_msg.finished:
-                 with self._lock:
-                     if not self.movies_eof_received:
-                         self.movies_eof_received = True
-                         processed_signal = True
-                         log_msg = "Processed MOVIES finished signal via movie control channel."
-                         # Check if other stream finished
-                         if self.other_eof_received:
-                             trigger_processing = True
-                     else:
-                         log_msg = "Duplicate MOVIES finished signal via movie control channel."
-             else:
-                 log_msg = f"Unexpected non-finished message on movie control channel."
+            if decoded_msg and decoded_msg.finished:
+                with self._lock:
+                    if not self.movies_eof_received:
+                        self.movies_eof_received = True
+                        processed_signal = True
+                        log_msg = "Processed MOVIES finished signal via movie control channel."
+                        # Check if other stream finished
+                        if self.other_eof_received:
+                            trigger_processing = True
+                    else:
+                        log_msg = "Duplicate MOVIES finished signal via movie control channel."
+            else:
+                log_msg = f"Unexpected non-finished message on movie control channel."
 
-             # Log outcome
-             if processed_signal: logging.warning(log_msg)
-             else: logging.info(log_msg)
+            # Log outcome
+            if processed_signal: logging.info(log_msg)
+            else: logging.info(log_msg)
 
-             # Trigger outside lock if needed
-             if trigger_processing:
-                 logging.warning("Both EOF signals received (MOVIES last via ctrl). Triggering final processing.")
-                 self._trigger_final_processing()
+            # Trigger outside lock if needed
+            if trigger_processing:
+                logging.warning("Both EOF signals received (MOVIES last via ctrl). Triggering final processing.")
+                self._trigger_final_processing()
 
-         except Exception as e:
-             logging.error(f"Error processing movie control signal: {e}", exc_info=True)
+        except Exception as e:
+            logging.error(f"Error processing movie control signal: {e}", exc_info=True)
 
-    def _process_other_control_signal(self, ch, method, properties, body):
-         """Callback for the unified control channel (from Server - Ratings/Credits). Expects full message."""
-         if self._stop_event.is_set(): return
-         processed_signal = False
-         log_msg = ""
-         trigger_processing = False
-         try:
-             if not body or len(body) < (CODE_LENGTH + INT_LENGTH):
-                 logging.warning(f"Received invalid message on unified control channel (too short): {len(body)} bytes")
-                 return
-             
-             # Decode based on type code in prefix
-             type_code = int.from_bytes(body[:CODE_LENGTH], byteorder='big')
-             protobuf_payload = body[CODE_LENGTH + INT_LENGTH:]
-             decoded_msg = None
-             relevant_type = False
-
-             if type_code == RATINGS_FILE_CODE and self.other_data_type == "RATINGS":
-                 decoded_msg = self.protocol.decode_ratings_msg(protobuf_payload)
-                 relevant_type = True
-             elif type_code == CREDITS_FILE_CODE and self.other_data_type == "CREDITS":
-                 decoded_msg = self.protocol.decode_credits_msg(protobuf_payload)
-                 relevant_type = True
-             else:
-                 # Ignore movie signals (code 1) or irrelevant signals on this channel
-                 log_msg = f"Ignoring signal code {type_code} on unified control channel for joiner type {self.other_data_type}."
-
-             if relevant_type and decoded_msg and decoded_msg.finished:
-                  with self._lock:
-                     if not self.other_eof_received:
-                          self.other_eof_received = True
-                          processed_signal = True
-                          log_msg = f"Processed {self.other_data_type} finished signal via unified control channel."
-                          if self.movies_eof_received:
-                               trigger_processing = True
-                     else:
-                         log_msg = f"Duplicate {self.other_data_type} finished signal via unified control channel."
-             elif relevant_type:
-                  log_msg = f"Unexpected non-finished message type {type_code} on unified control channel."
-             
-             # Log outcome
-             if processed_signal: logging.warning(log_msg)
-             else: logging.info(log_msg)
-
-             # Trigger outside lock if needed
-             if trigger_processing:
-                 logging.warning(f"Both EOF signals received ({self.other_data_type} last via ctrl). Triggering final processing.")
-                 self._trigger_final_processing()
-
-         except Exception as e:
-             logging.error(f"Error processing other control signal: {e}", exc_info=True)
-
-    # Helper method to avoid code duplication in callbacks
     def _trigger_final_processing(self):
         if self.other_data_type == "RATINGS":
             self._process_ratings_join()

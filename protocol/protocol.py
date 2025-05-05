@@ -21,6 +21,16 @@ class FileType(Enum):
 
 
 class Protocol:
+  # Headers for each file type
+  MOVIES_HEADERS = ["adult", "belongs_to_collection", "budget", "genres", "homepage", "id", "imdb_id", 
+                   "original_language", "original_title", "overview", "popularity", "poster_path", 
+                   "production_companies", "production_countries", "release_date", "revenue", "runtime", 
+                   "spoken_languages", "status", "tagline", "title", "video", "vote_average", "vote_count"]
+  
+  RATINGS_HEADERS = ["userId", "movieId", "rating", "timestamp"]
+  
+  CREDITS_HEADERS = ["cast", "crew", "id"]
+
   def __init__(self):
     self.__file_classes = {FileType.MOVIES: files_pb2.MoviesCSV(), 
                          FileType.RATINGS: files_pb2.RatingsCSV(), 
@@ -31,9 +41,16 @@ class Protocol:
     self.__codes_to_types = {MOVIES_FILE_CODE: FileType.MOVIES, 
                             RATINGS_FILE_CODE: FileType.RATINGS, 
                             CREDITS_FILE_CODE: FileType.CREDITS}
-    self.current_file_type = None
-    self.current_headers = []
-    self.current_headers_dict = dict()
+    self.__headers = {
+      FileType.MOVIES: self.MOVIES_HEADERS,
+      FileType.RATINGS: self.RATINGS_HEADERS,
+      FileType.CREDITS: self.CREDITS_HEADERS
+    }
+    self.__headers_dict = {
+      FileType.MOVIES: {h: i for i, h in enumerate(self.MOVIES_HEADERS)},
+      FileType.RATINGS: {h: i for i, h in enumerate(self.RATINGS_HEADERS)},
+      FileType.CREDITS: {h: i for i, h in enumerate(self.CREDITS_HEADERS)}
+    }
 
 
 
@@ -92,66 +109,54 @@ class Protocol:
       return file_type, msg_finished
 
     file_type = self.__codes_to_types[code]
-    if file_type != self.current_file_type:
-      self.current_headers = []
-      self.current_file_type = file_type
-      self.current_headers_dict = dict()
-
-    return file_type, self.lines_to_batch(msg, columns)
+    return file_type, self.lines_to_batch(msg, columns, file_type)
   
-  def lines_to_batch(self, line_bytes, columns):
+  def lines_to_batch(self, line_bytes, columns, file_type):
     lines = files_pb2.CSVBatch()
     lines.ParseFromString(line_bytes)
-    if not len(self.current_headers):
-      self.set_headers(lines.rows.pop(0))
     
-    ProtoClass = type(self.__file_classes[self.current_file_type])
+    ProtoClass = type(self.__file_classes[file_type])
     data_csv = ProtoClass()
 
     for line in lines.rows:
-      data = self.parse_line(line)
+      data = self.parse_line(line, file_type)
       line_parsed = None
       is_added = False
-      if self.current_file_type == FileType.MOVIES:
+      if file_type == FileType.MOVIES:
         line_parsed, is_added = self.update_movies_msg(data, columns['movies'])
-      elif self.current_file_type == FileType.RATINGS:
+      elif file_type == FileType.RATINGS:
         line_parsed, is_added = self.update_ratings_msg(data, columns['ratings'])
-      elif self.current_file_type == FileType.CREDITS:
+      elif file_type == FileType.CREDITS:
         line_parsed, is_added = self.update_credits_msg(data, columns['credits'])
       
       if is_added:
-        if self.current_file_type == FileType.MOVIES:
+        if file_type == FileType.MOVIES:
           data_csv.movies.append(line_parsed)
-        elif self.current_file_type == FileType.RATINGS:
+        elif file_type == FileType.RATINGS:
           data_csv.ratings.append(line_parsed)
-        elif self.current_file_type == FileType.CREDITS:
+        elif file_type == FileType.CREDITS:
           data_csv.credits.append(line_parsed)
     return data_csv
-  
-  def set_headers(self, headers):
-    self.current_headers = headers.strip('\n').split(',')
-    self.current_headers_dict = dict()
-    for ind, header in enumerate(self.current_headers):
-      self.current_headers_dict[header] = ind
 
-  def parse_line(self, line):
+  def parse_line(self, line, file_type):
     parts = line.split(',')
     data = dict()
     index = -1
+    headers_dict = self.__headers_dict[file_type]
+    
     for part in parts:
-
       if not part or part[0] != ' ':
         index+=1
       
       try:
-        data.setdefault(self.current_headers[index], "")
+        header = self.__headers[file_type][index]
+        data.setdefault(header, "")
         cleaned = part.strip(" '\\").strip('" \n')
         if part and part[0] == ' ':
           cleaned = "," + part
       
-        data[self.current_headers[index]] += cleaned
+        data[header] += cleaned
       except Exception as e:
-        logging.info(f"Line with more columns that disclosed")
         return dict()
     
     return data

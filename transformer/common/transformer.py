@@ -7,7 +7,8 @@ from protocol import files_pb2
 from protocol.utils.parsing_proto_utils import *
 from protocol.protocol import Protocol
 from protocol.rabbit_wrapper import RabbitMQConsumer, RabbitMQProducer
-import time
+
+logging.getLogger('pika').setLevel(logging.WARNING)
 
 class Transformer:
     def __init__(self, **kwargs):
@@ -256,7 +257,7 @@ class Transformer:
                 logging.info(f"No valid movies found in batch (delivery_tag: {method.delivery_tag}). Skipping send.")
             else:
                 self._send_processed_batch(processed_movies_list)
-            
+
 
         except Exception as e:
             logging.error(f"Error processing message batch (tag: {method.delivery_tag}): {e}", exc_info=True)
@@ -281,7 +282,7 @@ class Transformer:
                 if consumer == self.control_consumer and self._finished_signal_received:
                      logging.debug("Skipping stop() for control_consumer in finally block as it was stopped explicitly.")
                      continue # Skip stopping it again
-                
+
                 if consumer:
                     try:
                         consumer.stop()

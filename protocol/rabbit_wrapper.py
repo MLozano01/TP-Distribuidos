@@ -125,11 +125,11 @@ class RabbitMQConsumer(RabbitMQBase):
                 durable=self.durable
             )
             self.actual_queue_name = result.method.queue # Store the actual name
-            logging.info(f"Declared queue: {self.actual_queue_name} (Durable: {self.durable}, Exclusive: {self.exclusive}, AutoDelete: {self.auto_delete})")
+            #logging.info(f"Declared queue: {self.actual_queue_name} (Durable: {self.durable}, Exclusive: {self.exclusive}, AutoDelete: {self.auto_delete})")
 
             # Bind queue
             ch.queue_bind(exchange=self.exchange, queue=self.actual_queue_name, routing_key=self.routing_key)
-            logging.info(f"Queue '{self.actual_queue_name}' bound to exchange '{self.exchange}' with key '{self.routing_key}'")
+            #logging.info(f"Queue '{self.actual_queue_name}' bound to exchange '{self.exchange}' with key '{self.routing_key}'")
 
         except Exception as e:
             q_name_log = self.requested_queue_name or "(dynamic exclusive)"

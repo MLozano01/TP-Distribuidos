@@ -1,2 +1,5 @@
 data
 *.csv
+.idea
+results_ratings.json
+results_ratings_small.json
