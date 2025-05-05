@@ -5,7 +5,7 @@ import logging
 from protocol.protocol import Protocol
 
 logging.getLogger("pika").setLevel(logging.ERROR)
-
+logging.getLogger("RabbitMQ").setLevel(logging.ERROR)
 class Aggregator:
     def __init__(self, comm_queue, **kwargs):
         self.queue_rcv = None
@@ -29,7 +29,7 @@ class Aggregator:
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
-        logging.info(f"Received message, with routing key: {method.routing_key}")
+        logging.debug(f"Received message, with routing key: {method.routing_key}")
         decoded_msg = self.protocol.decode_movies_msg(body)
         if decoded_msg.finished:
             self.current_finished_msg_amount += 1
