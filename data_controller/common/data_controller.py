@@ -50,19 +50,20 @@ class DataController:
         self.movies_publisher = RabbitMQ(self.movies_exchange, self.movies_queue, self.movies_routing_key, "direct")
         self.ratings_publisher = RabbitMQ(self.ratings_exchange, "", "", "x-consistent-hash")
         self.credits_publisher = RabbitMQ(self.credits_exchange, "", "", "x-consistent-hash")
+        logging.info("Queues up, ready to use")
 
     def run(self):
         """Start the DataController with message consumption"""
         self._settle_queues()
         self.work_consumer.consume(self.callback)
-        self.check_finished()
+        self._check_finished()
 
     def callback(self, ch, method, properties, body):
-        try:
+        # try:
             message_type, message = self.protocol.decode_client_msg(body, self.columns_needed)
             if not message_type or not message:
                 logging.warning("Received invalid message from server")
-                ch.basic_ack(delivery_tag=method.delivery_tag)  # Acknowledge invalid messages
+                # ch.basic_ack(delivery_tag=method.delivery_tag)  # Acknowledge invalid messages
                 return
             
             if message.finished:
@@ -71,11 +72,11 @@ class DataController:
                 self._handle_data_message(message_type, message)
             
             # Acknowledge successful processing
-            ch.basic_ack(delivery_tag=method.delivery_tag)
-        except Exception as e:
-            logging.error(f"Error processing message: {e}")
+            # ch.basic_ack(delivery_tag=method.delivery_tag)
+        # except Exception as e:
+            # logging.error(f"Error processing message: {e}")
             # Reject the message and requeue it
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            # ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
     def _handle_finished_message(self, message_type, msg):
         """Handle finished messages with coordination"""
