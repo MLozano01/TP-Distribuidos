@@ -23,18 +23,33 @@ class Controller:
         self._setup_signal_handlers()
 
         try:
-            movie_comm_queue = Queue()
-            credits_comm_queue = Queue()
-            ratings_comm_queue = Queue()
-            data_controller_instance = DataController(movie_comm_queue, credits_comm_queue, ratings_comm_queue, **self.config)
+            # Movies communication
+            movies_finish_receive_ntc = Queue()
+            movies_finish_notify_ntc = Queue()
+            movies_finish_receive_ctn = Queue()
+            movies_finish_notify_ctn = Queue()
+
+            # Credits communication
+            credits_finish_receive_ntc = Queue()
+            credits_finish_notify_ntc = Queue()
+            credits_finish_receive_ctn = Queue()
+            credits_finish_notify_ctn = Queue()
+
+            # Ratings communication
+            ratings_finish_receive_ntc = Queue()
+            ratings_finish_notify_ntc = Queue()
+            ratings_finish_receive_ctn = Queue()
+            ratings_finish_notify_ctn = Queue()
+
+            data_controller_instance = DataController(movies_finish_receive_ntc, movies_finish_notify_ntc, movies_finish_receive_ctn, movies_finish_notify_ctn, credits_finish_receive_ntc, credits_finish_notify_ntc, credits_finish_receive_ctn, credits_finish_notify_ctn, ratings_finish_receive_ntc, ratings_finish_notify_ntc, ratings_finish_receive_ctn, ratings_finish_notify_ctn, **self.config)
 
             self.data_controller = Process(target=data_controller_instance.run, args=())
             self.data_controller.start()
             logging.info(f"DataController started with PID: {self.data_controller.pid}")
 
-            movies_communicator_instance = DataControllerCommunicator(self.movies_communication_config, movie_comm_queue, "MOVIES")
-            credits_communicator_instance = DataControllerCommunicator(self.credits_communication_config, credits_comm_queue, "CREDITS")
-            ratings_communicator_instance = DataControllerCommunicator(self.ratings_communication_config, ratings_comm_queue, "RATINGS")
+            movies_communicator_instance = DataControllerCommunicator(self.movies_communication_config, movies_finish_receive_ntc, movies_finish_notify_ntc, movies_finish_receive_ctn, movies_finish_notify_ctn, "MOVIES")
+            credits_communicator_instance = DataControllerCommunicator(self.credits_communication_config, credits_finish_receive_ntc, credits_finish_notify_ntc, credits_finish_receive_ctn, credits_finish_notify_ctn, "CREDITS")
+            ratings_communicator_instance = DataControllerCommunicator(self.ratings_communication_config, ratings_finish_receive_ntc, ratings_finish_notify_ntc, ratings_finish_receive_ctn, ratings_finish_notify_ctn, "RATINGS")
 
             self.movies_data_controller_communicator = Process(target=movies_communicator_instance.run, args=())
             self.movies_data_controller_communicator.start()
