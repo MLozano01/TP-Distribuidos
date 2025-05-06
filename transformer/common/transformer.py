@@ -1,26 +1,31 @@
 import logging
+from multiprocessing import Condition, Manager, Process, Queue
 import signal
 import threading
 from transformers import pipeline
 import json
 from protocol import files_pb2
+from protocol.rabbit_protocol import RabbitMQ
 from protocol.utils.parsing_proto_utils import *
 from protocol.protocol import Protocol
 from protocol.rabbit_wrapper import RabbitMQConsumer, RabbitMQProducer
 
 logging.getLogger('pika').setLevel(logging.WARNING)
 
+logging.getLogger("pika").setLevel(logging.ERROR)
+
 class Transformer:
-    def __init__(self, **kwargs):
+    def __init__(self, comm_queue, **kwargs):
         self.sentiment_analyzer = None
         self.queue_rcv = None
         self.queue_snd = None
-        self.control_consumer = None
         self.protocol = Protocol()
         self._stop_event = threading.Event()
         self._finished_signal_received = False
         self._finished_message_body = None
-        self.rabbit_host = kwargs.get('rabbit_host', 'localhost')
+        self.comm_queue = comm_queue
+        self.data_thread = None
+
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -33,94 +38,50 @@ class Transformer:
         self.stop()
         logging.info("Shutdown complete.")
 
-    def _settle_connections(self):
-        """Instantiate and setup RabbitMQ consumers and producer using wrapper classes."""
-        try:
-            self.queue_rcv = RabbitMQConsumer(
-                host=self.rabbit_host,
-                exchange=self.exchange_rcv,
-                exchange_type=self.exc_rcv_type,
-                queue_name=self.queue_rcv_name,
-                routing_key=self.routing_rcv_key,
-                durable=True
-            )
-            self.queue_snd = RabbitMQProducer(
-                host=self.rabbit_host,
-                exchange=self.exchange_snd,
-                exchange_type=self.exc_snd_type,
-                routing_key=self.routing_snd_key
-            )
-            self.control_consumer = RabbitMQConsumer(
-                host=self.rabbit_host,
-                exchange=self.control_exchange,
-                exchange_type="fanout",
-                queue_name=None,
-                routing_key=''
-            )
-            logging.info("RabbitMQ consumers and producer settled using rabbit_wrapper.")
-        except Exception as e:
-            logging.error(f"Fatal error during RabbitMQ connection setup: {e}", exc_info=True)
-            self.stop()
-            raise
+    def _create_comm_queue(self, number):
+        name = self.communication_config["queue_communication_name"] + f"_{number}"
+        key = self.communication_config["routing_communication_key"] + f"_{number}"
+        return RabbitMQ(self.communication_config["exchange_communication"], name, key, self.communication_config["exc_communication_type"])
+        
 
+    def _settle_queues(self):
+        self.queue_rcv = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type)
+        self.queue_snd = RabbitMQ(self.exchange_snd, self.queue_snd_name, self.routing_snd_key, self.exc_snd_type)
+        
+        logging.info("RabbitMQ queues started")
+    
+
+    def callback(self, ch, method, properties, body):
+        """Callback function to process messages."""
+        logging.info(f"Received message, with routing key: {method.routing_key}")
+        decoded_msg = self.protocol.decode_movies_msg(body)
+            
+        if decoded_msg.finished:
+            logging.info("Received MOVIES finished signal from server on data channel.")
+            self._publish_movie_finished_signal(decoded_msg)
+            return
+        self._process_message(decoded_msg)
+        
     def start(self):
         """Start the Transformer with separate threads for data and control messages."""
         self._setup_signal_handlers()
         try:
-            self._initialize_sentiment_analyzer()
-            self._settle_connections()
+            comm_queue = Queue()
+            self.comm_queue = comm_queue
+            self._settle_queues()
 
-            if not all([self.queue_rcv, self.queue_snd, self.control_consumer]):
+            if not all([self.queue_rcv, self.queue_snd]):
                 logging.error("Not all required RabbitMQ connections were initialized. Aborting start.")
                 return
+            
 
-            self.queue_rcv.consume(self._process_message)
-            self.control_consumer.consume(self._process_control_signal)
-
-            data_thread = threading.Thread(target=self.queue_rcv.start_consuming, daemon=True)
-            control_thread = threading.Thread(target=self.control_consumer.start_consuming, daemon=True)
-
-            data_thread.start()
-            control_thread.start()
-
-            logging.info("Transformer started with data and control threads...")
-            # Wait for threads to complete naturally
-            logging.info("Main thread waiting for data and control threads to join...")
-            data_thread.join()
-            logging.info("Data thread joined.")
-
-            # Explicitly stop the control consumer now that data processing is done
-            logging.info("Stopping control consumer...")
-            if self.control_consumer:
-                try:
-                    self.control_consumer.stop()
-                    logging.info("Control consumer stopped.")
-                except Exception as e_stop:
-                    logging.error(f"Error stopping control consumer: {e_stop}")
-            else:
-                logging.warning("Control consumer not initialized, cannot stop.")
-
-            # Now wait for the control thread to terminate
-            control_thread.join()
-            logging.info("Control thread joined.")
-
-            # After both threads complete, check if we received the signal and forward it
-            if self._finished_signal_received and self._finished_message_body:
-                logging.info("All threads joined. Forwarding stored FINISHED signal...")
-                try:
-                    # Add delay if needed, though maybe less critical now
-                    # time.sleep(3)
-                    self.queue_snd.publish(self._finished_message_body)
-                    logging.info(f"Successfully SENT stored FINISHED signal to exchange '{self.queue_snd.exchange}' with key '{self.queue_snd.default_routing_key}'")
-                except Exception as e_pub:
-                    logging.error(f"Failed to publish stored FINISHED signal: {e_pub}", exc_info=True)
-            else:
-                logging.warning("Threads joined, but no FINISHED signal was processed or stored. No final signal sent.")
+            self._initialize_sentiment_analyzer()
+            self.queue_rcv.consume(self.callback)
 
         except Exception as e:
             logging.error(f"Failed to start Transformer: {e}", exc_info=True)
-        finally:
-            self.stop()
+        
+
 
     def _initialize_sentiment_analyzer(self):
         """Initializes the Hugging Face sentiment analysis pipeline."""
@@ -150,9 +111,9 @@ class Transformer:
             revenue_val = movie.revenue
             is_budget_valid = budget_val is not None and float(budget_val) > 0
             is_revenue_valid = revenue_val is not None and float(revenue_val) > 0
-            if not (is_budget_valid and is_revenue_valid):
+            if not (is_budget_valid and is_revenue_valid and movie.overview):
                 movie_id = movie.id if movie.id else 'UNKNOWN_PROTO_ID'
-                logging.debug(f"Skipping movie ID {movie_id} due to zero/missing/invalid budget or revenue.")
+                logging.debug(f"Skipping movie ID {movie_id} due to zero/missing/invalid budget, revenue or overview.")
                 return False
             return True
         except (ValueError, TypeError):
@@ -194,81 +155,52 @@ class Transformer:
             outgoing_movies_msg = self.protocol.create_movie_list(processed_movies, client_id)
             logging.debug(f"Sending {len(processed_movies)} processed movies")
             self.queue_snd.publish(outgoing_movies_msg)
-            logging.info(f"Successfully SENT batch of {len(processed_movies)} movies to exchange '{self.queue_snd.exchange}' with key '{self.queue_snd.default_routing_key}'")
+            logging.info(f"Successfully SENT batch of {len(processed_movies)} movies to exchange '{self.queue_snd.exchange}'")
         except Exception as e:
             logging.error(f"Failed to send processed batch: {e}", exc_info=True)
 
-    def _process_control_signal(self, ch, method, properties, body):
-        """Callback function to process control signals (e.g., finished)."""
-        if self._stop_event.is_set():
-            logging.debug("Stop event set, ignoring control signal.")
-            return
+
+    def _publish_movie_finished_signal(self, msg):
+        self.comm_queue.put(msg.SerializeToString())
+        logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
+
+        if self.comm_queue.get() == True:
+            logging.info("Received SEND finished signal from communication channel.")
+            self.queue_snd.publish(msg.SerializeToString())
+            logging.info(f"Published movie finished signal to {self.queue_snd.exchange}")
+
+        logging.info("FINISHED SENDING THE FINISH MESSAGE")
+
+        
+    def _process_movie(self, incoming_movie):
+        if self._validate_movie(incoming_movie):
+            processed_movie = self._enrich_movie(incoming_movie)
+            # Log successful processing of a movie
+            logging.info(f"Processed Movie ID {processed_movie.id}: Sentiment='{processed_movie.sentiment}', Rate='{processed_movie.rate_revenue_budget:.4f}'")
+            return processed_movie
+        return None
+
+    def _process_message(self, incoming_movies_msg):
+        """Function to process received data messages"""
         try:
-            incoming_msg = self.protocol.decode_movies_msg(body)
-
-            if incoming_msg and incoming_msg.finished and not self._finished_signal_received:
-                logging.warning("Received FINISHED signal via control channel.")
-                self._finished_signal_received = True
-
-                # Cancel the data consumer to stop receiving new messages
-                try:
-                    if self.queue_rcv and self.queue_rcv.consumer_tag:
-                        logging.info(f"Cancelling data consumer (tag: {self.queue_rcv.consumer_tag}) due to FINISHED signal.")
-                        self.queue_rcv.channel.basic_cancel(self.queue_rcv.consumer_tag)
-                        logging.info("Data consumer cancelled.")
-                    else:
-                        logging.warning("Data consumer (queue_rcv) or consumer_tag not available for cancellation.")
-                except Exception as e_cancel:
-                    logging.error(f"Error cancelling data consumer: {e_cancel}", exc_info=True)
-
-                # Store the finished message body, DO NOT forward yet
-                self._finished_message_body = body
-                logging.info("FINISHED signal received and data consumer cancelled. Signal stored.")
-
-                # Do NOT set self._stop_event here. Let threads finish naturally.
-            elif self._finished_signal_received:
-                 logging.info("Ignoring duplicate FINISHED signal on control channel.")
-            else:
-                logging.info(f"Received non-finished or undecodable message on control channel. Ignoring.")
-
-        except Exception as e:
-            logging.error(f"Error processing control signal: {e}", exc_info=True)
-
-    def _process_message(self, ch, method, properties, body):
-        """Callback function to process received data messages"""
-        try:
-            # Log reception of message
-            logging.info(f"Received message batch on data channel (delivery_tag: {method.delivery_tag})")
-            incoming_movies_msg = self.protocol.decode_movies_msg(body)
-
             if not incoming_movies_msg or not incoming_movies_msg.movies:
-                 logging.warning("Received empty or invalid Protobuf movies batch structure. Skipping.")
-                 return
-
+                logging.warning("Received empty or invalid Protobuf movies batch structure. Skipping.")
+                return
+            logging.info("processing batch")
             processed_movies_list = []
             for incoming_movie in incoming_movies_msg.movies:
-                if self._validate_movie(incoming_movie):
-                    processed_movie = self._enrich_movie(incoming_movie)
+                processed_movie = self._process_movie(incoming_movie)
+                if processed_movie:
                     processed_movies_list.append(processed_movie)
-                    # Log successful processing of a movie
-                    logging.info(f"Processed Movie ID {processed_movie.id}: Sentiment='{processed_movie.sentiment}', Rate='{processed_movie.rate_revenue_budget:.4f}'")
 
             if not processed_movies_list:
-                logging.info(f"No valid movies found in batch (delivery_tag: {method.delivery_tag}). Skipping send.")
+                logging.info(f"No valid movies found in batch. Skipping send.")
             else:
                 self._send_processed_batch(processed_movies_list, incoming_movies_msg.client_id)
 
 
         except Exception as e:
-            logging.error(f"Error processing message batch (tag: {method.delivery_tag}): {e}", exc_info=True)
-            # Nack the message if processing fails to potentially requeue or dead-letter it
-            try:
-                if ch.is_open:
-                    logging.warning(f"NACKed message batch (tag: {method.delivery_tag}) due to processing error.")
-                else:
-                    logging.warning(f"Channel closed, cannot NACK message (tag: {method.delivery_tag}).")
-            except Exception as e_nack:
-                 logging.error(f"Failed to NACK message (tag: {method.delivery_tag}): {e_nack}")
+            logging.error(f"Error processing message batch: {e}", exc_info=True)
 
     def stop(self):
         """Stop the filter, signal threads, and close the queues/connections."""
@@ -276,23 +208,18 @@ class Transformer:
             logging.info("Stopping Transformer...")
             self._stop_event.set()
 
-            consumers = [self.queue_rcv, self.control_consumer]
-            for consumer in consumers:
-                # Check if this is the control consumer AND if the finished signal was received
-                if consumer == self.control_consumer and self._finished_signal_received:
-                     logging.debug("Skipping stop() for control_consumer in finally block as it was stopped explicitly.")
-                     continue # Skip stopping it again
-
-                if consumer:
-                    try:
-                        consumer.stop()
-                    except Exception as e:
-                        logging.error(f"Error stopping consumer {consumer}: {e}")
+            if self.queue_rcv:
+                try:
+                    self.queue_rcv.close_channel()
+                except Exception as e:
+                    logging.error(f"Error stopping consumer {self.queue_rcv}: {e}")
 
             if self.queue_snd:
                 try:
-                    self.queue_snd.stop()
+                    self.queue_snd.close_channel()
                 except Exception as e:
                         logging.error(f"Error stopping producer {self.queue_snd}: {e}")
 
+            if self.data_thread and self.data_thread.is_alive():
+                self.data_thread.terminate()
             logging.info("Transformer Stopped")
