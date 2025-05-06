@@ -59,12 +59,20 @@ def main():
               print(f"   - Key '{check_key}' not found in base")
               diff_found = True
           else:
-              base_key = base_match.get(key)
-              base_value = base_match.get(value)
-              base_rows_checked.add(base_key)
-              if base_value != check_value:
-                  print(f"   - Mismatch for key '{check_key}': '{base_value}' (base) vs '{check_value}' (checking)")
-                  diff_found = True
+                base_key = base_match.get(key)
+                base_value = base_match.get(value)
+                base_rows_checked.add(base_key)
+                try:
+                    base_value_typed = round(float(base_value), 2)
+                    check_value_typed = round(float(check_value), 2)
+
+                except:
+                    base_value_typed = base_value
+                    check_value_typed = check_value
+                finally:
+                    if base_value_typed != check_value_typed:
+                        print(f"   - Mismatch for key '{check_key}': '{base_value_typed}' (base) vs '{check_value_typed}' (checking)")
+                        diff_found = True
 
       if len(base_rows_checked) != len(base_rows):
         diff_found = True
