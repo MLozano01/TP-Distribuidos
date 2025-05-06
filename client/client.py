@@ -56,6 +56,7 @@ class Client:
     with open(path, "r") as file:
       lines = []
       current_size = 0
+      next(file) #header
       for line in file:
         size = len(line)
         if (current_size + size) > self.max_batch_size:
