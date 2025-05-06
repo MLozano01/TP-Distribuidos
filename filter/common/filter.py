@@ -75,6 +75,7 @@ class Filter:
         
         self.check_finished(decoded_msg.client_id, False)
         self.filter(decoded_msg)
+        self.check_finished(decoded_msg.client_id + 1, False)
 
     def filter(self, decoded_msg):
         try:
@@ -156,6 +157,8 @@ class Filter:
         self.finish_receive_ntc.put(msg.SerializeToString())
         logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
 
+        self.ack_finished()
+
         if self.finish_receive_ctn.get() == True:
             logging.info("Received SEND finished signal from communication channel.")
             if self.publish_to_joiners:
@@ -164,7 +167,7 @@ class Filter:
             else:
                 msg_to_send = msg.SerializeToString()
                 if self.queue_snd_movies.key == "results":
-                    msg_to_send = self.protocol.create_result({"movies": {}})
+                    msg_to_send = self.protocol.create_result({"movies": {}}, msg.client_id)
                 self.queue_snd_movies.publish(msg_to_send)
                 logging.info(f"Published movie finished signal to {self.queue_snd_movies.exchange}")
 
@@ -188,6 +191,12 @@ class Filter:
             client_finished = msg[0]
             self.finish_notify_ntc.put([client_finished, client_finished == client_id])
             logging.info(f"Got finished for {client_finished} and working on {client_id}.")
+
+    def ack_finished(self):
+        msg = self.finish_notify_ctn.get()
+        logging.info(f"Received finished signal from control channel: {msg}")
+        client_finished = msg[0]
+        self.finish_notify_ntc.put([client_finished, False])
 
     def end_filter(self):
         """End the filter and close the queue."""

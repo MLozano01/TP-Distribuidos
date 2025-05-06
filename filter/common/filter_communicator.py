@@ -111,7 +111,7 @@ class FilterCommunicator:
             logging.info("Sent msg to my filter")
             response = self.finish_notify_ntc.get()
             logging.info(f"{response}")
-            if response[1]:
+            if not response[1]:
                 logging.info("Filter was done with the client!!.")
                 self.queue_communication_2.publish(body)
             else:
