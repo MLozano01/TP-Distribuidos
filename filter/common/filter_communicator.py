@@ -14,8 +14,11 @@ class FilterCommunicator:
     It handles the sending and receiving of messages and data between filters.
     """
 
-    def __init__(self, config, queue):
-        self.comm_queue = queue
+    def __init__(self, config, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn):
+        self.finish_receive_ntc = finish_receive_ntc
+        self.finish_notify_ntc = finish_notify_ntc
+        self.finish_receive_ctn = finish_receive_ctn
+        self.finish_notify_ctn = finish_notify_ctn
         self.config = config
         self.queue_communication = None
         self.protocol = Protocol()
@@ -60,7 +63,7 @@ class FilterCommunicator:
         """
         try:
 
-            data = self.comm_queue.get()
+            data = self.finish_receive_ntc.get()
 
             logging.info(f"Received finished signal from filter")
 
@@ -104,9 +107,11 @@ class FilterCommunicator:
         
         if decoded_msg.finished:
             logging.info("Received finished signal from other filter!!.")
-            self.comm_queue.put(decoded_msg.client_id)
-            is_finished = self.comm_queue.get()
-            if is_finished:
+            self.finish_notify_ctn.put([decoded_msg.client_id, False])
+            logging.info("Sent msg to my filter")
+            response = self.finish_notify_ntc.get()
+            logging.info(f"{response}")
+            if response[1]:
                 logging.info("Filter was done with the client!!.")
                 self.queue_communication_2.publish(body)
             else:
@@ -119,8 +124,9 @@ class FilterCommunicator:
         """
         logging.info("RECEIVED A FILTER ACK")
         self.filters_acked += 1
+
         if self.filters_acked == self.config["filter_replicas_count"]:
             logging.info("All filters acked")
-            self.comm_queue.put(True)
+            self.finish_receive_ctn.put(True)
         else:
             logging.info(f"Filter {self.filters_acked} acked")

@@ -3,7 +3,8 @@ from common.aux import parse_filter_funct, movies_into_results
 import logging
 import json
 from protocol.protocol import Protocol, FileType
-from multiprocessing import Empty
+from queue import Empty
+import time
 
 logging.getLogger("pika").setLevel(logging.ERROR)
 logging.getLogger("RabbitMQ").setLevel(logging.ERROR)
@@ -11,14 +12,17 @@ logging.getLogger("RabbitMQ").setLevel(logging.ERROR)
 
 
 class Filter:
-    def __init__(self, comm_queue, **kwargs):
+    def __init__(self, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, **kwargs):
         self.protocol = Protocol()
         self.queue_rcv = None # For receiving movies data + finished signal
         self.queue_snd_movies_to_ratings_joiner = None
         self.queue_snd_movies_to_credits_joiner = None
         self.queue_snd_movies = None  # For publishing movies data
         self.finished_filter_arg_step_publisher = None # for notifying joiners
-        self.comm_queue = comm_queue
+        self.finish_receive_ntc = finish_receive_ntc
+        self.finish_notify_ntc = finish_notify_ntc
+        self.finish_receive_ctn = finish_receive_ctn
+        self.finish_notify_ctn = finish_notify_ctn
 
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -55,7 +59,8 @@ class Filter:
             logging.error("Receiver queue not initialized. Filter cannot run.")
             return
         self.queue_rcv.consume(self.callback)
-        self._check_finished(None)
+        logging.info(f"Done Consuming")
+        self.check_finished(1, True)
 
 
     def callback(self, ch, method, properties, body):
@@ -68,8 +73,7 @@ class Filter:
             self._publish_movie_finished_signal(decoded_msg)
             return
         
-        self._check_finished(decoded_msg.client_id)
-
+        self.check_finished(decoded_msg.client_id, False)
         self.filter(decoded_msg)
 
     def filter(self, decoded_msg):
@@ -81,18 +85,18 @@ class Filter:
                     self._publish_individually_by_movie_id(result, client_id)
                 else:
                     if hasattr(self, 'queue_snd_movies') and self.queue_snd_movies:
-                            logging.info(f"Publishing batch of {len(result)} filtered messages with routing key: '{self.queue_snd_movies.key}' to exchange '{self.queue_snd_movies.exchange}' ({self.queue_snd_movies.exc_type}).")
+                            # logging.info(f"Publishing batch of {len(result)} filtered messages with routing key: '{self.queue_snd_movies.key}' to exchange '{self.queue_snd_movies.exchange}' ({self.queue_snd_movies.exc_type}).")
                             if self.queue_snd_movies.key == "results":
                                 movies_res = movies_into_results(result)
-                                res = self.protocol.create_result(movies_res)
+                                res = self.protocol.create_result(movies_res, decoded_msg.client_id)
                                 self.queue_snd_movies.publish(res)
                                 return
 
                             self.queue_snd_movies.publish(self.protocol.create_movie_list(result, client_id))
                     else:
                             logging.error("Single sender queue not initialized for non-sharded publish.")
-            else:
-                logging.info(f"No matched the filter criteria.")
+            # else:
+            #     logging.info(f"No matched the filter criteria.")
 
         except Exception as e:
             logging.error(f"Error processing message: {e}")
@@ -108,7 +112,7 @@ class Filter:
 
         exchange_ratings = self.queue_snd_movies_to_ratings_joiner.exchange
         exchange_credits = self.queue_snd_movies_to_credits_joiner.exchange
-        logging.info(f"Publishing {len(result_list)} filtered messages individually by movie_id to exchanges '{exchange_ratings}' and '{exchange_credits}'.")
+        # logging.info(f"Publishing {len(result_list)} filtered messages individually by movie_id to exchanges '{exchange_ratings}' and '{exchange_credits}'.")
 
         published_count = 0
         for movie in result_list:
@@ -143,16 +147,16 @@ class Filter:
             except Exception as e_inner:
                 logging.error(f"Error processing movie ID {movie.id} before publishing: {e_inner}", exc_info=True)
 
-        logging.info(f"Finished publishing {published_count}/{len(result_list)} messages individually to both exchanges.")
+        # logging.info(f"Finished publishing {published_count}/{len(result_list)} messages individually to both exchanges.")
 
 
     def _publish_movie_finished_signal(self, msg):
         """Publishes the movie finished signal. If its to joiners it publishis to a specific fanout exchange, otherwise it publishes to the default key of the single sender queue."""
        
-        self.comm_queue.put(msg.SerializeToString())
+        self.finish_receive_ntc.put(msg.SerializeToString())
         logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
 
-        if self.comm_queue.get() == True:
+        if self.finish_receive_ctn.get() == True:
             logging.info("Received SEND finished signal from communication channel.")
             if self.publish_to_joiners:
                 self.finished_filter_arg_step_publisher.publish(self.protocol.create_finished_message(FileType.MOVIES, msg.client_id))
@@ -166,18 +170,24 @@ class Filter:
 
         logging.info("FINISHED SENDING THE FINISH MESSAGE")
 
-    def _check_finished(self, client_id):
-        if client_id:
+    def check_finished(self, client_id, last):
+        logging.info(f"Checking finished status for client_id: {client_id}, last: {last}")
+        if not last:
             try:
-                client_finished = self.comm_queue.get_nowait()
-                self.comm_queue.put(client_finished == client_id)
+                msg = self.finish_notify_ctn.get_nowait()
+                logging.info(f"Received finished signal from control channel: {msg}")
+                client_finished = msg[0]
+                self.finish_notify_ntc.put([client_finished, client_finished == client_id])
                 logging.info(f"Got finished for {client_finished} and working on {client_id}.")
             except Empty:
+                logging.info("No finished signal received yet.")
                 pass
         else:
-            if self.comm_queue.get_nowait():
-                self.comm_queue.put(True)
-                logging.info("Finished with everything.")
+            msg = self.finish_notify_ctn.get()
+            logging.info(f"Received finished signal from control channel: {msg}")
+            client_finished = msg[0]
+            self.finish_notify_ntc.put([client_finished, client_finished == client_id])
+            logging.info(f"Got finished for {client_finished} and working on {client_id}.")
 
     def end_filter(self):
         """End the filter and close the queue."""
