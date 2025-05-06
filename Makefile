@@ -28,7 +28,7 @@ docker-compose-up: docker-image
 	docker compose --profile "*" -f docker-compose.yaml up --build
 .PHONY: docker-compose-up
 
-docker-compose-up-system:
+docker-compose-up-system: docker-image
 	docker compose -f docker-compose.yaml up --build -d
 .PHONY: docker-compose-up-system
 
@@ -39,6 +39,8 @@ docker-compose-up-clients: docker-image-client
 docker-compose-down:
 	docker compose -f docker-compose.yaml stop -t 1
 	docker compose -f docker-compose.yaml down
+	docker network prune -f
+	docker volume prune -f
 .PHONY: docker-compose-down
 
 docker-compose-logs:

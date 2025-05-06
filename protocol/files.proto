@@ -144,6 +144,8 @@ message Aggregation {
 
 message AggregationBatch {
   repeated Aggregation aggr_row = 1;
+  optional bool finished = 2;
+  int32 client_id = 3;
 }
 // [END] Aggregators messages
 

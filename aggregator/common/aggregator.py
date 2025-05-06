@@ -57,7 +57,7 @@ class Aggregator:
         try:
             result = parse_aggregate_func(decoded_msg, self.key, self.field, self.operations, self.file_name)
             logging.info(f"Result: {result}")
-            self.queue_snd.publish(self.protocol.create_aggr_batch(result))
+            self.queue_snd.publish(self.protocol.create_aggr_batch(result, decoded_msg.client_id))
             self.send_actual_client_id_status.put([decoded_msg.client_id, DONE])
         except Exception as e:
             logging.error(f"Error processing message: {e}")

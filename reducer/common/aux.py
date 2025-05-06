@@ -76,6 +76,8 @@ def reduce_top5(data_to_reduce, reduce_args, result, client_id):
 
     result.setdefault(client_id, {})
 
+    logging.info(f"[REDUCE_TOP5] client_id: {client_id}, data_to_reduce: {data_to_reduce}")
+
     for data in data_to_reduce.aggr_row:
         result[client_id].setdefault(data.key, 0)
         result[client_id][data.key] += data.sum
