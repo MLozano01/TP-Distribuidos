@@ -6,9 +6,19 @@ def filter_movies(movies_csv):
     movies_pb = files_pb2.MoviesCSV()
     movies_pb.client_id = movies_csv.client_id
     for movie in movies_csv.movies:
+        pereti = False
+        if movie.id in [78237, 188761, 127702, 138167, 80277, 109690, 342163, 83266, 311215, 367613]:
+            logging.info(f"ES PERETTI: {movie.id}")
+            pereti = True
         if not movie.id or movie.id < 0 or not movie.release_date:
+            if pereti:
+                logging.info("F pereti por id or release_date")
+            logging.info(f"F movie id: {movie}")
             continue
         if not is_date(movie.release_date):
+            if pereti:
+                logging.info("F pereti por release_date")
+            logging.info(f"F movie release_date: {movie}")
             continue
 
         filtered_genres = [genre for genre in movie.genres if genre.name]

@@ -166,6 +166,11 @@ class Protocol:
           data_csv.credits.append(line_parsed)
     return data_csv
 
+  def begins_field(self, part):
+    #tiene tada, no arranca con " o arranca con "[
+    val= (part and part[0] != ' ' and part != '"') or part.startswith('"[') or part.startswith('"{')
+    return val
+  
   def parse_line(self, line, file_type):
     parts = line.split(',')
     data = dict()
@@ -173,18 +178,22 @@ class Protocol:
     headers_dict = self.__headers_dict[file_type]
     
     for part in parts:
-      if not part or part[0] != ' ':
+      if not part or self.begins_field(part):
+        # logging.info(f"passing index with: -{part}-")
         index+=1
       
       try:
         header = self.__headers[file_type][index]
         data.setdefault(header, "")
         cleaned = part.strip(" '\\").strip('" \n')
-        if part and part[0] == ' ':
+        if part and not self.begins_field(part):
           cleaned = "," + part
       
         data[header] += cleaned
       except Exception as e:
+        if (data['id'] in ["78237", "188761", "127702", "138167", "80277", "109690", "342163", "83266", "311215", "367613"]):
+          logging.info(F"VOLO DE PERETTI: {line}\n for header: {index} with data: {data} with part: {part}-")
+        logging.info(f"F parse_line: {line}\n for header: {index} with data: {data} with part: {part}-")
         return dict()
     
     return data
@@ -204,6 +213,7 @@ class Protocol:
     row_keys = row.keys()
     for column in columns:
       if column not in row_keys:
+        logging.info(f"Dropping because of {column}")
         return True
     return False
   
@@ -254,6 +264,7 @@ class Protocol:
   def update_movies_msg(self, movie, columns):
     movie_pb = files_pb2.MovieCSV()
     if self.drop_row(movie, columns):
+      logging.info(f"F drop row: {movie}")
       return movie_pb, False
     movie_pb.id = to_int(movie.get('id', -1))
     movie_pb.adult = to_bool(movie.get('adult', 'False'))
