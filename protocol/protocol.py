@@ -183,8 +183,9 @@ class Protocol:
         for index, data_field in enumerate(row):
           header = self.__headers[file_type][index]
           data[header] = data_field
-    except:
+    except Exception as e:
       logging.info(f"F parse_line: {line}\n data: {data}")
+      logging.info(f"error in parse_line: {e}")
       return dict()
     return data
 

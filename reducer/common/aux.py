@@ -121,7 +121,7 @@ def calculate_avg(partial_result):
     result = {}
 
     res = {}
-
+    logging.info(f"partial_result: {partial_result}")
     for key, value in partial_result.items():
         result.setdefault(key, 0)
         if value["count"] > 0:
