@@ -23,6 +23,7 @@ def parse_reduce_funct(data_to_reduce, reduce_by, result, client_id):
         return reduce_top5(protocol.decode_aggr_batch(data_to_reduce), args, result, client_id)
     
     if args[0] == "top" and args[1] == "10":
+        logging.info(f"[parse_reduce_funct] client_id: {client_id}")
         return reduce_top10(protocol.decode_actor_participations_batch(data_to_reduce), args, result, client_id)
     
     if args[0] == "max-min":
@@ -37,11 +38,15 @@ def parse_final_result(reduce_by, partial_results, client_id):
 
     client_partial_results = partial_results.get(client_id, {})
 
+
     logging.debug(f"[parse_final_result] reduce_by: {reduce_by}, partial_results keys: {list(client_partial_results.keys())[:20]}")
     if args[0] == "avg":
         return calculate_avg(client_partial_results)
     if args[0] == "top" and args[1] == "5":
         # Sort countries by sum (value) in descending order
+
+        logging.info(f"[parse_final_result] client_id: {client_id}, partial_results: {client_partial_results}")
+
         sorted_countries = sorted(client_partial_results.items(), key=operator.itemgetter(1), reverse=True)
         # Take the top 5
         top_5_countries = dict(sorted_countries[:int(args[1])])
@@ -74,6 +79,8 @@ def reduce_top5(data_to_reduce, reduce_args, result, client_id):
     for data in data_to_reduce.aggr_row:
         result[client_id].setdefault(data.key, 0)
         result[client_id][data.key] += data.sum
+
+    # logging.info(f"[REDUCE_TOP5] CLIENT_ID: {client_id}, result: {result[client_id]}")
 
     return result
 
@@ -108,7 +115,7 @@ def reduce_max_min(data_to_reduce, reduce_args, result, client_id):
 
     for data in data_to_reduce.movies:
         if len(result) < 2:
-            result[data.title] = data.average_rating
+            result[client_id][data.title] = data.average_rating
         else:
             max_rating = max(result, key=result.get)
             min_rating = min(result, key=result.get)

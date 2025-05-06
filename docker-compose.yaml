@@ -70,7 +70,7 @@ services:
       - ./filter/filters/filter_2000_movies.ini:/config.ini
     environment:
       - FILTER_REPLICA_ID=1
-      - FILTER_REPLICA_COUNT=2
+      - FILTER_REPLICA_COUNT=5
     
   filter_2000_movies-2:
     container_name: filter_2000_movies-2
@@ -87,7 +87,58 @@ services:
       - ./filter/filters/filter_2000_movies.ini:/config.ini
     environment:
       - FILTER_REPLICA_ID=2
-      - FILTER_REPLICA_COUNT=2
+      - FILTER_REPLICA_COUNT=5
+    
+  filter_2000_movies-3:
+    container_name: filter_2000_movies-3
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_2000_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=3
+      - FILTER_REPLICA_COUNT=5
+    
+  filter_2000_movies-4:
+    container_name: filter_2000_movies-4
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_2000_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=4
+      - FILTER_REPLICA_COUNT=5
+    
+  filter_2000_movies-5:
+    container_name: filter_2000_movies-5
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_2000_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=5
+      - FILTER_REPLICA_COUNT=5
     
   filter_arg_spa_movies-1:
     container_name: filter_arg_spa_movies-1
@@ -223,7 +274,41 @@ services:
       - ./aggregator/aggregators/aggr_country_budget.ini:/config.ini
     environment:
       - AGGR_REPLICA_ID=1
-      - AGGR_REPLICA_COUNT=1
+      - AGGR_REPLICA_COUNT=3
+    
+  aggregator_budget-2:
+    container_name: aggregator_budget-2
+    image: aggregator:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./aggregator/aggregators/aggr_country_budget.ini:/config.ini
+    environment:
+      - AGGR_REPLICA_ID=2
+      - AGGR_REPLICA_COUNT=3
+    
+  aggregator_budget-3:
+    container_name: aggregator_budget-3
+    image: aggregator:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./aggregator/aggregators/aggr_country_budget.ini:/config.ini
+    environment:
+      - AGGR_REPLICA_ID=3
+      - AGGR_REPLICA_COUNT=3
     
   
   reducer:

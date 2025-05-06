@@ -4,8 +4,6 @@ import logging
 import json
 from protocol.protocol import Protocol, FileType
 from queue import Empty
-from threading import Event
-import time
 from multiprocessing import Process, Queue
 
 logging.getLogger("pika").setLevel(logging.ERROR)
@@ -83,12 +81,11 @@ class Filter:
             logging.info("Received MOVIES finished signal from server on data channel.")
             self._publish_movie_finished_signal(decoded_msg)
             return
-        
+        self.send_actual_client_id_status.put([decoded_msg.client_id, START])
         self.filter(decoded_msg)
 
     def filter(self, decoded_msg):
         try:
-            self.send_actual_client_id_status.put([decoded_msg.client_id, START])
             result = parse_filter_funct(decoded_msg, self.filter_by)
             client_id = decoded_msg.client_id
             if result:
@@ -96,7 +93,7 @@ class Filter:
                     self._publish_individually_by_movie_id(result, client_id)
                 else:
                     if hasattr(self, 'queue_snd_movies') and self.queue_snd_movies:
-                            # logging.info(f"Publishing batch of {len(result)} filtered messages with routing key: '{self.queue_snd_movies.key}' to exchange '{self.queue_snd_movies.exchange}' ({self.queue_snd_movies.exc_type}).")
+                            logging.info(f"Publishing batch of {len(result)} filtered messages with routing key: '{self.queue_snd_movies.key}' to exchange '{self.queue_snd_movies.exchange}' ({self.queue_snd_movies.exc_type}).")
                             if self.queue_snd_movies.key == "results":
                                 movies_res = movies_into_results(result)
                                 res = self.protocol.create_result(movies_res, decoded_msg.client_id)
@@ -106,8 +103,8 @@ class Filter:
                             self.queue_snd_movies.publish(self.protocol.create_movie_list(result, client_id))
                     else:
                             logging.error("Single sender queue not initialized for non-sharded publish.")
-            # else:
-            #     logging.info(f"No matched the filter criteria.")
+            else:
+                logging.info(f"No matched the filter criteria.")
 
             self.send_actual_client_id_status.put([decoded_msg.client_id, DONE])
 
@@ -125,7 +122,7 @@ class Filter:
 
         exchange_ratings = self.queue_snd_movies_to_ratings_joiner.exchange
         exchange_credits = self.queue_snd_movies_to_credits_joiner.exchange
-        # logging.info(f"Publishing {len(result_list)} filtered messages individually by movie_id to exchanges '{exchange_ratings}' and '{exchange_credits}'.")
+        logging.info(f"Publishing {len(result_list)} filtered messages individually by movie_id to exchanges '{exchange_ratings}' and '{exchange_credits}'.")
 
         published_count = 0
         for movie in result_list:
@@ -160,7 +157,7 @@ class Filter:
             except Exception as e_inner:
                 logging.error(f"Error processing movie ID {movie.id} before publishing: {e_inner}", exc_info=True)
 
-        # logging.info(f"Finished publishing {published_count}/{len(result_list)} messages individually to both exchanges.")
+        logging.info(f"Finished publishing {published_count}/{len(result_list)} messages individually to both exchanges.")
 
 
     def _publish_movie_finished_signal(self, msg):
@@ -186,7 +183,7 @@ class Filter:
     def check_finished(self):
         while self.is_alive:
             try:
-                msg = self.finish_notify_ctn.get_nowait()
+                msg = self.finish_notify_ctn.get()
                 logging.info(f"Received finished signal from control channel: {msg}")
 
                 client_id, status = self.get_last()
@@ -201,8 +198,9 @@ class Filter:
             except Empty:
                 logging.info("No finished signal received yet.")
                 pass
-
-            time.sleep(0.5)
+            except Exception as e:
+                logging.error(f"Error in finished signal checker: {e}")
+                break
 
     def get_last(self):
         client_id = None

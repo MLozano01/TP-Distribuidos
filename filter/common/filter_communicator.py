@@ -23,7 +23,7 @@ class FilterCommunicator:
         self.config = config
         self.queue_communication = None
         self.protocol = Protocol()
-        self.filters_acked = 0
+        self.filters_acked = {}
 
 
     def _settle_queues(self):
@@ -109,12 +109,12 @@ class FilterCommunicator:
         if decoded_msg.finished:
             logging.info("Received finished signal from other filter!!.")
             self.finish_notify_ctn.put([decoded_msg.client_id, False])
-            logging.info("Sent msg to my filter")
+            
             done_with_client = self.finish_notify_ntc.get()
             logging.info(f"{done_with_client}")
             if done_with_client[1]:
                 logging.info("Filter was done with the client!!.")
-                self.queue_communication_2.publish(body)
+                self.queue_communication_2.publish(done_with_client[0].to_bytes(2, byteorder='big'))
             else:
                 raise Exception("Failed to send finished signal to other filter")
         return
@@ -124,9 +124,15 @@ class FilterCommunicator:
         Callback function to process incoming messages.
         """
         logging.info("RECEIVED A FILTER ACK")
-        self.filters_acked += 1
 
-        if self.filters_acked == self.config["filter_replicas_count"]:
+        client_id = int.from_bytes(body, byteorder='big')
+
+        logging.info(f"Received ack from the client: {client_id}")
+        
+        self.filters_acked.setdefault(client_id, 0)
+        self.filters_acked[client_id] += 1
+
+        if self.filters_acked[client_id] == self.config["filter_replicas_count"]:
             logging.info("All filters acked")
             self.finish_receive_ctn.put(True)
         else:

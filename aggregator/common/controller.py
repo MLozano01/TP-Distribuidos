@@ -18,16 +18,19 @@ class Controller:
 
         try:
 
-            comm_queue = Queue()
+            finish_receive_ntc = Queue()
+            finish_notify_ntc = Queue()
+            finish_receive_ctn = Queue()
+            finish_notify_ctn = Queue()
 
 
-            aggregator_instance = Aggregator(comm_queue, **self.config)
+            aggregator_instance = Aggregator(finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, **self.config)
 
             self.aggregator = Process(target=aggregator_instance.run, args=())
         
             self.aggregator.start()
 
-            communicator_instance = AggregatorCommunicator(self.communication_config, comm_queue)
+            communicator_instance = AggregatorCommunicator(self.communication_config, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn)
 
             self.aggregator_communicator = Process(target=communicator_instance.run, args=())
             self.aggregator_communicator.start()
