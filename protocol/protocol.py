@@ -1,3 +1,5 @@
+import csv
+import io
 from protocol import files_pb2
 from protocol.utils.parsing_proto_utils import *
 from enum import Enum
@@ -172,30 +174,18 @@ class Protocol:
     return val
   
   def parse_line(self, line, file_type):
-    parts = line.split(',')
-    data = dict()
-    index = -1
-    headers_dict = self.__headers_dict[file_type]
-    
-    for part in parts:
-      if not part or self.begins_field(part):
-        # logging.info(f"passing index with: -{part}-")
-        index+=1
-      
-      try:
-        header = self.__headers[file_type][index]
-        data.setdefault(header, "")
-        cleaned = part.strip(" '\\").strip('" \n')
-        if part and not self.begins_field(part):
-          cleaned = "," + part
-      
-        data[header] += cleaned
-      except Exception as e:
-        if (data['id'] in ["78237", "188761", "127702", "138167", "80277", "109690", "342163", "83266", "311215", "367613"]):
-          logging.info(F"VOLO DE PERETTI: {line}\n for header: {index} with data: {data} with part: {part}-")
-        logging.info(f"F parse_line: {line}\n for header: {index} with data: {data} with part: {part}-")
-        return dict()
-    
+
+    try:
+      string_io = io.StringIO(line)
+      reader = csv.reader(string_io)
+      data = dict()
+      for row in reader:
+        for index, data_field in enumerate(row):
+          header = self.__headers[file_type][index]
+          data[header] = data_field
+    except:
+      logging.info(f"F parse_line: {line}\n data: {data}")
+      return dict()
     return data
 
 
