@@ -4,12 +4,15 @@ import logging
 import json
 from protocol.protocol import Protocol, FileType
 from queue import Empty
+from threading import Event
 import time
+from multiprocessing import Process, Queue
 
 logging.getLogger("pika").setLevel(logging.ERROR)
 logging.getLogger("RabbitMQ").setLevel(logging.ERROR)
 
-
+START = False
+DONE = True
 
 class Filter:
     def __init__(self, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, **kwargs):
@@ -24,6 +27,10 @@ class Filter:
         self.finish_receive_ctn = finish_receive_ctn
         self.finish_notify_ctn = finish_notify_ctn
 
+
+        self.send_actual_client_id_status = Queue()
+        self.finish_signal_checker = None
+
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -33,6 +40,7 @@ class Filter:
             self.publish_to_joiners = False
 
         self.is_alive = True
+
 
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type)
@@ -58,9 +66,12 @@ class Filter:
         if not self.queue_rcv: # Check if receiver queue settled
             logging.error("Receiver queue not initialized. Filter cannot run.")
             return
+        
+        self.finish_signal_checker = Process(target=self.check_finished, args=())
+        self.finish_signal_checker.start()
+        
         self.queue_rcv.consume(self.callback)
         logging.info(f"Done Consuming")
-        self.check_finished(1, True)
 
 
     def callback(self, ch, method, properties, body):
@@ -73,12 +84,11 @@ class Filter:
             self._publish_movie_finished_signal(decoded_msg)
             return
         
-        self.check_finished(decoded_msg.client_id, False)
         self.filter(decoded_msg)
-        self.check_finished(decoded_msg.client_id + 1, False)
 
     def filter(self, decoded_msg):
         try:
+            self.send_actual_client_id_status.put([decoded_msg.client_id, START])
             result = parse_filter_funct(decoded_msg, self.filter_by)
             client_id = decoded_msg.client_id
             if result:
@@ -98,6 +108,8 @@ class Filter:
                             logging.error("Single sender queue not initialized for non-sharded publish.")
             # else:
             #     logging.info(f"No matched the filter criteria.")
+
+            self.send_actual_client_id_status.put([decoded_msg.client_id, DONE])
 
         except Exception as e:
             logging.error(f"Error processing message: {e}")
@@ -157,8 +169,6 @@ class Filter:
         self.finish_receive_ntc.put(msg.SerializeToString())
         logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
 
-        self.ack_finished()
-
         if self.finish_receive_ctn.get() == True:
             logging.info("Received SEND finished signal from communication channel.")
             if self.publish_to_joiners:
@@ -173,30 +183,38 @@ class Filter:
 
         logging.info("FINISHED SENDING THE FINISH MESSAGE")
 
-    def check_finished(self, client_id, last):
-        logging.info(f"Checking finished status for client_id: {client_id}, last: {last}")
-        if not last:
+    def check_finished(self):
+        while self.is_alive:
             try:
                 msg = self.finish_notify_ctn.get_nowait()
                 logging.info(f"Received finished signal from control channel: {msg}")
+
+                client_id, status = self.get_last()
                 client_finished = msg[0]
-                self.finish_notify_ntc.put([client_finished, client_finished == client_id])
-                logging.info(f"Got finished for {client_finished} and working on {client_id}.")
+                if client_finished == client_id:
+                    self.finish_notify_ntc.put([client_finished, status])
+                    logging.info(f"Received finished signal from control channel for client {client_finished}, with status {status}.")
+                else:
+                    self.finish_notify_ntc.put([client_finished, True])
+                    logging.info(f"Received finished signal from control channel for client {client_finished}, but working on {client_id}.")
+
             except Empty:
                 logging.info("No finished signal received yet.")
                 pass
-        else:
-            msg = self.finish_notify_ctn.get()
-            logging.info(f"Received finished signal from control channel: {msg}")
-            client_finished = msg[0]
-            self.finish_notify_ntc.put([client_finished, client_finished == client_id])
-            logging.info(f"Got finished for {client_finished} and working on {client_id}.")
 
-    def ack_finished(self):
-        msg = self.finish_notify_ctn.get()
-        logging.info(f"Received finished signal from control channel: {msg}")
-        client_finished = msg[0]
-        self.finish_notify_ntc.put([client_finished, False])
+            time.sleep(0.5)
+
+    def get_last(self):
+        client_id = None
+        status = None
+
+        while not self.send_actual_client_id_status.empty():
+
+            client_id, status = self.send_actual_client_id_status.get_nowait()
+
+        logging.info(f"Last client ID: {client_id}, status: {status}")
+
+        return client_id, status
 
     def end_filter(self):
         """End the filter and close the queue."""
@@ -220,6 +238,11 @@ class Filter:
         if self.movies_control_publisher:
             try: self.movies_control_publisher.close_channel()
             except Exception as e: logging.error(f"Error closing movie control publisher channel: {e}")
+
+        if self.finish_signal_checker:
+            self.finish_signal_checker.terminate()
+            self.finish_signal_checker.join()
+            logging.info("Finished signal checker process terminated.")
 
         self.is_alive = False
         logging.info("Filter Stopped")

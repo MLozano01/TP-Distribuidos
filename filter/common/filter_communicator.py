@@ -3,6 +3,7 @@ import logging
 from multiprocessing import Process
 from protocol.protocol import Protocol
 import time
+from threading import Event
 
 logging.getLogger("pika").setLevel(logging.ERROR)
 
@@ -70,7 +71,7 @@ class FilterCommunicator:
             consume_process = Process(target=self._manage_consume_pika, args=())
             consume_process.start()
 
-            time.sleep(0.5)  # Ensure the consumer is ready before publishing
+            time.sleep(0.5)
 
             self.queue_communication_1.publish(data)
             consume_process.join()
@@ -109,9 +110,9 @@ class FilterCommunicator:
             logging.info("Received finished signal from other filter!!.")
             self.finish_notify_ctn.put([decoded_msg.client_id, False])
             logging.info("Sent msg to my filter")
-            response = self.finish_notify_ntc.get()
-            logging.info(f"{response}")
-            if not response[1]:
+            done_with_client = self.finish_notify_ntc.get()
+            logging.info(f"{done_with_client}")
+            if done_with_client[1]:
                 logging.info("Filter was done with the client!!.")
                 self.queue_communication_2.publish(body)
             else:

@@ -121,24 +121,7 @@ services:
       - ./filter/filters/filter_Arg_movies.ini:/config.ini
     environment:
       - FILTER_REPLICA_ID=1
-      - FILTER_REPLICA_COUNT=2
-    
-  filter_arg_movies-2:
-    container_name: filter_arg_movies-2
-    image: filter:latest
-    networks:
-      - tp_network
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-        restart: true
-    links:
-      - rabbitmq
-    volumes:
-      - ./filter/filters/filter_Arg_movies.ini:/config.ini
-    environment:
-      - FILTER_REPLICA_ID=2
-      - FILTER_REPLICA_COUNT=2
+      - FILTER_REPLICA_COUNT=1
     
   filter_single_country_movies-1:
     container_name: filter_single_country_movies-1
@@ -155,24 +138,7 @@ services:
       - ./filter/filters/filter_single_country_movies.ini:/config.ini
     environment:
       - FILTER_REPLICA_ID=1
-      - FILTER_REPLICA_COUNT=2
-    
-  filter_single_country_movies-2:
-    container_name: filter_single_country_movies-2
-    image: filter:latest
-    networks:
-      - tp_network
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-        restart: true
-    links:
-      - rabbitmq
-    volumes:
-      - ./filter/filters/filter_single_country_movies.ini:/config.ini
-    environment:
-      - FILTER_REPLICA_ID=2
-      - FILTER_REPLICA_COUNT=2
+      - FILTER_REPLICA_COUNT=1
     
   filter_decade_movies-1:
     container_name: filter_decade_movies-1
