@@ -18,21 +18,23 @@ class Controller:
 
         try:
 
-            comm_queue = Queue()
+            finish_receive_ntc = Queue()
+            finish_notify_ntc = Queue()
+            finish_receive_ctn = Queue()
+            finish_notify_ctn = Queue()
 
             filter_name = self.config["filter_name"]
 
             logging.info(f"Starting filter {filter_name}  with config {self.config}")
 
-            filter_instance = Filter(comm_queue, **self.config)
+            filter_instance = Filter(finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, **self.config)
 
             self.filter = Process(target=filter_instance.run, args=())
         
             self.filter.start()
             logging.info(f"Filter {filter_name} started with PID: {self.filter.pid}")
 
-            communicator_instance = FilterCommunicator(self.communication_config, comm_queue)
-
+            communicator_instance = FilterCommunicator(self.communication_config, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn)
             self.filter_communicator = Process(target=communicator_instance.run, args=())
             self.filter_communicator.start()
             logging.info(f"Filter communicator started with PID: {self.filter_communicator.pid}")
