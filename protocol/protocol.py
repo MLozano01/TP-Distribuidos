@@ -184,8 +184,6 @@ class Protocol:
           header = self.__headers[file_type][index]
           data[header] = data_field
     except Exception as e:
-      logging.info(f"F parse_line: {line}\n data: {data}")
-      logging.info(f"error in parse_line: {e}")
       return dict()
     return data
 
@@ -204,7 +202,6 @@ class Protocol:
     row_keys = row.keys()
     for column in columns:
       if column not in row_keys:
-        logging.info(f"Dropping because of {column}")
         return True
     return False
   
@@ -255,7 +252,6 @@ class Protocol:
   def update_movies_msg(self, movie, columns):
     movie_pb = files_pb2.MovieCSV()
     if self.drop_row(movie, columns):
-      logging.info(f"F drop row: {movie}")
       return movie_pb, False
     movie_pb.id = to_int(movie.get('id', -1))
     movie_pb.adult = to_bool(movie.get('adult', 'False'))
