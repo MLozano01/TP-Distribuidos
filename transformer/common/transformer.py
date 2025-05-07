@@ -161,13 +161,15 @@ class Transformer:
 
 
     def _publish_movie_finished_signal(self, msg):
-        self.comm_queue.put(msg.SerializeToString())
-        logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
+        # self.comm_queue.put(msg.SerializeToString())
+        # logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
 
-        if self.comm_queue.get() == True:
-            logging.info("Received SEND finished signal from communication channel.")
-            self.queue_snd.publish(msg.SerializeToString())
-            logging.info(f"Published movie finished signal to {self.queue_snd.exchange}")
+        # if self.comm_queue.get() == True:
+        #     logging.info("Received SEND finished signal from communication channel.")
+        #     self.queue_snd.publish(msg.SerializeToString())
+        #     logging.info(f"Published movie finished signal to {self.queue_snd.exchange}")
+
+        self.queue_snd.publish(msg.SerializeToString())
 
         logging.info("FINISHED SENDING THE FINISH MESSAGE")
 
