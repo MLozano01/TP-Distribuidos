@@ -71,7 +71,7 @@ class Client:
             logging.error(f"Failed to forward message to data controller: {e}")
 
     def return_results(self, conn: socket.socket):
-        self.result_queue = RabbitMQ('exchange_snd_results', 'result', 'results', 'direct')
+        self.result_queue = RabbitMQ('exchange_snd_results', f'result_{self.client_id}', f'results_{self.client_id}', 'direct')
         self.result_queue.consume(self.result_controller_func)
 
     def result_controller_func(self, ch, method, properties, body):

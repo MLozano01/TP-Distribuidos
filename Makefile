@@ -32,6 +32,10 @@ docker-compose-up-system: docker-image
 	docker compose -f docker-compose.yaml up --build -d
 .PHONY: docker-compose-up-system
 
+docker-run-system:
+	docker compose -f docker-compose.yaml up --build -d
+.PHONY: docker-run-system
+
 docker-compose-up-clients: docker-image-client
 	docker compose --profile clients -f docker-compose.yaml up -d
 .PHONY: docker-compose-up-clients

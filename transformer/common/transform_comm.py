@@ -26,6 +26,7 @@ class TransformerCommunicator:
         self.queue_communication = None
         self.protocol = Protocol()
         self.transformers_acked = {}
+        self.continue_running = True
 
     def _create_comm_queue(self, number):
         name = self.config["queue_communication_name"] + f"_{number}"
@@ -69,26 +70,27 @@ class TransformerCommunicator:
         """
         Manage the inner communication between transformers.
         """
-        try:
+        consume_process = Process(target=self._manage_consume_pika, args=())
+        consume_process.start()
+        while self.continue_running:
+            try:
 
-            data = self.finish_receive_ntc.get()
+                data = self.finish_receive_ntc.get()
 
-            logging.info(f"Received finished signal from transformers")
+                logging.info(f"Received finished signal from transformers")
 
-            consume_process = Process(target=self._manage_consume_pika, args=())
-            consume_process.start()
 
-            time.sleep(0.5)  # Ensure the consumer is ready before publishing
+                time.sleep(0.5)  # Ensure the consumer is ready before publishing
 
-            self.queue_communication_1.publish(data)
-            consume_process.join()
+                self.queue_communication_1.publish(data)
 
-            
-            logging.info("Finished acking the other transformers")
+                
+                logging.info("Finished acking the other transformers")
 
-        except Exception as e:
-            logging.error(f"Error in managing inner communication: {e}")
-            self.comm_queue.put(False)
+            except Exception as e:
+                logging.error(f"Error in managing inner communication: {e}")
+                self.comm_queue.put(False)
+        consume_process.join()
 
     def _manage_consume_pika(self):
         consumer_queue = RabbitMQ(self.config["exchange_communication"], self.config["queue_communication_name"] + "_2", self.config["routing_communication_key"] + "_2", self.config["exc_communication_type"])

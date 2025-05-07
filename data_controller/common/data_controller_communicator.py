@@ -16,18 +16,22 @@ class DataControllerCommunicator:
     It handles the sending and receiving of messages and data between data controllers.
     """
 
-    def __init__(self, config, queue, type):
-        self.comm_queue = queue
+    def __init__(self, config, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, type):
+        self.finish_receive_ntc = finish_receive_ntc
+        self.finish_notify_ntc = finish_notify_ntc
+        self.finish_receive_ctn = finish_receive_ctn
+        self.finish_notify_ctn = finish_notify_ctn
         self.config = config
         self.queue_communication = None
         self.protocol = Protocol()
-        self.data_controllers_acked = 0
+        self.data_controllers_acked = {}
         self.type = type
 
         logger.info(f"Initialized {self.type} communicator with: {self.config['data_controller_replicas_count']} replicas count")
         
         # Setup signal handler for SIGTERM
         signal.signal(signal.SIGTERM, self._handle_shutdown)
+        self.continue_running = True
 
     def _settle_queues(self):
         """
@@ -65,25 +69,24 @@ class DataControllerCommunicator:
         """
         Manage the inner communication between data controllers.
         """
-        try:
+        consume_process = Process(target=self._await_replicas_ack, args=())
+        consume_process.start()
+        while self.continue_running:
+            try:
+                data = self.finish_receive_ntc.get()
+                logger.info(f"Received {self.type} finished signal from upstream")
 
-            data = self.comm_queue.get()
 
-            logger.info(f"Received {self.type} finished signal from upstream")
+                time.sleep(0.5)  # Ensure the consumer is ready before publishing
 
-            consume_process = Process(target=self._await_replicas_ack, args=())
-            consume_process.start()
+                self.queue_communication_1.publish(data)
+                
+                logger.info(f"All {self.type} acks of the other replicas received")
 
-            time.sleep(0.5)  # Ensure the consumer is ready before publishing
-
-            self.queue_communication_1.publish(data)
-            consume_process.join()
-            
-            logger.info(f"All {self.type} acks of the other replicas received")
-
-        except Exception as e:
-            logger.error(f"Error in managing inner communication: {e}")
-            self.comm_queue.put(False)
+            except Exception as e:
+                logger.error(f"Error in managing inner communication: {e}")
+                self.finish_receive_ctn.put(False)
+        consume_process.join()
 
     def _await_replicas_ack(self):
         consumer_queue = RabbitMQ(self.config["exchange_communication"], self.config["queue_communication_name"] + "_2", self.config["routing_communication_key"] + "_2", self.config["exc_communication_type"])
@@ -105,29 +108,52 @@ class DataControllerCommunicator:
         Callback function to process incoming messages.
         """
         logger.debug(f"Received message on communication channel with routing key: {method.routing_key}")
-        decoded_msg = self.protocol.decode_movies_msg(body)
+        
+        # Decode message based on type
+        if self.type == "MOVIES":
+            decoded_msg = self.protocol.decode_movies_msg(body)
+        elif self.type == "RATINGS":
+            decoded_msg = self.protocol.decode_ratings_msg(body)
+        elif self.type == "CREDITS":
+            decoded_msg = self.protocol.decode_credits_msg(body)
+        else:
+            logger.error(f"Unknown message type: {self.type}")
+            return
         
         if decoded_msg.finished:
             logger.info(f"Received {self.type} finished from replica data controller.")
-            self.queue_communication_2.publish(body)
-        return
+            self.finish_notify_ctn.put([decoded_msg.client_id, False])
+
+            done_with_client = self.finish_notify_ntc.get()
+            logging.info(f"{done_with_client}")
+            if done_with_client[1]:
+                logging.info(f"Data controller was done with the client {decoded_msg.client_id}")
+                self.queue_communication_2.publish(done_with_client[0].to_bytes(2, byteorder='big'))
+            else:
+                raise Exception("Failed to send finished signal to other filter")
+        
     
     def _handle_replica_ack(self, ch, method, properties, body):
         """
         Callback function to process incoming messages.
         """
         logger.debug("RECEIVED A DATA CONTROLLER ACK")
-        self.data_controllers_acked += 1
-        if self.data_controllers_acked == self.config["data_controller_replicas_count"]:
-            logger.info(f"All data controllers acked {self.type}")
-            self.comm_queue.put(True)
-        else:
-            logger.info(f"Data controller {self.type} ack number: {self.data_controllers_acked} received")
+        client_id = int.from_bytes(body, byteorder='big')
+
+        logging.info(f"Received ack from the client: {client_id}")
+
+        self.data_controllers_acked.setdefault(client_id, 0)
+        self.data_controllers_acked[client_id] += 1
+
+        if self.data_controllers_acked[client_id] == self.config["data_controller_replicas_count"]:
+            logging.info("All data_controller acked")
+            self.finish_receive_ctn.put(True)
+
 
     def stop(self):
         """Stop the DataControllerCommunicator and close all connections"""
         logging.info(f"Stopping {self.type} DataControllerCommunicator...")
-        
+        self.continue_running = False
         # Close queue communication 1 connection
         if hasattr(self, 'queue_communication_1'):
             try:
