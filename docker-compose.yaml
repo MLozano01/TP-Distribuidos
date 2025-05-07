@@ -38,12 +38,30 @@ services:
       - ./data/movies_metadata.csv:/movies_metadata.csv
       - ./data/results_client1.json:/results.json
     
+  client2:
+    container_name: client2
+    image: client:latest
+    profiles: [clients]
+    environment:
+      - CLI_ID=2
+    networks:
+      - tp_network
+    depends_on:
+      server:
+        condition: service_started
+    volumes:
+      - ./client/config.ini:/config.ini
+      - ./data/credits.csv:/credits.csv
+      - ./data/ratings_small.csv:/ratings.csv
+      - ./data/movies_metadata.csv:/movies_metadata.csv
+      - ./data/results_client2.json:/results.json
+    
   server:
     container_name: server
     image: server:latest
     entrypoint: python3 /main.py
     environment:
-      - NUM_CLIENTS=1
+      - NUM_CLIENTS=2
     networks:
       - tp_network
     depends_on:
@@ -71,24 +89,7 @@ services:
       - ./filter/filters/filter_2000_movies.ini:/config.ini
     environment:
       - FILTER_REPLICA_ID=1
-      - FILTER_REPLICA_COUNT=2
-    
-  filter_2000_movies-2:
-    container_name: filter_2000_movies-2
-    image: filter:latest
-    networks:
-      - tp_network
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-        restart: true
-    links:
-      - rabbitmq
-    volumes:
-      - ./filter/filters/filter_2000_movies.ini:/config.ini
-    environment:
-      - FILTER_REPLICA_ID=2
-      - FILTER_REPLICA_COUNT=2
+      - FILTER_REPLICA_COUNT=1
     
   filter_arg_spa_movies-1:
     container_name: filter_arg_spa_movies-1

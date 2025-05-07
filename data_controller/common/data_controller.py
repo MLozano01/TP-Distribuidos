@@ -14,6 +14,7 @@ DONE = True
 # Configure logging to reduce noise
 logging.getLogger('pika').setLevel(logging.WARNING)
 logging.getLogger('RabbitMQ').setLevel(logging.WARNING)
+logging.getLogger('DataControllerCommunicator').setLevel(logging.WARNING)
 
 class DataController:
     def __init__(
@@ -38,25 +39,28 @@ class DataController:
         self.movies_publisher = None
         self.ratings_publisher = None
         self.credits_publisher = None
-        self.replica_id = kwargs.get('replica_id', 'unknown')  # Initialize replica_id with a default value
+        self.replica_id = kwargs.get('replica_id', 'unknown')
 
         # Movies communication
         self.movies_finish_receive_ntc = movies_finish_receive_ntc
         self.movies_finish_notify_ntc = movies_finish_notify_ntc
         self.movies_finish_receive_ctn = movies_finish_receive_ctn
         self.movies_finish_notify_ctn = movies_finish_notify_ctn
+        self.movies_client_status = Queue()
 
         # Credits communication
         self.credits_finish_receive_ntc = credits_finish_receive_ntc
         self.credits_finish_notify_ntc = credits_finish_notify_ntc
         self.credits_finish_receive_ctn = credits_finish_receive_ctn
         self.credits_finish_notify_ctn = credits_finish_notify_ctn
+        self.credits_client_status = Queue()
 
         # Ratings communication
         self.ratings_finish_receive_ntc = ratings_finish_receive_ntc
         self.ratings_finish_notify_ntc = ratings_finish_notify_ntc
         self.ratings_finish_receive_ctn = ratings_finish_receive_ctn
         self.ratings_finish_notify_ctn = ratings_finish_notify_ctn
+        self.ratings_client_status = Queue()
 
         self.finish_signal_checker = None
         self.send_actual_client_id_status = Queue()
@@ -126,8 +130,8 @@ class DataController:
 
     def _handle_finished_message(self, message_type, msg):
         """Handle finished messages with coordination"""
-        logging.info(f"Received {message_type.name} finished signal from server.")
         client_id = msg.client_id
+        logging.info(f"Received {message_type.name} finished signal from server for client {client_id}")
         msg_to_send = msg.SerializeToString()
         
         if message_type == FileType.MOVIES:
@@ -147,14 +151,18 @@ class DataController:
                 self.credits_publisher.publish(msg_to_send)
 
     def _handle_data_message(self, message_type, msg):
-        self.send_actual_client_id_status.put([msg.client_id, START])
         if message_type == FileType.MOVIES:
+            self.movies_client_status.put([msg.client_id, START])
             self.publish_movies(msg)
+            self.movies_client_status.put([msg.client_id, DONE])
         elif message_type == FileType.RATINGS:
+            self.ratings_client_status.put([msg.client_id, START])
             self.publish_ratings(msg)
+            self.ratings_client_status.put([msg.client_id, DONE])
         elif message_type == FileType.CREDITS:
+            self.credits_client_status.put([msg.client_id, START])
             self.publish_credits(msg)
-        self.send_actual_client_id_status.put([msg.client_id, DONE])
+            self.credits_client_status.put([msg.client_id, DONE])
 
     def publish_movies(self, movies_csv):
         movies_pb = filter_movies(movies_csv)
@@ -242,7 +250,7 @@ class DataController:
                 msg = queue.get()
                 logging.info(f"Received {type_name} finished signal from control channel: {msg}")
 
-                client_id, status = self.get_last()
+                client_id, status = self.get_last(type_name)
                 client_finished = msg[0]
                 if client_finished == client_id:
                     notify_queue.put([client_finished, status])
@@ -252,21 +260,29 @@ class DataController:
                     logging.info(f"Received {type_name} finished signal from control channel for client {client_finished}, but working on {client_id}.")
 
             except Empty:
-                logging.info(f"No {type_name} finished signal received yet.")
-                pass
+                # This is expected when no messages are available
+                continue
             except Exception as e:
                 logging.error(f"Error in {type_name} finished signal checker: {e}")
-                break
+                continue  # Continue the loop on error
 
-    def get_last(self):
+    def get_last(self, message_type):
         client_id = None
         status = None
+        status_queue = None
 
-        while not self.send_actual_client_id_status.empty():
-            client_id, status = self.send_actual_client_id_status.get_nowait()
+        if message_type == "MOVIES":
+            status_queue = self.movies_client_status
+        elif message_type == "RATINGS":
+            status_queue = self.ratings_client_status
+        elif message_type == "CREDITS":
+            status_queue = self.credits_client_status
 
-        logging.info(f"Last client ID: {client_id}, status: {status}")
+        if status_queue:
+            while not status_queue.empty():
+                client_id, status = status_queue.get_nowait()
 
+        logging.info(f"Last client ID for {message_type}: {client_id}, status: {status}")
         return client_id, status
 
     def _handle_shutdown(self, signum, frame):
