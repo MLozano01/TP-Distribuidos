@@ -14,12 +14,15 @@ class AggregatorCommunicator:
     It handles the sending and receiving of messages and data between aggregators.
     """
 
-    def __init__(self, config, queue):
-        self.comm_queue = queue
+    def __init__(self, config, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn):
+        self.finish_receive_ntc = finish_receive_ntc
+        self.finish_notify_ntc = finish_notify_ntc
+        self.finish_receive_ctn = finish_receive_ctn
+        self.finish_notify_ctn = finish_notify_ctn
         self.config = config
         self.queue_communication = None
         self.protocol = Protocol()
-        self.aggr_acked = 0
+        self.aggr_acked = {}
 
     def _create_comm_queue(self, number):
         name = self.config["queue_communication_name"] + f"_{number}"
@@ -64,7 +67,7 @@ class AggregatorCommunicator:
         """
         try:
 
-            data = self.comm_queue.get()
+            data = self.finish_receive_ntc.get()
 
             logging.info(f"Received finished signal from aggregator")
 
@@ -108,9 +111,17 @@ class AggregatorCommunicator:
         decoded_msg = self.protocol.decode_movies_msg(body)
         
         if decoded_msg.finished:
-            logging.info("Received finished signal from other aggregator!!.")
-            comm_queue_2 = self._create_comm_queue(2)
-            comm_queue_2.publish(body)
+            logging.info("Received finished signal from other filter!!.")
+            self.finish_notify_ctn.put([decoded_msg.client_id, False])
+
+            done_with_client = self.finish_notify_ntc.get()
+            logging.info(f"{done_with_client}")
+            if done_with_client[1]:
+                logging.info("Filter was done with the client!!.")
+                self.queue_communication_2.publish(done_with_client[0].to_bytes(2, byteorder='big'))
+            else:
+                raise Exception("Failed to send finished signal to other filter")
+
         return
     
     def other_callback(self, ch, method, properties, body):
@@ -118,9 +129,15 @@ class AggregatorCommunicator:
         Callback function to process incoming messages.
         """
         logging.info("RECEIVED A AGGR ACK")
-        self.aggr_acked += 1
-        if self.aggr_acked == self.config["aggr_replicas_count"]:
-            logging.info("All aggregators acked")
-            self.comm_queue.put(True)
+        client_id = int.from_bytes(body, byteorder='big')
+
+        logging.info(f"Received ack from the client: {client_id}")
+        
+        self.aggr_acked.setdefault(client_id, 0)
+        self.aggr_acked[client_id] += 1
+
+        if self.aggr_acked[client_id] == self.config["aggr_replicas_count"]:
+            logging.info("All agg acked")
+            self.finish_receive_ctn.put(True)
         else:
-            logging.info(f"Aggregator {self.aggr_acked} acked")
+            logging.info(f"Filter {self.aggr_acked} acked")

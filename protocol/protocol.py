@@ -390,8 +390,10 @@ class Protocol:
     movies_pb_str = movies_pb.SerializeToString()
     return movies_pb_str
 
-  def create_aggr_batch(self, dict_results):
+  def create_aggr_batch(self, dict_results, client_id):
     batch_pb = files_pb2.AggregationBatch()
+
+    batch_pb.client_id = client_id
 
     for key, results in dict_results.items():
       aggr_pb = batch_pb.aggr_row.add()
@@ -433,8 +435,9 @@ class Protocol:
       batch_pb.ParseFromString(buffer)
       return batch_pb
 
-  def create_result(self, dict_results):
+  def create_result(self, dict_results, client_id):
     batch_pb = files_pb2.ResultBatch()
+    batch_pb.client_id = client_id
 
     for key, results in dict_results.items():
       if key == "country":
