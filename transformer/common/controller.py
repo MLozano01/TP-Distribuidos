@@ -18,14 +18,19 @@ class Controller:
 
         try:
 
-            comm_queue = Queue()
-            filter_instance = Transformer(comm_queue, **self.config)
+            finish_receive_ntc = Queue()
+            finish_notify_ntc = Queue()
+            finish_receive_ctn = Queue()
+            finish_notify_ctn = Queue()
 
-            self.transformer = Process(target=filter_instance.start, args=())
+
+            transformer_instance = Transformer(finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, **self.config)
+
+            self.transformer = Process(target=transformer_instance.start, args=())
         
             self.transformer.start()
 
-            communicator_instance = TransformerCommunicator(self.communication_config, comm_queue)
+            communicator_instance = TransformerCommunicator(self.communication_config, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn)
 
             self.transformer_communicator = Process(target=communicator_instance.run, args=())
             self.transformer_communicator.start()
