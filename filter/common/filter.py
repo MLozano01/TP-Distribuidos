@@ -92,7 +92,7 @@ class Filter:
                             if self.queue_snd_movies.key == "results":
                                 movies_res = movies_into_results(result)
                                 res = self.protocol.create_result(movies_res, decoded_msg.client_id)
-                                self.queue_snd_movies.publish(res)
+                                self.queue_snd_movies.publish(res, f"{self.routing_snd_key}_{decoded_msg.client_id}")
                                 return
 
                             self.queue_snd_movies.publish(self.protocol.create_movie_list(result, client_id))
@@ -171,7 +171,9 @@ class Filter:
                 msg_to_send = msg.SerializeToString()
                 if self.queue_snd_movies.key == "results":
                     msg_to_send = self.protocol.create_result({"movies": {}}, msg.client_id)
-                self.queue_snd_movies.publish(msg_to_send)
+                    self.queue_snd_movies.publish(msg_to_send, f"{self.routing_snd_key}_{msg.client_id}")
+                else:
+                    self.queue_snd_movies.publish(msg_to_send)
                 logging.info(f"Published movie finished signal to {self.queue_snd_movies.exchange}")
 
         logging.info("FINISHED SENDING THE FINISH MESSAGE")
