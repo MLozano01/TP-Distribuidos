@@ -44,8 +44,6 @@ def parse_final_result(reduce_by, partial_results, client_id):
     if args[0] == "top" and args[1] == "5":
         # Sort countries by sum (value) in descending order
 
-        logging.info(f"[parse_final_result] client_id: {client_id}, partial_results: {client_partial_results}")
-
         sorted_countries = sorted(client_partial_results.items(), key=operator.itemgetter(1), reverse=True)
         # Take the top 5
         top_5_countries = dict(sorted_countries[:int(args[1])])

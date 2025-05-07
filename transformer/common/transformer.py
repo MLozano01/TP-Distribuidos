@@ -8,14 +8,19 @@ from protocol import files_pb2
 from protocol.rabbit_protocol import RabbitMQ
 from protocol.utils.parsing_proto_utils import *
 from protocol.protocol import Protocol
+from queue import Empty
+
 from protocol.rabbit_wrapper import RabbitMQConsumer, RabbitMQProducer
 
 logging.getLogger('pika').setLevel(logging.WARNING)
 
 logging.getLogger("pika").setLevel(logging.ERROR)
 
+START = False
+DONE = True
+
 class Transformer:
-    def __init__(self, comm_queue, **kwargs):
+    def __init__(self, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, **kwargs):
         self.sentiment_analyzer = None
         self.queue_rcv = None
         self.queue_snd = None
@@ -23,8 +28,20 @@ class Transformer:
         self._stop_event = threading.Event()
         self._finished_signal_received = False
         self._finished_message_body = None
-        self.comm_queue = comm_queue
+
+        self.finished_filter_arg_step_publisher = None # for notifying joiners
+        self.finish_receive_ntc = finish_receive_ntc
+        self.finish_notify_ntc = finish_notify_ntc
+        self.finish_receive_ctn = finish_receive_ctn
+        self.finish_notify_ctn = finish_notify_ctn
+
         self.data_thread = None
+
+        self.send_actual_client_id_status = Queue()
+        self.finish_signal_checker = None
+
+        self.is_alive = True
+
 
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -60,14 +77,16 @@ class Transformer:
             logging.info("Received MOVIES finished signal from server on data channel.")
             self._publish_movie_finished_signal(decoded_msg)
             return
+        
+        self.send_actual_client_id_status.put([decoded_msg.client_id, START])
         self._process_message(decoded_msg)
+        
         
     def start(self):
         """Start the Transformer with separate threads for data and control messages."""
         self._setup_signal_handlers()
         try:
-            comm_queue = Queue()
-            self.comm_queue = comm_queue
+
             self._settle_queues()
 
             if not all([self.queue_rcv, self.queue_snd]):
@@ -75,7 +94,11 @@ class Transformer:
                 return
             
 
+            self.finish_signal_checker = Process(target=self.check_finished, args=())
+            self.finish_signal_checker.start()
+
             self._initialize_sentiment_analyzer()
+
             self.queue_rcv.consume(self.callback)
 
         except Exception as e:
@@ -161,15 +184,13 @@ class Transformer:
 
 
     def _publish_movie_finished_signal(self, msg):
-        # self.comm_queue.put(msg.SerializeToString())
-        # logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
+        self.finish_receive_ntc.put(msg.SerializeToString())
+        logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
 
-        # if self.comm_queue.get() == True:
-        #     logging.info("Received SEND finished signal from communication channel.")
-        #     self.queue_snd.publish(msg.SerializeToString())
-        #     logging.info(f"Published movie finished signal to {self.queue_snd.exchange}")
-
-        self.queue_snd.publish(msg.SerializeToString())
+        if self.finish_receive_ctn.get() == True:
+            logging.info("Received SEND finished signal from communication channel.")
+            self.queue_snd.publish(msg.SerializeToString())
+            logging.info(f"Published movie finished signal to {self.queue_snd.exchange}")
 
         logging.info("FINISHED SENDING THE FINISH MESSAGE")
 
@@ -200,12 +221,47 @@ class Transformer:
             else:
                 self._send_processed_batch(processed_movies_list, incoming_movies_msg.client_id)
 
-
+            self.send_actual_client_id_status.put([incoming_movies_msg.client_id, DONE])
         except Exception as e:
             logging.error(f"Error processing message batch: {e}", exc_info=True)
 
+    def check_finished(self):
+        while self.is_alive:
+            try:
+                msg = self.finish_notify_ctn.get()
+                logging.info(f"Received finished signal from control channel: {msg}")
+
+                client_id, status = self.get_last()
+                client_finished = msg[0]
+                if client_finished == client_id:
+                    self.finish_notify_ntc.put([client_finished, status])
+                    logging.info(f"Received finished signal from control channel for client {client_finished}, with status {status}.")
+                else:
+                    self.finish_notify_ntc.put([client_finished, True])
+                    logging.info(f"Received finished signal from control channel for client {client_finished}, but working on {client_id}.")
+
+            except Empty:
+                logging.info("No finished signal received yet.")
+                pass
+            except Exception as e:
+                logging.error(f"Error in finished signal checker: {e}")
+                break
+
+    def get_last(self):
+        client_id = None
+        status = None
+
+        while not self.send_actual_client_id_status.empty():
+
+            client_id, status = self.send_actual_client_id_status.get_nowait()
+
+        logging.info(f"Last client ID: {client_id}, status: {status}")
+
+        return client_id, status
+
     def stop(self):
         """Stop the filter, signal threads, and close the queues/connections."""
+
         if not self._stop_event.is_set():
             logging.info("Stopping Transformer...")
             self._stop_event.set()
@@ -224,4 +280,12 @@ class Transformer:
 
             if self.data_thread and self.data_thread.is_alive():
                 self.data_thread.terminate()
-            logging.info("Transformer Stopped")
+
+            if self.finish_signal_checker:
+                self.finish_signal_checker.terminate()
+                self.finish_signal_checker.join()
+                logging.info("Finished signal checker process terminated.")
+
+        self.is_alive = False
+
+        logging.info("Transformer Stopped")
