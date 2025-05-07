@@ -17,6 +17,7 @@ class Server:
         self.next_client_id = 1
 
     def run(self):
+        self._setup_signal_handlers()
         while self.running:
             try:
                 conn, addr = self.socket.accept()
@@ -55,6 +56,7 @@ class Server:
         self.socket.shutdown(socket.SHUT_RDWR)
         self.socket.close()
         logging.info("Socket Closed")
+
     
     def close_clients(self):
         for process in self.clients:
