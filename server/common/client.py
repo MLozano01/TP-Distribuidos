@@ -1,10 +1,10 @@
 from multiprocessing import Process
 import socket
 import logging
-import signal
 from protocol.protocol import Protocol
 from protocol.rabbit_protocol import RabbitMQ
 from protocol.utils.socket_utils import recvall
+import signal
 
 class Client:
     def __init__(self, client_sock, client_id):
@@ -15,27 +15,23 @@ class Client:
         self.result_controller = None
         self.forward_queue = None
         self.result_queue = None
-        self.running = True
-
-        # Set up signal handlers
-        signal.signal(signal.SIGTERM, self._signal_handler)
-        signal.signal(signal.SIGINT, self._signal_handler)
-
-    def _signal_handler(self, signum, frame):
-        logging.info(f"Client {self.client_id} received signal {signum}, initiating graceful shutdown...")
-        self.running = False
 
     def run(self):
         self.data_controller = Process(target=self.handle_connection, args=[self.socket])
-        self.result_controller = Process(target=self.return_results, args=[self.socket])
-        
         self.data_controller.start()
+
+        self.result_controller = Process(target=self.return_results, args=[self.socket])
         self.result_controller.start()
 
         self.data_controller.join()
         self.result_controller.join()
 
         self.stop()
+
+    
+    def _setup_signal_handlers(self):
+        signal.signal(signal.SIGTERM, self.stop)
+        signal.signal(signal.SIGINT, self.stop)
 
     def stop(self):
         if self.forward_queue:

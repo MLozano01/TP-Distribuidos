@@ -26,7 +26,6 @@ class Filter:
         self.finish_receive_ctn = finish_receive_ctn
         self.finish_notify_ctn = finish_notify_ctn
 
-
         self.send_actual_client_id_status = Queue()
         self.finish_signal_checker = None
 

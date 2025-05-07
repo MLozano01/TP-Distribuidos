@@ -13,16 +13,25 @@ class Server:
         self.socket.bind(('', port))
         self.socket.listen(listen_backlog)
         self.running = True
-        self.client_processes = []
+        self.clients = []
         self.next_client_id = 1
-        
-        # Set up signal handlers
-        signal.signal(signal.SIGTERM, self._signal_handler)
-        signal.signal(signal.SIGINT, self._signal_handler)
 
-    def _signal_handler(self, signum, frame):
-        logging.info(f"Received signal {signum}, initiating graceful shutdown...")
-        self.running = False
+    def run(self):
+        while self.running:
+            try:
+                conn, addr = self.socket.accept()
+                logging.info(f"Connection accepted from {addr}")
+                
+                client_process = Process(target=self._handle_client,args=(conn, self.next_client_id))
+                client_process.start()
+                self.clients.append(client_process)        
+
+                logging.info(f"Client {self.next_client_id} added")
+                self.next_client_id += 1
+                
+            except Exception as e:
+                logging.error(f"Error accepting connection: {e}")
+                break
 
     def _handle_client(self, client_socket, client_id):
         try:
@@ -33,33 +42,9 @@ class Server:
         finally:
             client_socket.close()
 
-    def run(self):
-        while self.running:
-            try:
-                # Set socket timeout to allow checking self.running periodically
-                self.socket.settimeout(1.0)
-                try:
-                    conn, addr = self.socket.accept()
-                    logging.info(f"Connection accepted from {addr}")
-                    
-                    # Create a new process for this client
-                    client_process = Process(
-                        target=self._handle_client,
-                        args=(conn, self.next_client_id)
-                    )
-                    client_process.start()
-                    
-                    self.client_processes.append(client_process)
-                    logging.info(f"Client {self.next_client_id} added")
-                    self.next_client_id += 1
-                    
-                except socket.timeout:
-                    # This is expected when no connection arrives within the timeout
-                    continue
-                
-            except Exception as e:
-                logging.error(f"Error accepting connection: {e}")
-                break
+    def _setup_signal_handlers(self):
+        signal.signal(signal.SIGTERM, self.end_server)
+        signal.signal(signal.SIGINT, self.end_server)
 
     def accept_connection(self):
         conn, addr = self.socket.accept()
@@ -72,8 +57,7 @@ class Server:
         logging.info("Socket Closed")
     
     def close_clients(self):
-        logging.info("Closing all client connections...")
-        for process in self.client_processes:
+        for process in self.clients:
             try:
                 if process.is_alive():
                     process.terminate()
@@ -82,7 +66,6 @@ class Server:
                 logging.error(f"Error closing client process: {e}")
 
     def end_server(self):
-        logging.info("Initiating server shutdown...")
         self.running = False
         self.close_socket()
         self.close_clients()

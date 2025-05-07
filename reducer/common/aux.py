@@ -44,8 +44,6 @@ def parse_final_result(reduce_by, partial_results, client_id):
     if args[0] == "top" and args[1] == "5":
         # Sort countries by sum (value) in descending order
 
-        logging.info(f"[parse_final_result] client_id: {client_id}, partial_results: {client_partial_results}")
-
         sorted_countries = sorted(client_partial_results.items(), key=operator.itemgetter(1), reverse=True)
         # Take the top 5
         top_5_countries = dict(sorted_countries[:int(args[1])])
@@ -132,7 +130,7 @@ def reduce_max_min(data_to_reduce, reduce_args, result, client_id):
 def calculate_avg(partial_result):
     result = {}
     res = {}
-
+    logging.info(f"partial_result: {partial_result}")
     for key, value in partial_result.items():
         result.setdefault(key, 0)
         if value["count"] > 0:

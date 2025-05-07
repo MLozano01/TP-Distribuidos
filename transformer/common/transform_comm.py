@@ -14,12 +14,18 @@ class TransformerCommunicator:
     It handles the sending and receiving of messages and data between transformers.
     """
 
-    def __init__(self, config, queue):
-        self.comm_queue = queue
+    def __init__(self, config, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn):
+        
+        self.finished_filter_arg_step_publisher = None # for notifying joiners
+        self.finish_receive_ntc = finish_receive_ntc
+        self.finish_notify_ntc = finish_notify_ntc
+        self.finish_receive_ctn = finish_receive_ctn
+        self.finish_notify_ctn = finish_notify_ctn
+        
         self.config = config
         self.queue_communication = None
         self.protocol = Protocol()
-        self.transformers_acked = 0
+        self.transformers_acked = {}
 
     def _create_comm_queue(self, number):
         name = self.config["queue_communication_name"] + f"_{number}"
@@ -65,7 +71,7 @@ class TransformerCommunicator:
         """
         try:
 
-            data = self.comm_queue.get()
+            data = self.finish_receive_ntc.get()
 
             logging.info(f"Received finished signal from transformers")
 
@@ -108,8 +114,16 @@ class TransformerCommunicator:
         decoded_msg = self.protocol.decode_movies_msg(body)
         
         if decoded_msg.finished:
-            logging.info("Received finished signal from other transformer!!.")
-            self.queue_communication_2.publish(body)
+            logging.info("Received finished signal from other filter!!.")
+            self.finish_notify_ctn.put([decoded_msg.client_id, False])
+            
+            done_with_client = self.finish_notify_ntc.get()
+            logging.info(f"{done_with_client}")
+            if done_with_client[1]:
+                logging.info("Filter was done with the client!!.")
+                self.queue_communication_2.publish(done_with_client[0].to_bytes(2, byteorder='big'))
+            else:
+                raise Exception("Failed to send finished signal to other filter")
         return
     
     def other_callback(self, ch, method, properties, body):
@@ -117,9 +131,15 @@ class TransformerCommunicator:
         Callback function to process incoming messages.
         """
         logging.info("RECEIVED A TRANSFORMER ACK")
-        self.transformers_acked += 1
-        if self.transformers_acked == self.config["transformer_replicas_count"]:
+        client_id = int.from_bytes(body, byteorder='big')
+
+        logging.info(f"Received ack from the client: {client_id}")
+        
+        self.transformers_acked.setdefault(client_id, 0)
+        self.transformers_acked[client_id] += 1
+
+        if self.transformers_acked[client_id] == self.config["transformer_replicas_count"]:
             logging.info("All transformers acked")
-            self.comm_queue.put(True)
+            self.finish_receive_ctn.put(True)
         else:
             logging.info(f"Transformer {self.transformers_acked} acked")
