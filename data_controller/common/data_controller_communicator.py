@@ -31,6 +31,7 @@ class DataControllerCommunicator:
         
         # Setup signal handler for SIGTERM
         signal.signal(signal.SIGTERM, self._handle_shutdown)
+        self.continue_running = True
 
     def _settle_queues(self):
         """
@@ -68,23 +69,24 @@ class DataControllerCommunicator:
         """
         Manage the inner communication between data controllers.
         """
-        try:
-            data = self.finish_receive_ntc.get()
-            logger.info(f"Received {self.type} finished signal from upstream")
+        consume_process = Process(target=self._await_replicas_ack, args=())
+        consume_process.start()
+        while self.continue_running:
+            try:
+                data = self.finish_receive_ntc.get()
+                logger.info(f"Received {self.type} finished signal from upstream")
 
-            consume_process = Process(target=self._await_replicas_ack, args=())
-            consume_process.start()
 
-            time.sleep(0.5)  # Ensure the consumer is ready before publishing
+                time.sleep(0.5)  # Ensure the consumer is ready before publishing
 
-            self.queue_communication_1.publish(data)
-            consume_process.join()
-            
-            logger.info(f"All {self.type} acks of the other replicas received")
+                self.queue_communication_1.publish(data)
+                
+                logger.info(f"All {self.type} acks of the other replicas received")
 
-        except Exception as e:
-            logger.error(f"Error in managing inner communication: {e}")
-            self.finish_receive_ctn.put(False)
+            except Exception as e:
+                logger.error(f"Error in managing inner communication: {e}")
+                self.finish_receive_ctn.put(False)
+        consume_process.join()
 
     def _await_replicas_ack(self):
         consumer_queue = RabbitMQ(self.config["exchange_communication"], self.config["queue_communication_name"] + "_2", self.config["routing_communication_key"] + "_2", self.config["exc_communication_type"])
@@ -151,7 +153,7 @@ class DataControllerCommunicator:
     def stop(self):
         """Stop the DataControllerCommunicator and close all connections"""
         logging.info(f"Stopping {self.type} DataControllerCommunicator...")
-        
+        self.continue_running = False
         # Close queue communication 1 connection
         if hasattr(self, 'queue_communication_1'):
             try:

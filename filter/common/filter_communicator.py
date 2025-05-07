@@ -24,6 +24,7 @@ class FilterCommunicator:
         self.queue_communication = None
         self.protocol = Protocol()
         self.filters_acked = {}
+        self.continue_running = True
 
 
     def _settle_queues(self):
@@ -62,26 +63,27 @@ class FilterCommunicator:
         """
         Manage the inner communication between filters.
         """
-        try:
+        consume_process = Process(target=self._manage_consume_pika, args=())
+        consume_process.start()
+        while self.continue_running:
+            try:
 
-            data = self.finish_receive_ntc.get()
+                data = self.finish_receive_ntc.get()
 
-            logging.info(f"Received finished signal from filter")
+                logging.info(f"Received finished signal from filter")
 
-            consume_process = Process(target=self._manage_consume_pika, args=())
-            consume_process.start()
 
-            time.sleep(0.5)
+                time.sleep(0.5)
 
-            self.queue_communication_1.publish(data)
-            consume_process.join()
+                self.queue_communication_1.publish(data)
 
-            
-            logging.info("Finished acking the other filters")
+                
+                logging.info("Finished acking the other filters")
 
-        except Exception as e:
-            logging.error(f"Error in managing inner communication: {e}")
-            self.comm_queue.put(False)
+            except Exception as e:
+                logging.error(f"Error in managing inner communication: {e}")
+                self.comm_queue.put(False)
+        consume_process.join()
 
     def _manage_consume_pika(self):
         consumer_queue = RabbitMQ(self.config["exchange_communication"], self.config["queue_communication_name"] + "_2", self.config["routing_communication_key"] + "_2", self.config["exc_communication_type"])
