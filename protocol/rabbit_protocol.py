@@ -12,6 +12,7 @@ class RabbitMQ:
         self.exc_type = exc_type
         self.auto_ack = auto_ack
         self.prefetch_count = prefetch_count
+        self.connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq', heartbeat=500))
         self.channel = self.create_channel()
         self.callback_func = None
 
@@ -20,9 +21,7 @@ class RabbitMQ:
         """Used to create a channel for the queue."""
 
         try:
-            connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq', heartbeat=500))
-
-            channel = connection.channel()
+            channel = self.connection.channel()
             channel.basic_qos(prefetch_count=1)
             channel.exchange_declare(exchange=self.exchange, exchange_type=self.exc_type, durable=True)
 
@@ -32,7 +31,7 @@ class RabbitMQ:
         except Exception as e:
             rabbit_logger.error(f"Failed to create channel: {e}")
             if 'connection' in locals():
-                connection.close()
+                self.connection.close()
                 rabbit_logger.info("Connection closed")
             if 'channel' in locals():
                 channel.close()
@@ -84,6 +83,14 @@ class RabbitMQ:
             rabbit_logger.error(f"Failed to consume from {self.q_name}: {e}")
             raise e
         
+        finally:
+            if self.channel.is_open:
+                self.channel.close()
+                rabbit_logger.info("Channel closed")
+            if self.connection.is_open:
+                self.connection.close()
+                rabbit_logger.info("Connection closed")
+        
     def callback(self, ch, method, properties, body):
         try:
             self.callback_func(ch, method,properties,body)
@@ -95,9 +102,11 @@ class RabbitMQ:
     def close_channel(self):
         """Used to close the channel."""
         if self.channel.is_open:
-            self.channel.stop_consuming()
-            self.channel.close()
+            try:
+                self.connection.add_callback_threadsafe(self.channel.stop_consuming)
+                logging.info("Stopped consuming messages")
+            except Exception as e:
+                rabbit_logger.error(f"Failed to stop consuming: {e}")
+                return
             rabbit_logger.info("Stopped consuming messages")
-        else:
-            rabbit_logger.info("Channel is already closed")
-        rabbit_logger.info("Channel closed")
+        

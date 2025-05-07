@@ -170,7 +170,7 @@ class Filter:
             else:
                 msg_to_send = msg.SerializeToString()
                 if self.queue_snd_movies.key == "results":
-                    msg_to_send = self.protocol.create_result({"movies": {}}, msg.client_id)
+                    msg_to_send = self.protocol.create_result({"movies": {}}, msg.client_id, True)
                     self.queue_snd_movies.publish(msg_to_send, f"{self.routing_snd_key}_{msg.client_id}")
                 else:
                     self.queue_snd_movies.publish(msg_to_send)

@@ -16,33 +16,82 @@ class Client:
         self.forward_queue = None
         self.result_queue = None
 
+        self.results_received = 0
+        self.total_expected = 5
+
+        self.running = True
+
     def run(self):
+        
         self.data_controller = Process(target=self.handle_connection, args=[self.socket])
         self.data_controller.start()
 
         self.result_controller = Process(target=self.return_results, args=[self.socket])
         self.result_controller.start()
 
-        self.data_controller.join()
-        self.result_controller.join()
-
-        self.stop()
+        self._setup_signal_handlers()
 
     
     def _setup_signal_handlers(self):
         signal.signal(signal.SIGTERM, self.stop)
         signal.signal(signal.SIGINT, self.stop)
 
+
     def stop(self):
-        if self.forward_queue:
-            self.forward_queue.stop()
-        if self.result_queue:
-            self.result_queue.stop()
+        try:
+            if self.forward_queue:
+                self.forward_queue.close_channel()
+            if self.result_queue:
+                self.result_queue.close_channel()
+
+        except Exception as e:
+            logging.error(f"Error stopping client IN QUEUES: {e}")
+
+        try:    
+            if self.data_controller and self.data_controller.is_alive():
+                self.data_controller.terminate()
+                self.data_controller.join()
+                self.data_controller = None
+
+            if self.result_controller and self.result_controller.is_alive():
+                self.result_controller.terminate()
+                self.result_controller.join()
+                self.result_controller = None
+
+        except Exception as e:
+            logging.error(f"Error stopping client IN PROCESSES: {e}")
+
+        if self.socket:
+            try:
+                self.socket.shutdown(socket.SHUT_RDWR)
+                self.socket.close()
+            except Exception as e:
+                logging.error(f"Error closing socket: {e}")
+
+        self.running = False
+
+        logging.info(f"Client {self.client_id} stopped.")
+
+    def stop_consumer(self):
+        try:
+            if self.forward_queue:
+                self.forward_queue.close_channel()
+            if self.result_queue:
+                self.result_queue.close_channel()
+
+        except Exception as e:
+            logging.error(f"Error stopping client IN QUEUES: {e}")
         
-        if self.data_controller and self.data_controller.is_alive():
-            self.data_controller.terminate()
-        if self.result_controller and self.result_controller.is_alive():
-            self.result_controller.terminate()
+        if self.socket:
+            try:
+                self.socket.shutdown(socket.SHUT_RDWR)
+                self.socket.close()
+            except Exception as e:
+                logging.error(f"Error closing socket: {e}")
+
+        self.running = False
+
+        logging.info(f"Client {self.client_id} stopped consuming.")
 
     def handle_connection(self, conn: socket.socket):
         # Initialize the forward queue for data messages
@@ -73,11 +122,25 @@ class Client:
     def return_results(self, conn: socket.socket):
         self.result_queue = RabbitMQ('exchange_snd_results', f'result_{self.client_id}', f'results_{self.client_id}', 'direct')
         self.result_queue.consume(self.result_controller_func)
+        logging.info("Je suis ICI")
 
     def result_controller_func(self, ch, method, properties, body):
         try:
             msg = self.protocol.create_client_result(body)
             self.socket.sendall(msg)
+
+            decoded_msg = self.protocol.decode_result(body)
+
+            if decoded_msg.query_id == 1 and not decoded_msg.final:
+                return
+
+            self.results_received += 1
+            logging.info(f"Results received: {self.results_received}.")
+            if self.results_received == self.total_expected:
+                logging.info(f"{self.results_received} results received for client {self.client_id} with total {self.total_expected}.")
+                logging.info(f"All results received for client {self.client_id}. Closing connection.")
+                self.stop_consumer()
+                return
         except Exception as e:
             logging.error(f"Error processing message: {e}")
             return

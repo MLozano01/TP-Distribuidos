@@ -433,9 +433,12 @@ class Protocol:
       batch_pb.ParseFromString(buffer)
       return batch_pb
 
-  def create_result(self, dict_results, client_id):
+  def create_result(self, dict_results, client_id, final=False):
     batch_pb = files_pb2.ResultBatch()
     batch_pb.client_id = client_id
+
+    if final: 
+      batch_pb.final = True
 
     for key, results in dict_results.items():
       if key == "country":
