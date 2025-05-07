@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import json
+import math
 import sys
 
 def read_json(path):
@@ -62,15 +63,15 @@ def main():
                 base_key = base_match.get(key)
                 base_value = base_match.get(value)
                 base_rows_checked.add(base_key)
+                are_the_same = False
                 try:
-                    base_value_typed = round(float(base_value), 2)
-                    check_value_typed = round(float(check_value), 2)
-
+                    base_value_typed = float(base_value)
+                    check_value_typed = float(check_value)
+                    are_the_same = math.isclose(base_value_typed, check_value_typed, rel_tol=1e-6)
                 except:
-                    base_value_typed = base_value
-                    check_value_typed = check_value
+                    are_the_same = base_value == check_value
                 finally:
-                    if base_value_typed != check_value_typed:
+                    if not are_the_same:
                         print(f"   - Mismatch for key '{check_key}': '{base_value_typed}' (base) vs '{check_value_typed}' (checking)")
                         diff_found = True
 
