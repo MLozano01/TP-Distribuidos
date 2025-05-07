@@ -92,8 +92,15 @@ class DataController:
     def run(self):
         """Start the DataController with message consumption"""
         self._settle_queues()
-        self.finish_signal_checker = Process(target=self.check_finished, args=())
-        self.finish_signal_checker.start()
+        
+        # Create separate processes for each type of check_finished
+        self.movies_finish_signal_checker = Process(target=self.check_finished, args=("MOVIES",))
+        self.ratings_finish_signal_checker = Process(target=self.check_finished, args=("RATINGS",))
+        self.credits_finish_signal_checker = Process(target=self.check_finished, args=("CREDITS",))
+        
+        self.movies_finish_signal_checker.start()
+        self.ratings_finish_signal_checker.start()
+        self.credits_finish_signal_checker.start()
 
         self.work_consumer.consume(self.callback)
 
@@ -200,35 +207,55 @@ class DataController:
             except Exception as e:
                 logging.error(f"Error closing credits publisher channel: {e}")
 
-        if self.finish_signal_checker:
-            self.finish_signal_checker.terminate()
-            self.finish_signal_checker.join()
-            logging.info("Finished signal checker process terminated.")
+        # Terminate all finish signal checkers
+        for checker, name in [
+            (self.movies_finish_signal_checker, "Movies"),
+            (self.ratings_finish_signal_checker, "Ratings"),
+            (self.credits_finish_signal_checker, "Credits")
+        ]:
+            if checker:
+                checker.terminate()
+                checker.join()
+                logging.info(f"{name} finished signal checker process terminated.")
         
         self.is_alive = False
         
         logging.info(f"DataController {self.replica_id} stopped successfully")
 
-    def check_finished(self):
+    def check_finished(self, type_name):
+        """Check for finished signals for a specific type of message"""
         while self.is_alive:
             try:
-                msg = self.finish_notify_ctn.get()
-                logging.info(f"Received finished signal from control channel: {msg}")
+                if type_name == "MOVIES":
+                    queue = self.movies_finish_notify_ctn
+                    notify_queue = self.movies_finish_notify_ntc
+                elif type_name == "RATINGS":
+                    queue = self.ratings_finish_notify_ctn
+                    notify_queue = self.ratings_finish_notify_ntc
+                elif type_name == "CREDITS":
+                    queue = self.credits_finish_notify_ctn
+                    notify_queue = self.credits_finish_notify_ntc
+                else:
+                    logging.error(f"Unknown type in check_finished: {type_name}")
+                    break
+
+                msg = queue.get()
+                logging.info(f"Received {type_name} finished signal from control channel: {msg}")
 
                 client_id, status = self.get_last()
                 client_finished = msg[0]
                 if client_finished == client_id:
-                    self.finish_notify_ntc.put([client_finished, status])
-                    logging.info(f"Received finished signal from control channel for client {client_finished}, with status {status}.")
+                    notify_queue.put([client_finished, status])
+                    logging.info(f"Received {type_name} finished signal from control channel for client {client_finished}, with status {status}.")
                 else:
-                    self.finish_notify_ntc.put([client_finished, True])
-                    logging.info(f"Received finished signal from control channel for client {client_finished}, but working on {client_id}.")
+                    notify_queue.put([client_finished, True])
+                    logging.info(f"Received {type_name} finished signal from control channel for client {client_finished}, but working on {client_id}.")
 
             except Empty:
-                logging.info("No finished signal received yet.")
+                logging.info(f"No {type_name} finished signal received yet.")
                 pass
             except Exception as e:
-                logging.error(f"Error in finished signal checker: {e}")
+                logging.error(f"Error in {type_name} finished signal checker: {e}")
                 break
 
     def get_last(self):
