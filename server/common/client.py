@@ -4,6 +4,7 @@ import logging
 from protocol.protocol import Protocol
 from protocol.rabbit_protocol import RabbitMQ
 from protocol.utils.socket_utils import recvall
+import signal
 
 class Client:
     def __init__(self, client_sock, client_id):
@@ -25,15 +26,22 @@ class Client:
         self.data_controller.join()
         self.result_controller.join()
 
+        self.stop()
+
+    
+    def _setup_signal_handlers(self):
+        signal.signal(signal.SIGTERM, self.stop)
+        signal.signal(signal.SIGINT, self.stop)
+
     def stop(self):
         if self.forward_queue:
             self.forward_queue.stop()
         if self.result_queue:
             self.result_queue.stop()
         
-        if self.data_controller.is_alive():
+        if self.data_controller and self.data_controller.is_alive():
             self.data_controller.terminate()
-        if self.result_controller.is_alive():
+        if self.result_controller and self.result_controller.is_alive():
             self.result_controller.terminate()
 
     def handle_connection(self, conn: socket.socket):
