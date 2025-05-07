@@ -6,7 +6,7 @@ def filter_movies(movies_csv):
     movies_pb = files_pb2.MoviesCSV()
     movies_pb.client_id = movies_csv.client_id
     for movie in movies_csv.movies:
-        if not movie.id or movie.id < 0 or not movie.release_date:
+        if not movie.id or movie.id < 0 or not movie.release_date or not movie.overview:
             continue
         if not is_date(movie.release_date):
             continue
@@ -36,7 +36,7 @@ def filter_ratings(ratings_csv):
     filtered_out = 0
     
     for rating in ratings_csv.ratings:
-        if not rating.movieId or rating.movieId < 0 or not rating.rating or rating.rating < 0:
+        if not rating.movieId or rating.movieId < 0 or rating.rating is None or rating.rating < 0:
             filtered_out += 1
             continue
 
@@ -57,7 +57,7 @@ def filter_credits(credits_csv):
     total_credits = len(credits_csv.credits)
     filtered_out = 0
     for credit in credits_csv.credits:
-        if not credit.id or credit.id < 0 or not len(credit.cast):
+        if not credit.id or credit.id < 0:
             filtered_out += 1
             continue
 

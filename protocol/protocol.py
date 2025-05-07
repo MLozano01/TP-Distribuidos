@@ -1,3 +1,5 @@
+import csv
+import io
 from protocol import files_pb2
 from protocol.utils.parsing_proto_utils import *
 from enum import Enum
@@ -166,27 +168,25 @@ class Protocol:
           data_csv.credits.append(line_parsed)
     return data_csv
 
+  def begins_field(self, part):
+    #tiene tada, no arranca con " o arranca con "[
+    val= (part and part[0] != ' ' and part != '"') or part.startswith('"[') or part.startswith('"{')
+    return val
+  
   def parse_line(self, line, file_type):
-    parts = line.split(',')
-    data = dict()
-    index = -1
-    headers_dict = self.__headers_dict[file_type]
-    
-    for part in parts:
-      if not part or part[0] != ' ':
-        index+=1
-      
-      try:
-        header = self.__headers[file_type][index]
-        data.setdefault(header, "")
-        cleaned = part.strip(" '\\").strip('" \n')
-        if part and part[0] == ' ':
-          cleaned = "," + part
-      
-        data[header] += cleaned
-      except Exception as e:
-        return dict()
-    
+
+    try:
+      string_io = io.StringIO(line)
+      reader = csv.reader(string_io)
+      data = dict()
+      for row in reader:
+        for index, data_field in enumerate(row):
+          header = self.__headers[file_type][index]
+          data[header] = data_field
+    except Exception as e:
+      logging.info(f"F parse_line: {line}\n data: {data}")
+      logging.info(f"error in parse_line: {e}")
+      return dict()
     return data
 
 
@@ -204,6 +204,7 @@ class Protocol:
     row_keys = row.keys()
     for column in columns:
       if column not in row_keys:
+        logging.info(f"Dropping because of {column}")
         return True
     return False
   
@@ -254,6 +255,7 @@ class Protocol:
   def update_movies_msg(self, movie, columns):
     movie_pb = files_pb2.MovieCSV()
     if self.drop_row(movie, columns):
+      logging.info(f"F drop row: {movie}")
       return movie_pb, False
     movie_pb.id = to_int(movie.get('id', -1))
     movie_pb.adult = to_bool(movie.get('adult', 'False'))

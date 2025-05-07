@@ -1,0 +1,278 @@
+[
+  {
+    "query_id": 1,
+    "result_row": [
+      {
+        "title": "La Cienaga",
+        "genres": [
+          "Comedy",
+          "Drama"
+        ]
+      },
+      {
+        "title": "Burnt Money",
+        "genres": [
+          "Crime"
+        ]
+      },
+      {
+        "title": "The City of No Limits",
+        "genres": [
+          "Thriller",
+          "Drama"
+        ]
+      },
+      {
+        "title": "Nicotina",
+        "genres": [
+          "Drama",
+          "Action",
+          "Comedy",
+          "Thriller"
+        ]
+      },
+      {
+        "title": "Lost Embrace",
+        "genres": [
+          "Drama",
+          "Foreign"
+        ]
+      },
+      {
+        "title": "Whisky",
+        "genres": [
+          "Comedy",
+          "Drama",
+          "Foreign"
+        ]
+      },
+      {
+        "title": "The Holy Girl",
+        "genres": [
+          "Drama",
+          "Foreign"
+        ]
+      },
+      {
+        "title": "The Aura",
+        "genres": [
+          "Crime",
+          "Drama",
+          "Thriller"
+        ]
+      },
+      {
+        "title": "Bombón: The Dog",
+        "genres": [
+          "Drama"
+        ]
+      },
+      {
+        "title": "Rolling Family",
+        "genres": [
+          "Drama",
+          "Comedy"
+        ]
+      },
+      {
+        "title": "The Method",
+        "genres": [
+          "Drama",
+          "Thriller"
+        ]
+      },
+      {
+        "title": "Every Stewardess Goes to Heaven",
+        "genres": [
+          "Drama",
+          "Romance",
+          "Foreign"
+        ]
+      },
+      {
+        "title": "Tetro",
+        "genres": [
+          "Drama",
+          "Mystery"
+        ]
+      },
+      {
+        "title": "The Secret in Their Eyes",
+        "genres": [
+          "Crime",
+          "Drama",
+          "Mystery",
+          "Romance"
+        ]
+      },
+      {
+        "title": "Liverpool",
+        "genres": [
+          "Drama"
+        ]
+      },
+      {
+        "title": "The Headless Woman",
+        "genres": [
+          "Drama",
+          "Mystery",
+          "Thriller"
+        ]
+      },
+      {
+        "title": "The Last Summer of La Boyita",
+        "genres": [
+          "Drama"
+        ]
+      },
+      {
+        "title": "The Appeared",
+        "genres": [
+          "Horror",
+          "Thriller",
+          "Mystery"
+        ]
+      },
+      {
+        "title": "The Fish Child",
+        "genres": [
+          "Drama",
+          "Thriller",
+          "Romance",
+          "Foreign"
+        ]
+      },
+      {
+        "title": "Cleopatra",
+        "genres": [
+          "Drama",
+          "Comedy",
+          "Foreign"
+        ]
+      },
+      {
+        "title": "Roma",
+        "genres": [
+          "Drama",
+          "Foreign"
+        ]
+      },
+      {
+        "title": "Conversations with Mother",
+        "genres": [
+          "Comedy",
+          "Drama",
+          "Foreign"
+        ]
+      },
+      {
+        "title": "The Education of Fairies",
+        "genres": [
+          "Drama"
+        ]
+      },
+      {
+        "title": "The Good Life",
+        "genres": [
+          "Drama"
+        ]
+      }
+    ]
+  },
+  {
+    "query_id": 2,
+    "result_row": [
+      {
+        "country": "United States of America",
+        "sum": 120106886644.0
+      },
+      {
+        "country": "France",
+        "sum": 2231335209.0
+      },
+      {
+        "country": "United Kingdom",
+        "sum": 1611604610.0
+      },
+      {
+        "country": "India",
+        "sum": 1169682797.0
+      },
+      {
+        "country": "Japan",
+        "sum": 832585873.0
+      }
+    ]
+  },
+  {
+    "query_id": 3,
+    "result_row": [
+      {
+        "title": "The forbidden education",
+        "average": 4.0
+      },
+      {
+        "title": "Left for Dead",
+        "average": 1
+      }
+    ]
+  },
+  {
+    "query_id": 4,
+    "result_row": [
+      {
+        "actor_name": "Ricardo Darín",
+        "sum": 17.0
+      },
+      {
+        "actor_name": "Alejandro Awada",
+        "sum": 7.0
+      },
+      {
+        "actor_name": "Inés Efron",
+        "sum": 7.0
+      },
+      {
+        "actor_name": "Leonardo Sbaraglia",
+        "sum": 7.0
+      },
+      {
+        "actor_name": "Valeria Bertuccelli",
+        "sum": 7.0
+      },
+      {
+        "actor_name": "Arturo Goetz",
+        "sum": 6.0
+      },
+      {
+        "actor_name": "Diego Peretti",
+        "sum": 6.0
+      },
+      {
+        "actor_name": "Pablo Echarri",
+        "sum": 6.0
+      },
+      {
+        "actor_name": "Rafael Spregelburd",
+        "sum": 6.0
+      },
+      {
+        "actor_name": "Rodrigo de la Serna",
+        "sum": 6.0
+      }
+    ]
+  },
+  {
+    "query_id": 5,
+    "result_row": [
+      {
+        "sentiment": "NEGATIVE",
+        "average": 5410.682868
+      },
+      {
+        "sentiment": "POSITIVE",
+        "average": 5707.409875
+      }
+    ]
+  }
+]
