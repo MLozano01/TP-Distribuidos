@@ -38,8 +38,6 @@ class Reducer:
 
             msg = protocol.decode_movies_msg(data)
 
-            # logging.info(f"RECEIVE MSG WITH CLIENT ID {msg.client_id} with msg = {msg}")
-
             if msg.finished:
                 logging.info(f"ALL Finished msg received on query_id {self.query_id}")
                 result = parse_final_result(self.reduce_by, self.partial_result, msg.client_id)
@@ -52,9 +50,6 @@ class Reducer:
 
                 return
             
-            # if self.query_id == 2:
-            #     logging.info(f"RECEIVE MSG WITH CLIENT ID {msg.client_id} with msg = {msg}")
-
             self.partial_result = parse_reduce_funct(data, self.reduce_by, self.partial_result, msg.client_id)
 
         except json.JSONDecodeError as e:

@@ -39,7 +39,6 @@ def parse_final_result(reduce_by, partial_results, client_id):
     client_partial_results = partial_results.get(client_id, {})
 
 
-    logging.debug(f"[parse_final_result] reduce_by: {reduce_by}, partial_results keys: {list(client_partial_results.keys())[:20]}")
     if args[0] == "avg":
         return calculate_avg(client_partial_results)
     if args[0] == "top" and args[1] == "5":
@@ -69,20 +68,16 @@ def parse_final_result(reduce_by, partial_results, client_id):
         return res
     if args[0] == "max-min":
         res = {}
-        res["max-min"] = partial_results
+        res["max-min"] = client_partial_results
         return res
 
 def reduce_top5(data_to_reduce, reduce_args, result, client_id):
 
     result.setdefault(client_id, {})
 
-    logging.info(f"[REDUCE_TOP5] client_id: {client_id}, data_to_reduce: {data_to_reduce}")
-
     for data in data_to_reduce.aggr_row:
         result[client_id].setdefault(data.key, 0)
         result[client_id][data.key] += data.sum
-
-    # logging.info(f"[REDUCE_TOP5] CLIENT_ID: {client_id}, result: {result[client_id]}")
 
     return result
 
@@ -116,18 +111,21 @@ def reduce_max_min(data_to_reduce, reduce_args, result, client_id):
     result.setdefault(client_id, {})
 
     for data in data_to_reduce.movies:
-        if len(result) < 2:
-            result[client_id][data.title] = data.average_rating
-        else:
-            max_rating = max(result, key=result.get)
-            min_rating = min(result, key=result.get)
+        client_result = result[client_id]
+        if len(client_result) < 2:
+            client_result[data.title] = data.average_rating
+        else: 
+            max_rating = max(client_result, key=client_result.get)
+            min_rating = min(client_result, key=client_result.get)
 
-            if result[client_id][max_rating] < data.average_rating:
-                result[client_id].pop(max_rating)
-                result[client_id][data.title] = data.average_rating
-            elif result[client_id][min_rating] > data.average_rating:
-                result[client_id].pop(min_rating)
-                result[client_id][data.title] = data.average_rating
+            if client_result[max_rating] < data.average_rating:
+                client_result.pop(max_rating)
+                client_result[data.title] = data.average_rating
+            elif client_result[min_rating] > data.average_rating:
+                client_result.pop(min_rating)
+                client_result[data.title] = data.average_rating
+
+    logging.info(f"[REDUCE_MAX_MIN] client_id: {client_id}, result: {result}")
 
     return result
 

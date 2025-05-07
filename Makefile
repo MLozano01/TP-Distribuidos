@@ -37,10 +37,8 @@ docker-compose-up-clients: docker-image-client
 .PHONY: docker-compose-up-clients
 
 docker-compose-down:
-	docker compose -f docker-compose.yaml stop -t 1
-	docker compose -f docker-compose.yaml down
-	docker network prune -f
-	docker volume prune -f
+	docker compose --profile "*" -f docker-compose.yaml stop -t 1
+	docker compose --profile "*" -f docker-compose.yaml down
 .PHONY: docker-compose-down
 
 docker-compose-logs:
