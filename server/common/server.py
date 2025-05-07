@@ -1,5 +1,7 @@
 import socket
 import logging
+import signal
+from multiprocessing import Process
 from common.client import Client
 
 logging.getLogger('pika').setLevel(logging.WARNING)
@@ -20,16 +22,29 @@ class Server:
                 conn, addr = self.socket.accept()
                 logging.info(f"Connection accepted from {addr}")
                 
-                client = Client(conn, self.next_client_id)
+                client_process = Process(target=self._handle_client,args=(conn, self.next_client_id))
+                client_process.start()
+                self.clients.append(client_process)        
+
+                logging.info(f"Client {self.next_client_id} added")
                 self.next_client_id += 1
-                
-                self.clients.append(client)
-                logging.info(f"Client {client.client_id} added")
-                client.run()
                 
             except Exception as e:
                 logging.error(f"Error accepting connection: {e}")
                 break
+
+    def _handle_client(self, client_socket, client_id):
+        try:
+            client = Client(client_socket, client_id)
+            client.run()
+        except Exception as e:
+            logging.error(f"Error in client process {client_id}: {e}")
+        finally:
+            client_socket.close()
+
+    def _setup_signal_handlers(self):
+        signal.signal(signal.SIGTERM, self.end_server)
+        signal.signal(signal.SIGINT, self.end_server)
 
     def accept_connection(self):
         conn, addr = self.socket.accept()
@@ -42,8 +57,13 @@ class Server:
         logging.info("Socket Closed")
     
     def close_clients(self):
-        for client in self.clients:
-            client.stop()
+        for process in self.clients:
+            try:
+                if process.is_alive():
+                    process.terminate()
+                    process.join(timeout=5.0)
+            except Exception as e:
+                logging.error(f"Error closing client process: {e}")
 
     def end_server(self):
         self.running = False
