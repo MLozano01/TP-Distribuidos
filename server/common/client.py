@@ -19,7 +19,6 @@ class Client:
         self.results_received = 0
         self.total_expected = 5
 
-        self.running = True
 
     def run(self):
         
@@ -31,13 +30,17 @@ class Client:
 
         self._setup_signal_handlers()
 
+        self.data_controller.join()
+        self.result_controller.join()
+        logging.info(f"Finished client {self.client_id}")
+
     
     def _setup_signal_handlers(self):
         signal.signal(signal.SIGTERM, self.stop)
         signal.signal(signal.SIGINT, self.stop)
 
 
-    def stop(self):
+    def stop(self, _sig, _frame):
         try:
             if self.forward_queue:
                 self.forward_queue.close_channel()
@@ -50,13 +53,8 @@ class Client:
         try:    
             if self.data_controller and self.data_controller.is_alive():
                 self.data_controller.terminate()
-                self.data_controller.join()
-                self.data_controller = None
-
             if self.result_controller and self.result_controller.is_alive():
                 self.result_controller.terminate()
-                self.result_controller.join()
-                self.result_controller = None
 
         except Exception as e:
             logging.error(f"Error stopping client IN PROCESSES: {e}")
@@ -65,14 +63,15 @@ class Client:
             try:
                 self.socket.shutdown(socket.SHUT_RDWR)
                 self.socket.close()
+                self.socket = None
             except Exception as e:
                 logging.error(f"Error closing socket: {e}")
 
-        self.running = False
 
         logging.info(f"Client {self.client_id} stopped.")
 
     def stop_consumer(self):
+        logging.info("Stoping consumers")
         try:
             if self.forward_queue:
                 self.forward_queue.close_channel()
@@ -86,10 +85,10 @@ class Client:
             try:
                 self.socket.shutdown(socket.SHUT_RDWR)
                 self.socket.close()
+                self.socket = None
             except Exception as e:
                 logging.error(f"Error closing socket: {e}")
 
-        self.running = False
 
         logging.info(f"Client {self.client_id} stopped consuming.")
 
@@ -110,6 +109,7 @@ class Client:
                 return
             
             self._forward_to_data_controller(buffer)
+        self.stop_consumer()
 
     def _forward_to_data_controller(self, message):
         try:
@@ -120,9 +120,11 @@ class Client:
             logging.error(f"Failed to forward message to data controller: {e}")
 
     def return_results(self, conn: socket.socket):
-        self.result_queue = RabbitMQ('exchange_snd_results', f'result_{self.client_id}', f'results_{self.client_id}', 'direct')
-        self.result_queue.consume(self.result_controller_func)
-        logging.info("Je suis ICI")
+        try:
+            self.result_queue = RabbitMQ('exchange_snd_results', f'result_{self.client_id}', f'results_{self.client_id}', 'direct')
+            self.result_queue.consume(self.result_controller_func)
+        except Exception as e:
+            logging.error(f"Failed to consume results: {e}")
 
     def result_controller_func(self, ch, method, properties, body):
         try:
@@ -141,6 +143,9 @@ class Client:
                 logging.info(f"All results received for client {self.client_id}. Closing connection.")
                 self.stop_consumer()
                 return
+        except socket.error as err:
+            self.stop_consumer()
+            return
         except Exception as e:
             logging.error(f"Error processing message: {e}")
             return
