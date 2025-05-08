@@ -17,7 +17,8 @@ class Controller:
         self.movies_communication_config = movies_communication_config
         self.credits_communication_config = credits_communication_config
         self.ratings_communication_config = ratings_communication_config
-
+        self.queues = []
+        
     def start(self):
         logging.info("Starting DataController")
         self._setup_signal_handlers()
@@ -28,6 +29,10 @@ class Controller:
             movies_finish_notify_ntc = Queue()
             movies_finish_receive_ctn = Queue()
             movies_finish_notify_ctn = Queue()
+            self.queues.append(movies_finish_receive_ntc)
+            self.queues.append(movies_finish_notify_ntc)
+            self.queues.append(movies_finish_receive_ctn)
+            self.queues.append(movies_finish_notify_ctn)
 
             # Credits communication
             credits_finish_receive_ntc = Queue()
@@ -35,11 +40,20 @@ class Controller:
             credits_finish_receive_ctn = Queue()
             credits_finish_notify_ctn = Queue()
 
+            self.queues.append(credits_finish_receive_ntc)
+            self.queues.append(credits_finish_notify_ntc)
+            self.queues.append(credits_finish_receive_ctn)
+            self.queues.append(credits_finish_notify_ctn)
             # Ratings communication
             ratings_finish_receive_ntc = Queue()
             ratings_finish_notify_ntc = Queue()
             ratings_finish_receive_ctn = Queue()
             ratings_finish_notify_ctn = Queue()
+
+            self.queues.append(ratings_finish_receive_ntc)
+            self.queues.append(ratings_finish_notify_ntc)
+            self.queues.append(ratings_finish_receive_ctn)
+            self.queues.append(ratings_finish_notify_ctn)
 
             data_controller_instance = DataController(movies_finish_receive_ntc, movies_finish_notify_ntc, movies_finish_receive_ctn, movies_finish_notify_ctn, credits_finish_receive_ntc, credits_finish_notify_ntc, credits_finish_receive_ctn, credits_finish_notify_ctn, ratings_finish_receive_ntc, ratings_finish_notify_ntc, ratings_finish_receive_ctn, ratings_finish_notify_ctn, **self.config)
 
@@ -61,7 +75,7 @@ class Controller:
             self.ratings_data_controller_communicator.start()
 
 
-            self.data_controller.join()        
+            self.data_controller.join()   
             self.movies_data_controller_communicator.join()
             self.credits_data_controller_communicator.join()
             self.ratings_data_controller_communicator.join()
@@ -81,19 +95,17 @@ class Controller:
         """Handle shutdown signals"""
         logging.info(f"Received signal {signum}. Shutting down gracefully...")
         try:
+
+            for queue in self.queues:
+                queue.close()
+            for queue in self.queues:
+                queue.join_thread()
+            self.queues = []  
             # First stop the data controller which will close its connections
             if self.data_controller:
                 logging.info("Stopping DataController process...")
                 self.data_controller.terminate()
-                try:
-                    self.data_controller.join(timeout=5)  # Wait up to 5 seconds
-                    if self.data_controller.is_alive():
-                        logging.warning("DataController did not terminate gracefully, forcing...")
-                        self.data_controller.kill()
-                except Exception as e:
-                    logging.error(f"Error waiting for DataController to terminate: {e}")
-                logging.info("DataController process stopped")
-            
+
             # Then stop all communicators
             communicators = [
                 (self.movies_data_controller_communicator, "Movies"),
@@ -105,27 +117,18 @@ class Controller:
                 if comm:
                     logging.info(f"Stopping {name} communicator process...")
                     comm.terminate()
-                    try:
-                        comm.join(timeout=5)  # Wait up to 5 seconds
-                        if comm.is_alive():
-                            logging.warning(f"{name} communicator did not terminate gracefully, forcing...")
-                            comm.kill()
-                    except Exception as e:
-                        logging.error(f"Error waiting for {name} communicator to terminate: {e}")
-                    logging.info(f"{name} communicator process stopped")
             
-            # Clear references
-            self.data_controller = None
-            self.movies_data_controller_communicator = None
-            self.credits_data_controller_communicator = None
-            self.ratings_data_controller_communicator = None
+            self.data_controller.join() 
+            logging.info("DataController process stopped")
+            for comm, name in communicators:
+                comm.join()
+                logging.info(f"{name} communicator process stopped")
             
             logging.info("All processes stopped successfully")
         except Exception as e:
             logging.error(f"Error during shutdown: {e}")
         finally:
             logging.info("Shutdown complete.")
-            os._exit(0)  # Force exit after cleanup
 
     def stop(self):
         """Stop all processes gracefully"""
