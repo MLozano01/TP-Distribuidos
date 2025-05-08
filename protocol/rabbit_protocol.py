@@ -77,10 +77,13 @@ class RabbitMQ:
                 def check_stop():
                     stop_event.wait()
                     try:
-                        self.channel.stop_consuming()  # Safe way to unblock start_consuming()
-                        rabbit_logger.debug(f"Stopped consuming in {self.q_name}, with routing_key {self.key}")
+                        # Schedule stop_consuming in a thread-safe way
+                        self.connection.add_callback_threadsafe(
+                            lambda: self.channel.stop_consuming()
+                        )
+                        rabbit_logger.debug(f"Scheduled stop consuming in {self.q_name}, with routing_key {self.key}")
                     except Exception as e:
-                        rabbit_logger.error(f"Error stopping {self.q_name}, with routing_key {self.key}: {e}")
+                        rabbit_logger.error(f"Error scheduling stop for {self.q_name}, with routing_key {self.key}: {e}")
 
                 t = threading.Thread(target=check_stop, daemon=True)
                 t.start()

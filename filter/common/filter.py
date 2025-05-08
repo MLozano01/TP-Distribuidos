@@ -62,9 +62,13 @@ class Filter:
         self.finish_signal_checker = Process(target=self.check_finished, args=())
         self.finish_signal_checker.start()
         
-        self.queue_rcv.consume(callback=self.callback, stop_event=self.stop_event)
-        self._close_publishers()
-        logging.info(f"Filter done Consuming and publishers closed")
+        try:
+            self.queue_rcv.consume(callback_func=self.callback, stop_event=self.stop_event)
+            self._close_publishers()
+            logging.info(f"Filter done Consuming and publishers closed")
+        except Exception as e:
+            logging.error(f"Error in filter consumption: {e}")
+            self._close_publishers()
 
 
     def callback(self, ch, method, properties, body):
@@ -211,11 +215,9 @@ class Filter:
         status = None
 
         while not self.send_actual_client_id_status.empty():
-
             client_id, status = self.send_actual_client_id_status.get_nowait()
 
         logging.info(f"Last client ID: {client_id}, status: {status}")
-
         return client_id, status
 
     def _close_publishers(self):
@@ -228,8 +230,8 @@ class Filter:
             try: self.queue_snd_movies_to_credits_joiner.close_channel()
             except Exception as e: logging.error(f"Error closing credits sender channel: {e}")
 
-        if hasattr(self, 'queue_snd_single') and self.queue_snd_single:
-             try: self.queue_snd_single.close_channel()
+        if self.queue_snd_movies:
+             try: self.queue_snd_movies.close_channel()
              except Exception as e: logging.error(f"Error closing single sender channel: {e}")
 
     
