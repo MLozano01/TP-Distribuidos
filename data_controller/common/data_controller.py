@@ -108,47 +108,45 @@ class DataController:
 
         self.work_consumer.consume(self.callback)
 
+        self.movies_finish_signal_checker.join()
+        self.ratings_finish_signal_checker.join()
+        self.credits_finish_signal_checker.join()
+
     def callback(self, ch, method, properties, body):
-        # try:
-            message_type, message = self.protocol.decode_client_msg(body, self.columns_needed)
-            if not message_type or not message:
-                logging.warning("Received invalid message from server")
-                # ch.basic_ack(delivery_tag=method.delivery_tag)  # Acknowledge invalid messages
-                return
-            
-            if message.finished:
-                self._handle_finished_message(message_type, message)
-            else:
-                self._handle_data_message(message_type, message)
-            
-            # Acknowledge successful processing
-            # ch.basic_ack(delivery_tag=method.delivery_tag)
-        # except Exception as e:
-            # logging.error(f"Error processing message: {e}")
-            # Reject the message and requeue it
-            # ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+        message_type, message = self.protocol.decode_client_msg(body, self.columns_needed)
+        if not message_type or not message:
+            logging.warning("Received invalid message from server")
+            return
+        
+        if message.finished:
+            self._handle_finished_message(message_type, message)
+        else:
+            self._handle_data_message(message_type, message)
+
 
     def _handle_finished_message(self, message_type, msg):
         """Handle finished messages with coordination"""
         client_id = msg.client_id
         logging.info(f"Received {message_type.name} finished signal from server for client {client_id}")
         msg_to_send = msg.SerializeToString()
-        
-        if message_type == FileType.MOVIES:
-            self.movies_finish_receive_ntc.put(msg_to_send)
-            if self.movies_finish_receive_ctn.get() == True:
-                logging.info(f"Propagating finished MOVIES of client {client_id} downstream")
-                self.movies_publisher.publish(msg_to_send)
-        elif message_type == FileType.RATINGS:
-            self.ratings_finish_receive_ntc.put(msg_to_send)
-            if self.ratings_finish_receive_ctn.get() == True:
-                logging.info(f"Propagating finished RATINGS of client {client_id} downstream")
-                self.ratings_publisher.publish(msg_to_send)
-        elif message_type == FileType.CREDITS:
-            self.credits_finish_receive_ntc.put(msg_to_send)
-            if self.credits_finish_receive_ctn.get() == True:
-                logging.info(f"Propagating finished CREDITS of client {client_id} downstream")
-                self.credits_publisher.publish(msg_to_send)
+        try:
+            if message_type == FileType.MOVIES:
+                self.movies_finish_receive_ntc.put(msg_to_send)
+                if self.movies_finish_receive_ctn.get() == True:
+                    logging.info(f"Propagating finished MOVIES of client {client_id} downstream")
+                    self.movies_publisher.publish(msg_to_send)
+            elif message_type == FileType.RATINGS:
+                self.ratings_finish_receive_ntc.put(msg_to_send)
+                if self.ratings_finish_receive_ctn.get() == True:
+                    logging.info(f"Propagating finished RATINGS of client {client_id} downstream")
+                    self.ratings_publisher.publish(msg_to_send)
+            elif message_type == FileType.CREDITS:
+                self.credits_finish_receive_ntc.put(msg_to_send)
+                if self.credits_finish_receive_ctn.get() == True:
+                    logging.info(f"Propagating finished CREDITS of client {client_id} downstream")
+                    self.credits_publisher.publish(msg_to_send)
+        except Exception as e:
+            logging.error(f"Error occurred while handling a finished message: {e}")
 
     def _handle_data_message(self, message_type, msg):
         if message_type == FileType.MOVIES:
@@ -181,8 +179,12 @@ class DataController:
 
     def stop(self):
         """Stop the DataController and close all connections"""
-        logging.info(f"Stopping DataController {self.replica_id}...")
+        if not self.is_alive:
+            logging.info(f"Already stopped DataController {self.replica_id}")
+            return
         
+        logging.info(f"Stopping DataController {self.replica_id}...")
+        self.is_alive = False
         # Close work consumer connection
         if self.work_consumer:
             try:
@@ -223,10 +225,15 @@ class DataController:
         ]:
             if checker:
                 checker.terminate()
-                checker.join()
-                logging.info(f"{name} finished signal checker process terminated.")
+                
         
-        self.is_alive = False
+        for checker, name in [
+            (self.movies_finish_signal_checker, "Movies"),
+            (self.ratings_finish_signal_checker, "Ratings"),
+            (self.credits_finish_signal_checker, "Credits")
+        ]:
+            checker.join()
+            logging.info(f"{name} finished signal checker process terminated.")
         
         logging.info(f"DataController {self.replica_id} stopped successfully")
 

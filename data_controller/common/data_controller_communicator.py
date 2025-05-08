@@ -85,13 +85,16 @@ class DataControllerCommunicator:
 
             except Exception as e:
                 logger.error(f"Error in managing inner communication: {e}")
-                self.finish_receive_ctn.put(False)
+                if self.continue_running:
+                    self.finish_receive_ctn.put(False)
         consume_process.join()
 
     def _await_replicas_ack(self):
-        consumer_queue = RabbitMQ(self.config["exchange_communication"], self.config["queue_communication_name"] + "_2", self.config["routing_communication_key"] + "_2", self.config["exc_communication_type"])
-        consumer_queue.consume(self._handle_replica_ack)
-
+        try:
+            consumer_queue = RabbitMQ(self.config["exchange_communication"], self.config["queue_communication_name"] + "_2", self.config["routing_communication_key"] + "_2", self.config["exc_communication_type"])
+            consumer_queue.consume(self._handle_replica_ack)
+        except Exception as e:
+            logger.error(f"Error in managing inner communication: {e}")
 
     def handle_replicas_finished(self):
         """
@@ -145,13 +148,20 @@ class DataControllerCommunicator:
         self.data_controllers_acked.setdefault(client_id, 0)
         self.data_controllers_acked[client_id] += 1
 
-        if self.data_controllers_acked[client_id] == self.config["data_controller_replicas_count"]:
-            logging.info("All data_controller acked")
-            self.finish_receive_ctn.put(True)
+        try:
+            if self.data_controllers_acked[client_id] == self.config["data_controller_replicas_count"]:
+                logging.info("All data_controller acked")
+                self.finish_receive_ctn.put(True)
+        except Exception as e:
+            logger.error(f"Error in managing inner communication: {e}")
 
 
     def stop(self):
         """Stop the DataControllerCommunicator and close all connections"""
+        if not self.continue_running:
+            logging.info(f"Already stopped DataControllerCommunicator")
+            return
+        
         logging.info(f"Stopping {self.type} DataControllerCommunicator...")
         self.continue_running = False
         # Close queue communication 1 connection
