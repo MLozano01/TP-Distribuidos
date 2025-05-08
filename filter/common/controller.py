@@ -13,7 +13,6 @@ class Controller:
         self.filter_communicator = None
         self.config = config
         self.communication_config = communication_config
-        self.finish_notify_ctn = None
         self.comm_queue = []
         self.stop_event = Event()
 
