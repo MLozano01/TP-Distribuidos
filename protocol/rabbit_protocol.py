@@ -1,6 +1,7 @@
 import pika
 import time
 import logging
+import threading
 
 rabbit_logger = logging.getLogger("RabbitMQ")
 
@@ -58,7 +59,7 @@ class RabbitMQ:
             raise e
 
 
-    def consume(self, callback_func, routing_key=None):
+    def consume(self, callback_func, routing_key=None, stop_event=None):
         """The callback function is defined by the different nodes."""
 
         try:
@@ -72,8 +73,19 @@ class RabbitMQ:
             self.callback_func = callback_func
             self.channel.basic_consume(queue=self.q_name, on_message_callback=self.callback, auto_ack=self.auto_ack)
 
-            rabbit_logger.debug(f"Waiting for messages in {self.q_name}, with routing_key {self.key}. To exit press CTRL+C")
+            if stop_event is not None:
+                def check_stop():
+                    stop_event.wait()
+                    try:
+                        self.channel.stop_consuming()  # Safe way to unblock start_consuming()
+                        rabbit_logger.debug(f"Stopped consuming in {self.q_name}, with routing_key {self.key}")
+                    except Exception as e:
+                        rabbit_logger.error(f"Error stopping {self.q_name}, with routing_key {self.key}: {e}")
 
+                t = threading.Thread(target=check_stop, daemon=True)
+                t.start()
+            
+            rabbit_logger.debug(f"Waiting for messages in {self.q_name}, with routing_key {self.key}. To exit press CTRL+C")
             self.channel.start_consuming()
 
         except KeyboardInterrupt:

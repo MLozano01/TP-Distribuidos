@@ -4,7 +4,7 @@ import logging
 import json
 from protocol.protocol import Protocol, FileType
 from queue import Empty
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, Event
 
 logging.getLogger("pika").setLevel(logging.ERROR)
 logging.getLogger("RabbitMQ").setLevel(logging.ERROR)
@@ -13,7 +13,7 @@ START = False
 DONE = True
 
 class Filter:
-    def __init__(self, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, **kwargs):
+    def __init__(self, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, stop_event, **kwargs):
         self.protocol = Protocol()
         self.queue_rcv = None # For receiving movies data + finished signal
         self.queue_snd_movies_to_ratings_joiner = None
@@ -28,7 +28,7 @@ class Filter:
 
         self.send_actual_client_id_status = Queue()
         self.finish_signal_checker = None
-
+        self.stop_event = stop_event
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -37,7 +37,6 @@ class Filter:
             logging.warning("'publish_to_joiners' not found in config, defaulting to False.")
             self.publish_to_joiners = False
 
-        self.is_alive = True
 
 
     def _settle_queues(self):
@@ -63,8 +62,9 @@ class Filter:
         self.finish_signal_checker = Process(target=self.check_finished, args=())
         self.finish_signal_checker.start()
         
-        self.queue_rcv.consume(self.callback)
-        logging.info(f"Done Consuming")
+        self.queue_rcv.consume(callback=self.callback, stop_event=self.stop_event)
+        self._close_publishers()
+        logging.info(f"Filter done Consuming and publishers closed")
 
 
     def callback(self, ch, method, properties, body):
@@ -161,7 +161,8 @@ class Filter:
         self.finish_receive_ntc.put(msg.SerializeToString())
         logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
 
-        if self.finish_receive_ctn.get() == True:
+        queue_msg = self.finish_receive_ctn.get()
+        if queue_msg == True:
             logging.info("Received SEND finished signal from communication channel.")
             if self.publish_to_joiners:
                 self.queue_snd_movies_to_ratings_joiner.publish(self.protocol.create_movie_finished_msg(msg.client_id))
@@ -175,13 +176,19 @@ class Filter:
                 else:
                     self.queue_snd_movies.publish(msg_to_send)
                 logging.info(f"Published movie finished signal to {self.queue_snd_movies.exchange}")
+        elif queue_msg == "STOP_EVENT":
+            logging.info(f"Received STOP_EVENT on finish_receive_ctn")
 
         logging.info("FINISHED SENDING THE FINISH MESSAGE")
 
     def check_finished(self):
-        while self.is_alive:
+        while not self.stop_event.is_set():
             try:
                 msg = self.finish_notify_ctn.get()
+                if msg == "STOP_EVENT":
+                    logging.info(f"Filter check_finished process end")
+                    break
+
                 logging.info(f"Received finished signal from control channel: {msg}")
 
                 client_id, status = self.get_last()
@@ -192,7 +199,6 @@ class Filter:
                 else:
                     self.finish_notify_ntc.put([client_finished, True])
                     logging.info(f"Received finished signal from control channel for client {client_finished}, but working on {client_id}.")
-
             except Empty:
                 logging.info("No finished signal received yet.")
                 pass
@@ -212,12 +218,8 @@ class Filter:
 
         return client_id, status
 
-    def end_filter(self):
-        """End the filter and close the queue."""
-        if self.queue_rcv:
-            try: self.queue_rcv.close_channel()
-            except Exception as e: logging.error(f"Error closing receiver channel: {e}")
-
+    def _close_publishers(self):
+        """Close publish channels of the filter."""
         if hasattr(self, 'queue_snd_ratings') and self.queue_snd_movies_to_ratings_joiner:
             try: self.queue_snd_movies_to_ratings_joiner.close_channel()
             except Exception as e: logging.error(f"Error closing ratings sender channel: {e}")
@@ -230,15 +232,4 @@ class Filter:
              try: self.queue_snd_single.close_channel()
              except Exception as e: logging.error(f"Error closing single sender channel: {e}")
 
-        # Close control consumer and publisher
-        if self.movies_control_publisher:
-            try: self.movies_control_publisher.close_channel()
-            except Exception as e: logging.error(f"Error closing movie control publisher channel: {e}")
-
-        if self.finish_signal_checker:
-            self.finish_signal_checker.terminate()
-            self.finish_signal_checker.join()
-            logging.info("Finished signal checker process terminated.")
-
-        self.is_alive = False
-        logging.info("Filter Stopped")
+    
