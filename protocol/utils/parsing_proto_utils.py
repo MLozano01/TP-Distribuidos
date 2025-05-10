@@ -3,13 +3,13 @@ from datetime import datetime
 
 def to_float(value) -> float:
   try:
-    return float(value if value else -1.0)
+    return float(value)
   except:
     return -1.0
 
 def to_int(value) -> int:
   try:
-    return int(value if value else -1)
+    return int(value)
   except:
     return -1
 

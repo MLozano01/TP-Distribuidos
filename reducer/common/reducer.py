@@ -5,6 +5,8 @@ import logging
 import json
 from protocol.protocol import Protocol
 
+logging.getLogger("pika").setLevel(logging.ERROR)   
+logging.getLogger("RabbitMQ").setLevel(logging.DEBUG)
 
 class Reducer:
     def __init__(self, **kwargs):
@@ -14,8 +16,6 @@ class Reducer:
             setattr(self, key, value)
         self.is_alive = True
         self.partial_result = {}
-        self.received_finished_msg_amount = 0
-        logging.info(f"Expecting {self.expected_finished_msg_amount} finished messages based on config.")
 
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type)
@@ -28,31 +28,29 @@ class Reducer:
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
-        logging.info(f"Received message, with routing key: {method.routing_key}")
+        logging.debug(f"Received message, with routing key: {method.routing_key}")
         self.reducer(body)
 
     def reducer(self, data):
         try:
             protocol = Protocol()
 
-            msg = protocol.decode_movies_msg(bytes(data))
+
+            msg = protocol.decode_movies_msg(data)
 
             if msg.finished:
-                self.received_finished_msg_amount += 1
-                logging.info(f"Finished msg ({self.received_finished_msg_amount}/{self.expected_finished_msg_amount}) received on query_id {self.query_id}")
-                if self.received_finished_msg_amount >= self.expected_finished_msg_amount:
-                    logging.info(f"ALL Finished msg received on query_id {self.query_id}")
-                    result = parse_final_result(self.reduce_by, self.partial_result)
-                    res_proto = protocol.create_result(result)
+                logging.info(f"ALL Finished msg received on query_id {self.query_id}")
+                result = parse_final_result(self.reduce_by, self.partial_result, msg.client_id)
+                res_proto = protocol.create_result(result, msg.client_id)
 
-                    self.queue_snd.publish(res_proto)
+                self.queue_snd.publish(res_proto, f'{self.routing_snd_key}_{msg.client_id}')
 
-                    res_decoded = protocol.decode_result(res_proto)
-                    logging.info(f"Final result: {res_decoded}")
+                res_decoded = protocol.decode_result(res_proto)
+                logging.info(f"Final result: {res_decoded}")
 
                 return
-
-            self.partial_result = parse_reduce_funct(data, self.reduce_by, self.partial_result)
+            
+            self.partial_result = parse_reduce_funct(data, self.reduce_by, self.partial_result, msg.client_id)
 
         except json.JSONDecodeError as e:
             logging.error(f"Failed to decode JSON: {e}")

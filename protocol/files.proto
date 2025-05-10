@@ -20,6 +20,7 @@ message RatingCSV {
 message RatingsCSV {
   repeated RatingCSV ratings = 1;
   optional bool finished = 2;
+  int32 client_id = 3;
 }
 // [END ratings messages]
 
@@ -29,7 +30,6 @@ message CreditCSV {
     int32 cast_id = 1;
     string character = 2;
     string credit_id = 3;
-
     int32 gender = 4;
     int32 id = 5;
     string name = 6;
@@ -57,6 +57,7 @@ message CreditCSV {
 message CreditsCSV {
   repeated CreditCSV credits = 1;
   optional bool finished = 2;
+  int32 client_id = 3;
 }
 // [END credits messages]
 
@@ -129,6 +130,7 @@ message MovieCSV {
 message MoviesCSV {
   repeated MovieCSV movies = 1;
   optional bool finished = 2;
+  int32 client_id = 3;
 }
 // [END movies messages]
 
@@ -142,6 +144,8 @@ message Aggregation {
 
 message AggregationBatch {
   repeated Aggregation aggr_row = 1;
+  optional bool finished = 2;
+  int32 client_id = 3;
 }
 // [END] Aggregators messages
 
@@ -155,6 +159,7 @@ message ActorParticipation {
 message ActorParticipationsBatch {
     repeated ActorParticipation participations = 1;
     optional bool finished = 2;
+    int32 client_id = 3;
 }
 // [END] Actor Participation messages
 
@@ -176,9 +181,10 @@ message Result {
 message ResultBatch {
   int32 query_id = 1;
   repeated Result result_row = 2;
+  int32 client_id = 3;
+  optional bool final = 4;
 }
 
 // [END] ResultBatch messages
-
 
 // [END messages]

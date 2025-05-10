@@ -15,20 +15,20 @@ operators = {
 def _get_filter_args(filter_by):
     return filter_by.split(",")
 
-def parse_filter_funct(data_to_filter, filter_by, file_name):
+def parse_filter_funct(data_to_filter, filter_by):
 
     args = _get_filter_args(filter_by)
 
-    if file_name == "movies" and args[0] == "release_date":
+    if args[0] == "release_date":
         return filter_movies_by_date(data_to_filter, args)
     
-    if file_name == "movies" and args[0] == "countries":
+    if args[0] == "countries":
         return filter_movies_by_country(data_to_filter, args)
 
-    if file_name == "movies" and args[0] == "single":
+    if args[0] == "single":
         return filter_movies_by_quantity(data_to_filter, args)
     
-    if file_name == "movies" and args[0] == "decade":
+    if args[0] == "decade":
         return filter_movies_by_dacade(data_to_filter, args)
 
 

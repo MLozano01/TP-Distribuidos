@@ -16,6 +16,7 @@ all:
 docker-image:
 	docker build -f ./server/Dockerfile -t "server:latest" .
 	docker build -f ./client/Dockerfile -t "client:latest" .
+	docker build -f ./data_controller/Dockerfile -t "data-controller:latest" .
 	docker build -f ./filter/Dockerfile -t "filter:latest" .
 	docker build -f ./transformer/Dockerfile -t "transformer:latest" .
 	docker build -f ./aggregator/Dockerfile -t "aggregator:latest" .
@@ -24,12 +25,24 @@ docker-image:
 .PHONY: docker-image
 
 docker-compose-up: docker-image
-	docker compose -f docker-compose.yaml up --build
+	docker compose --profile "*" -f docker-compose.yaml up --build
 .PHONY: docker-compose-up
 
+docker-compose-up-system: docker-image
+	docker compose -f docker-compose.yaml up --build -d
+.PHONY: docker-compose-up-system
+
+docker-run-system:
+	docker compose -f docker-compose.yaml up --build -d
+.PHONY: docker-run-system
+
+docker-compose-up-clients: docker-image-client
+	docker compose --profile clients -f docker-compose.yaml up -d
+.PHONY: docker-compose-up-clients
+
 docker-compose-down:
-	docker compose -f docker-compose.yaml stop -t 1
-	docker compose -f docker-compose.yaml down
+	docker compose --profile "*" -f docker-compose.yaml stop -t 1
+	docker compose --profile "*" -f docker-compose.yaml down
 .PHONY: docker-compose-down
 
 docker-compose-logs:

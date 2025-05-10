@@ -1,3 +1,5 @@
+import csv
+import io
 from protocol import files_pb2
 from protocol.utils.parsing_proto_utils import *
 from enum import Enum
@@ -21,6 +23,16 @@ class FileType(Enum):
 
 
 class Protocol:
+  # Headers for each file type
+  MOVIES_HEADERS = ["adult", "belongs_to_collection", "budget", "genres", "homepage", "id", "imdb_id", 
+                   "original_language", "original_title", "overview", "popularity", "poster_path", 
+                   "production_companies", "production_countries", "release_date", "revenue", "runtime", 
+                   "spoken_languages", "status", "tagline", "title", "video", "vote_average", "vote_count"]
+  
+  RATINGS_HEADERS = ["userId", "movieId", "rating", "timestamp"]
+  
+  CREDITS_HEADERS = ["cast", "crew", "id"]
+
   def __init__(self):
     self.__file_classes = {FileType.MOVIES: files_pb2.MoviesCSV(), 
                          FileType.RATINGS: files_pb2.RatingsCSV(), 
@@ -31,9 +43,16 @@ class Protocol:
     self.__codes_to_types = {MOVIES_FILE_CODE: FileType.MOVIES, 
                             RATINGS_FILE_CODE: FileType.RATINGS, 
                             CREDITS_FILE_CODE: FileType.CREDITS}
-    self.current_file_type = None
-    self.current_headers = []
-    self.current_headers_dict = dict()
+    self.__headers = {
+      FileType.MOVIES: self.MOVIES_HEADERS,
+      FileType.RATINGS: self.RATINGS_HEADERS,
+      FileType.CREDITS: self.CREDITS_HEADERS
+    }
+    self.__headers_dict = {
+      FileType.MOVIES: {h: i for i, h in enumerate(self.MOVIES_HEADERS)},
+      FileType.RATINGS: {h: i for i, h in enumerate(self.RATINGS_HEADERS)},
+      FileType.CREDITS: {h: i for i, h in enumerate(self.CREDITS_HEADERS)}
+    }
 
 
 
@@ -61,10 +80,11 @@ class Protocol:
     msg = code.to_bytes(CODE_LENGTH, byteorder='big')
     return self.create_bytes(END_FILE_CODE, msg)
 
-  def create_finished_message(self, type):
+  def create_finished_message(self, type, client_id):
       """Creates and serializes a 'finished' message for the given type."""
       msg = self.__file_classes[type]
       msg.finished = True
+      msg.client_id = client_id
 
       serialized_msg = msg.SerializeToString()
       code = self.__type_codes.get(type)
@@ -80,80 +100,91 @@ class Protocol:
     return message
 
 
+  def add_client_id(self, message, client_id):
+    """Adds client ID to the message to call before forwarding to the distributed system."""
+    code = int.from_bytes(message[:CODE_LENGTH], byteorder='big')
+    length = int.from_bytes(message[CODE_LENGTH:CODE_LENGTH + INT_LENGTH], byteorder='big')
+    data = message[CODE_LENGTH + INT_LENGTH:]
+    
+    # Add client ID to the data
+    client_id_bytes = client_id.to_bytes(INT_LENGTH, byteorder='big')
+    new_data = client_id_bytes + data
+    
+    # Create new message with updated length
+    new_message = bytearray()
+    new_message.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
+    new_message.extend((length + INT_LENGTH).to_bytes(INT_LENGTH, byteorder='big'))
+    new_message.extend(new_data)
+    
+    return new_message
+
   def decode_client_msg(self, msg_buffer, columns):
     code = int.from_bytes(msg_buffer[:CODE_LENGTH], byteorder='big')
-
-    msg = msg_buffer[CODE_LENGTH + INT_LENGTH::]
+    length = int.from_bytes(msg_buffer[CODE_LENGTH:CODE_LENGTH + INT_LENGTH], byteorder='big')
+    
+    # Extract client ID
+    client_id = int.from_bytes(msg_buffer[CODE_LENGTH + INT_LENGTH:CODE_LENGTH + 2*INT_LENGTH], byteorder='big')
+    msg = msg_buffer[CODE_LENGTH + 2*INT_LENGTH:]
+    
     if code == END_FILE_CODE:
       file_code = int.from_bytes(msg[:CODE_LENGTH], byteorder='big')
       file_type = self.__codes_to_types[file_code]
       msg_finished = self.__file_classes[file_type]
       msg_finished.finished = True
+      msg_finished.client_id = client_id
       return file_type, msg_finished
 
     file_type = self.__codes_to_types[code]
-    if file_type != self.current_file_type:
-      self.current_headers = []
-      self.current_file_type = file_type
-      self.current_headers_dict = dict()
-
-    return file_type, self.lines_to_batch(msg, columns)
-  
-  def lines_to_batch(self, line_bytes, columns):
-    lines = files_pb2.CSVBatch()
-    lines.ParseFromString(line_bytes)
-    if not len(self.current_headers):
-      self.set_headers(lines.rows.pop(0))
+    # First decode the CSV batch without client_id
+    csv_batch = files_pb2.CSVBatch()
+    csv_batch.ParseFromString(msg)
     
-    ProtoClass = type(self.__file_classes[self.current_file_type])
+    # Then process the batch and add client_id to the final message
+    batch = self.lines_to_batch(csv_batch, columns, file_type)
+    batch.client_id = client_id
+    return file_type, batch
+
+  def lines_to_batch(self, csv_batch, columns, file_type):
+    ProtoClass = type(self.__file_classes[file_type])
     data_csv = ProtoClass()
 
-    for line in lines.rows:
-      data = self.parse_line(line)
+    for line in csv_batch.rows:
+      data = self.parse_line(line, file_type)
       line_parsed = None
       is_added = False
-      if self.current_file_type == FileType.MOVIES:
+      if file_type == FileType.MOVIES:
         line_parsed, is_added = self.update_movies_msg(data, columns['movies'])
-      elif self.current_file_type == FileType.RATINGS:
+      elif file_type == FileType.RATINGS:
         line_parsed, is_added = self.update_ratings_msg(data, columns['ratings'])
-      elif self.current_file_type == FileType.CREDITS:
+      elif file_type == FileType.CREDITS:
         line_parsed, is_added = self.update_credits_msg(data, columns['credits'])
       
       if is_added:
-        if self.current_file_type == FileType.MOVIES:
+        if file_type == FileType.MOVIES:
           data_csv.movies.append(line_parsed)
-        elif self.current_file_type == FileType.RATINGS:
+        elif file_type == FileType.RATINGS:
           data_csv.ratings.append(line_parsed)
-        elif self.current_file_type == FileType.CREDITS:
+        elif file_type == FileType.CREDITS:
           data_csv.credits.append(line_parsed)
     return data_csv
+
+  def begins_field(self, part):
+    #tiene tada, no arranca con " o arranca con "[
+    val= (part and part[0] != ' ' and part != '"') or part.startswith('"[') or part.startswith('"{')
+    return val
   
-  def set_headers(self, headers):
-    self.current_headers = headers.strip('\n').split(',')
-    self.current_headers_dict = dict()
-    for ind, header in enumerate(self.current_headers):
-      self.current_headers_dict[header] = ind
+  def parse_line(self, line, file_type):
 
-  def parse_line(self, line):
-    parts = line.split(',')
-    data = dict()
-    index = -1
-    for part in parts:
-
-      if not part or part[0] != ' ':
-        index+=1
-      
-      try:
-        data.setdefault(self.current_headers[index], "")
-        cleaned = part.strip(" '\\").strip('" \n')
-        if part and part[0] == ' ':
-          cleaned = "," + part
-      
-        data[self.current_headers[index]] += cleaned
-      except Exception as e:
-        logging.info(f"Line with more columns that disclosed")
-        return dict()
-    
+    try:
+      string_io = io.StringIO(line)
+      reader = csv.reader(string_io)
+      data = dict()
+      for row in reader:
+        for index, data_field in enumerate(row):
+          header = self.__headers[file_type][index]
+          data[header] = data_field
+    except Exception as e:
+      return dict()
     return data
 
 
@@ -334,18 +365,33 @@ class Protocol:
     message.extend(len_msg.to_bytes(INT_LENGTH, byteorder='big'))
     message.extend(data)
     return message
+  
+  def create_movie_finished_msg(self, client_id):
+    movies_pb = files_pb2.MoviesCSV()
+    movies_pb.finished = True
+    movies_pb.client_id = client_id
+    return movies_pb.SerializeToString()
+  
+  def create_actor_participations_finished_msg(self, client_id):
+    actor_participations_pb = files_pb2.ActorParticipationsBatch()
+    actor_participations_pb.finished = True
+    actor_participations_pb.client_id = client_id
+    return actor_participations_pb.SerializeToString()
 
-  def create_movie_list(self, movies):
+  def create_movie_list(self, movies, client_id):
     movies_pb = files_pb2.MoviesCSV()
 
     for movie in movies:
       movies_pb.movies.append(movie)
 
+    movies_pb.client_id = client_id
     movies_pb_str = movies_pb.SerializeToString()
     return movies_pb_str
 
-  def create_aggr_batch(self, dict_results):
+  def create_aggr_batch(self, dict_results, client_id):
     batch_pb = files_pb2.AggregationBatch()
+
+    batch_pb.client_id = client_id
 
     for key, results in dict_results.items():
       aggr_pb = batch_pb.aggr_row.add()
@@ -362,12 +408,12 @@ class Protocol:
     aggr.ParseFromString(buffer)
     return aggr
 
-  def create_actor_participations_batch(self, participations):
+  def create_actor_participations_batch(self, participations, client_id):
       """Creates and serializes an ActorParticipationsBatch message."""
-      batch_pb = files_pb2.ActorParticipationsBatch()
-      # participations should be a list of ActorParticipation objects
-      batch_pb.participations.extend(participations)
-      return batch_pb.SerializeToString()
+      batch = files_pb2.ActorParticipationsBatch()
+      batch.participations.extend(participations)
+      batch.client_id = client_id
+      return batch.SerializeToString()
 
   def create_finished_actor_participations_msg(self):
       """Creates and serializes an ActorParticipationsBatch message with finished=True."""
@@ -387,8 +433,12 @@ class Protocol:
       batch_pb.ParseFromString(buffer)
       return batch_pb
 
-  def create_result(self, dict_results):
+  def create_result(self, dict_results, client_id, final=False):
     batch_pb = files_pb2.ResultBatch()
+    batch_pb.client_id = client_id
+
+    if final: 
+      batch_pb.final = True
 
     for key, results in dict_results.items():
       if key == "country":

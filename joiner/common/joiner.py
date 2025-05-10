@@ -7,7 +7,8 @@ from protocol.rabbit_wrapper import RabbitMQConsumer, RabbitMQProducer
 from protocol import files_pb2 # Import files_pb2 to access new message types
 
 # Define batch size for outgoing messages
-BATCH_SIZE = 20000
+BATCH_SIZE = 60000
+logging.getLogger("pika").setLevel(logging.ERROR)
 
 class Joiner:
     def __init__(self, **kwargs):
@@ -20,19 +21,16 @@ class Joiner:
 
         # Protocol and State
         self.protocol = Protocol()
-        self.movies_buffer = {}  # {movie_id: movie_data (MovieCSV object)}
-        self.other_buffer = {}   # {movie_id: [other_data_item_1, ...]}
-        # EOF flags - Need signal from control channel when ALL data of a type is sent globally
-        self.movies_eof_received = False
-        self.other_eof_received = False
-        # self.can_start_joining = False # Removed - join triggered by receiving both EOFs
+        self.movies_buffer = {}  # {client_id: {movie_id: movie_data (MovieCSV object)}}
+        self.other_buffer = {}   # {client_id: {movie_id: [other_data_item_1, ...]}}
+        # Track EOF signals per client
+        self.movies_eof_received = set()  # Set of client_ids that have received movies EOF
+        self.other_eof_received = set()   # Set of client_ids that have received other EOF
         self._lock = threading.Lock() # To protect shared buffers and EOF flags
 
         # RabbitMQ Connections
         self.movies_consumer = None
         self.other_consumer = None
-        self.control_consumer = None # Listens for Ratings/Credits signals from Server
-        self.movies_control_consumer = None # Listens for Movies signal from Filter
         self.output_producer = None
 
         # Stop event for graceful shutdown
@@ -63,7 +61,6 @@ class Joiner:
                 routing_key=consistent_hash_binding_key # Use fixed weight "1"
                 # durable=True by default
             )
-            logging.info(f"Movies Consumer on exchange: {self.movies_consumer.exchange}")
             # Other Data Consumer (Consistent Hash Queue)
             self.other_consumer = RabbitMQConsumer(
                 host=host,
@@ -72,23 +69,6 @@ class Joiner:
                 queue_name=self.config['queue_other_name'],
                 routing_key=consistent_hash_binding_key # Use fixed weight "1"
                 # durable=True by default
-            )
-            logging.info(f"Other Consumer on exchange: {self.other_consumer.exchange}")
-            # Control Consumer (Fanout Queue for RATINGS/CREDITS finished signals from Server)
-            self.control_consumer = RabbitMQConsumer(
-                host=host,
-                exchange="server_finished_file_exchange", # Unified exchange name from config
-                exchange_type="fanout", # Should be fanout
-                queue_name=None, # Let RabbitMQ generate a unique queue name
-                routing_key='' # Fanout ignores routing key
-            )
-            # Movies Control Consumer (Fanout Queue for MOVIES finished signal from Filter)
-            self.movies_control_consumer = RabbitMQConsumer(
-                 host=host,
-                 exchange="filter_arg_step_finished",
-                 exchange_type="fanout",
-                 queue_name=None,
-                 routing_key=''
             )
 
             # --- Producer ---
@@ -99,8 +79,6 @@ class Joiner:
                 routing_key=self.config['routing_key_output'] # Default routing key
                 # Producer declares exchange but not queue by default
             )
-            logging.info(f"Output Producer on exchange: {self.output_producer.exchange}")
-            logging.info("RabbitMQ connections settled using rabbit_wrapper classes.")
 
         except Exception as e:
              logging.error(f"Fatal error during RabbitMQ connection setup: {e}", exc_info=True)
@@ -117,7 +95,6 @@ class Joiner:
 
             # Check if connections were successfully settled
             if not all([self.movies_consumer, self.other_consumer, 
-                        self.control_consumer, self.movies_control_consumer, 
                         self.output_producer]):
                  logging.error("Not all required RabbitMQ connections were initialized. Aborting start.")
                  return
@@ -126,15 +103,11 @@ class Joiner:
             # Note: auto_ack=True used as requested
             self.movies_consumer.consume(self._process_movie_message, auto_ack=True)
             self.other_consumer.consume(self._process_other_message, auto_ack=True)
-            self.control_consumer.consume(self._process_other_control_signal, auto_ack=True) # Renamed callback
-            self.movies_control_consumer.consume(self._process_movies_control_signal, auto_ack=True) # New callback
 
             # Start consumers in separate threads by calling start_consuming
             threads = []
             threads.append(threading.Thread(target=self.movies_consumer.start_consuming, daemon=True))
             threads.append(threading.Thread(target=self.other_consumer.start_consuming, daemon=True))
-            threads.append(threading.Thread(target=self.control_consumer.start_consuming, daemon=True))
-            threads.append(threading.Thread(target=self.movies_control_consumer.start_consuming, daemon=True)) # New thread
 
             for t in threads:
                 t.start()
@@ -157,19 +130,30 @@ class Joiner:
         if self._stop_event.is_set(): return
         try:
             movies_msg = self.protocol.decode_movies_msg(body)
-            if not movies_msg or not movies_msg.movies:
-                logging.warning("Received empty or invalid movie batch.")
+
+            if not movies_msg or not movies_msg.client_id:
+                logging.warning("Received empty or invalid movie message.")
+                return
+
+            client_id = movies_msg.client_id
+            # Handle finished signal
+            if movies_msg.finished:
+                self._handle_movies_finished_signal(client_id)
+                return
+            
+            if not movies_msg.movies:
+                logging.warning("Received empty movie batch.")
                 return
 
             with self._lock:
+                if client_id not in self.movies_buffer:
+                    self.movies_buffer[client_id] = {}
+                
                 for movie in movies_msg.movies:
-                    self.movies_buffer[movie.id] = movie
-                    logging.info(f"Buffered movie ID {movie.id}")
+                    self.movies_buffer[client_id][movie.id] = movie
 
         except Exception as e:
             logging.error(f"Error processing movie message: {e}", exc_info=True)
-            # Consider if this error should trigger a shutdown
-            # self._stop_event.set()
 
     def _process_other_message(self, ch, method, properties, body):
         """Callback for processing other data (ratings/credits)."""
@@ -196,46 +180,57 @@ class Joiner:
                 logging.error(f"Unsupported OTHER_DATA_TYPE: {self.other_data_type}")
                 return
 
+            # Check if this is a finished signal
+            if other_msg and other_msg.finished:
+                client_id = other_msg.client_id
+                should_trigger_processing = False
+                with self._lock:
+                    if client_id not in self.other_eof_received:
+                        self.other_eof_received.add(client_id)
+                        logging.info(f"Processed {self.other_data_type} finished signal for client {client_id}.")
+                        if client_id in self.movies_eof_received:
+                            should_trigger_processing = True
+                    else:
+                        logging.info(f"Duplicate {self.other_data_type} finished signal for client {client_id}.")
+                
+                if should_trigger_processing:
+                    self._trigger_final_processing(client_id)
+                return
+
             # Original data processing logic
             if not other_msg or not data_list:
                  logging.warning(f"Received empty or invalid {self.other_data_type} batch.")
                  return
 
             with self._lock: # Acquire lock to modify shared buffer
+                client_id = other_msg.client_id
+                if client_id not in self.other_buffer:
+                    self.other_buffer[client_id] = {}
+
                 for item in data_list:
                     movie_id = getattr(item, movie_id_field, None)
                     if movie_id is None:
                          logging.warning(f"Could not extract movie ID using field '{movie_id_field}' from {self.other_data_type} item.")
                          continue
 
-                    # TODO LATER if EOF MOVIES ARRIVED only match other with buffered movie id. Optimization: If movie_id not in movies_buffer, discard this item
-                    # if movie_id not in self.movies_buffer:
-                        #logging.info(f"Discarding {self.other_data_type} for movie ID {movie_id} as it's not in movies_buffer.")
-                      #  continue
-
                     if is_ratings:
                         # Get current sum and count, default to (0.0, 0)
-                        current_sum, current_count = self.other_buffer.get(movie_id, (0.0, 0))
+                        current_sum, current_count = self.other_buffer[client_id].get(movie_id, (0.0, 0))
                         # Update sum and count
                         new_sum = current_sum + item.rating # Assuming item is RatingCSV
                         new_count = current_count + 1
                         # Store the updated tuple
-                        self.other_buffer[movie_id] = (new_sum, new_count)
-                        logging.info(f"Buffered movie ID {movie_id} with sum: {new_sum} and count: {new_count}")
-                    # --- Modification End ---
+                        self.other_buffer[client_id][movie_id] = (new_sum, new_count)
                     else: # Handle Credits (buffering the object)
-                        if movie_id not in self.other_buffer:
-                            self.other_buffer[movie_id] = []
-                        self.other_buffer[movie_id].append(item)
-                        logging.info(f"Buffered {self.other_data_type} data for movie ID {movie_id}")
+                        if movie_id not in self.other_buffer[client_id]:
+                            self.other_buffer[client_id][movie_id] = []
+                        self.other_buffer[client_id][movie_id].append(item)
 
         except Exception as e:
             logging.error(f"Error processing {self.other_data_type} message: {e}", exc_info=True)
-            # Consider if this error should trigger a shutdown
-            # self._stop_event.set()
 
-    def _process_ratings_join(self):
-        """Processes buffered data for RATINGS join, modifying MovieCSV."""
+    def _process_ratings_join(self, client_id):
+        """Processes buffered data for RATINGS join for a specific client, modifying MovieCSV."""
         processed_movies_batch = [] # Accumulate movies for the current batch
         joined_ids = set()
         initial_movie_count = 0
@@ -243,23 +238,27 @@ class Joiner:
         total_movies_sent = 0
 
         with self._lock:
-            initial_movie_count = len(self.movies_buffer)
-            initial_ratings_count = len(self.other_buffer)
-            logging.info(f"Processing Ratings Join. Movies: {initial_movie_count}, Ratings Stats: {initial_ratings_count}")
+            if client_id not in self.movies_buffer or client_id not in self.other_buffer:
+                logging.warning(f"No data found for client {client_id}")
+                return
+
+            initial_movie_count = len(self.movies_buffer[client_id])
+            initial_ratings_count = len(self.other_buffer[client_id])
+            logging.info(f"Processing Ratings Join for client {client_id}. Movies: {initial_movie_count}, Ratings Stats: {initial_ratings_count}")
 
             # Iterate over a copy of movie IDs to allow safe deletion
-            movie_ids_to_check = list(self.movies_buffer.keys())
+            movie_ids_to_check = list(self.movies_buffer[client_id].keys())
 
             for movie_id in movie_ids_to_check:
                 # Check for match only if movie_id is still in buffer
-                if movie_id not in self.movies_buffer:
-                     continue
+                if movie_id not in self.movies_buffer[client_id]:
+                    continue
                 
-                if movie_id in self.other_buffer:
-                    movie_data = self.movies_buffer[movie_id]
+                if movie_id in self.other_buffer[client_id]:
+                    movie_data = self.movies_buffer[client_id][movie_id]
                     try:
                         # Retrieve the pre-calculated sum and count directly
-                        ratings_sum, rating_count = self.other_buffer[movie_id]
+                        ratings_sum, rating_count = self.other_buffer[client_id][movie_id]
 
                         if rating_count > 0:
                             avg_rating = ratings_sum / rating_count
@@ -278,7 +277,7 @@ class Joiner:
                             logging.info(f"Movie batch size reached ({len(processed_movies_batch)}). Sending batch...")
                             # Send batch (needs _send_movie_batch helper which handles producer check)
                             # Sending here holds the lock longer, but simplifies batch logic.
-                            self._send_movie_batch(processed_movies_batch)
+                            self._send_movie_batch(processed_movies_batch, client_id)
                             total_movies_sent += len(processed_movies_batch)
                             processed_movies_batch.clear() # Reset for next batch
 
@@ -288,27 +287,27 @@ class Joiner:
             # --- Batching: Send any remaining movies after the loop --- 
             if processed_movies_batch:
                 logging.info(f"Sending final batch of {len(processed_movies_batch)} processed movies...")
-                self._send_movie_batch(processed_movies_batch)
+                self._send_movie_batch(processed_movies_batch, client_id)
                 total_movies_sent += len(processed_movies_batch)
                 processed_movies_batch.clear()
-            # --- End Batching Modification ---
 
-            # Cleanup processed movies/ratings outside the iteration loop
+            # Send finished message after all batches   
+            logging.info(f"Sending finished message for client {client_id} after processing {total_movies_sent} movies")
+            finished_msg = self.protocol.create_movie_finished_msg(client_id)
+            self.output_producer.publish(finished_msg)
+
+            # Cleanup processed movies/ratings for this client
             for mid in joined_ids:
-                if mid in self.movies_buffer: del self.movies_buffer[mid]
-                if mid in self.other_buffer: del self.other_buffer[mid]
+                if mid in self.movies_buffer[client_id]: del self.movies_buffer[client_id][mid]
+                if mid in self.other_buffer[client_id]: del self.other_buffer[client_id][mid]
 
-            final_movie_count = len(self.movies_buffer)
-            final_ratings_count = len(self.other_buffer)
+            final_movie_count = len(self.movies_buffer[client_id])
+            final_ratings_count = len(self.other_buffer[client_id])
             # Use total_movies_sent for the final log
-            logging.info(f"Ratings join pass complete. Sent {total_movies_sent} processed MovieCSV records in batches. Processed {len(joined_ids)} movie IDs. Initial state: ({initial_movie_count} M, {initial_ratings_count} R). Final state: ({final_movie_count} M, {final_ratings_count} R).")
-            # Send finished signal for the processed movie stream
-            logging.info("Sending finished signal for processed MovieCSV stream...")
-            self.output_producer.publish(self.protocol.create_finished_movies_msg())
+            logging.info(f"Ratings join pass complete for client {client_id}. Sent {total_movies_sent} processed MovieCSV records in batches. Processed {len(joined_ids)} movie IDs. Initial state: ({initial_movie_count} M, {initial_ratings_count} R). Final state: ({final_movie_count} M, {final_ratings_count} R).")
 
-
-    def _process_credits_join(self):
-        """Processes buffered data for CREDITS join, emitting ActorParticipation messages in batches."""
+    def _process_credits_join(self, client_id):
+        """Processes buffered data for CREDITS join for a specific client, emitting ActorParticipation messages in batches."""
         participations_batch = [] # Accumulate participations for the current batch
         processed_movie_ids = set()
         initial_movie_count = 0
@@ -316,21 +315,25 @@ class Joiner:
         total_participations_sent = 0
 
         with self._lock:
-            initial_movie_count = len(self.movies_buffer)
-            initial_credits_count = len(self.other_buffer)
-            logging.info(f"Starting Credits Join. Movies: {initial_movie_count}, Credits: {initial_credits_count}")
+            if client_id not in self.movies_buffer or client_id not in self.other_buffer:
+                logging.warning(f"No data found for client {client_id}")
+                return
+
+            initial_movie_count = len(self.movies_buffer[client_id])
+            initial_credits_count = len(self.other_buffer[client_id])
+            logging.info(f"Starting Credits Join for client {client_id}. Movies: {initial_movie_count}, Credits: {initial_credits_count}")
 
             # Iterate over a copy of movie IDs to allow safe deletion
-            movie_ids_to_check = list(self.movies_buffer.keys())
+            movie_ids_to_check = list(self.movies_buffer[client_id].keys())
 
             for movie_id in movie_ids_to_check:
                 # Check for match only if movie_id is still in buffer
-                if movie_id not in self.movies_buffer:
+                if movie_id not in self.movies_buffer[client_id]:
                     continue
 
-                if movie_id in self.other_buffer:
-                    movie_data = self.movies_buffer[movie_id]
-                    credit_csv = self.other_buffer[movie_id][0]
+                if movie_id in self.other_buffer[client_id]:
+                    movie_data = self.movies_buffer[client_id][movie_id]
+                    credit_csv = self.other_buffer[client_id][movie_id][0]
                     try:
                         if credit_csv:
                             # Assume only one CreditCSV item per movie ID
@@ -340,13 +343,11 @@ class Joiner:
                                 # Check if batch is full
                                 if len(participations_batch) >= BATCH_SIZE:
                                     logging.info(f"Participation batch size reached ({len(participations_batch)}). Sending batch...")
-                                    # Send batch (outside lock? -> needs careful consideration, but send helper handles producer check)
-                                    # Sending here might hold lock longer, but simplifies batch logic, other threads finished by now
-                                    self._send_actor_participations_batch(participations_batch)
+                                    self._send_actor_participations_batch(participations_batch, client_id)
                                     total_participations_sent += len(participations_batch)
-                                    participations_batch.clear() # Reset for next batch
+                                    participations_batch.clear()
 
-                            logging.info(f"Processed movie {movie_id}: Found {len(credit_csv.cast)} cast, skipped {skipped}, added {len(movie_participations)} participations.")
+                            logging.debug(f"Processed movie {movie_id}: Found {len(credit_csv.cast)} cast, skipped {skipped}, added {len(movie_participations)} participations.")
                             processed_movie_ids.add(movie_id)
                         else:
                             logging.warning(f"Matched movie ID {movie_id} but the credits list in buffer was empty. Marking as processed.")
@@ -355,25 +356,27 @@ class Joiner:
                     except Exception as e:
                         logging.error(f"Error processing credits join for movie ID {movie_id}: {e}", exc_info=True)
 
-            # --- Batching: Send any remaining participations after the loop ---
+            # Send any remaining participations for this client
             if participations_batch:
-                logging.info(f"Sending final batch of {len(participations_batch)} participations...")
-                self._send_actor_participations_batch(participations_batch)
+                logging.info(f"Sending final batch of {len(participations_batch)} participations for client {client_id}...")
+                self._send_actor_participations_batch(participations_batch, client_id)
                 total_participations_sent += len(participations_batch)
                 participations_batch.clear()
-            # --- End Batching Modification ---
 
-            # Cleanup processed movies/credits outside the iteration loop
+            # Send finished message after all batches
+            logging.info(f"Sending finished message for client {client_id} after processing {total_participations_sent} participations")
+            finished_msg = self.protocol.create_actor_participations_finished_msg(client_id)
+            self.output_producer.publish(finished_msg)
+
+            # Cleanup processed movies/credits for this client
             for mid in processed_movie_ids:
-                if mid in self.movies_buffer: del self.movies_buffer[mid]
-                if mid in self.other_buffer: del self.other_buffer[mid]
+                if mid in self.movies_buffer[client_id]: del self.movies_buffer[client_id][mid]
+                if mid in self.other_buffer[client_id]: del self.other_buffer[client_id][mid]
 
-            final_movie_count = len(self.movies_buffer)
-            final_credits_count = len(self.other_buffer)
+            final_movie_count = len(self.movies_buffer[client_id])
+            final_credits_count = len(self.other_buffer[client_id])
             # Use total_participations_sent for the final log
-            logging.info(f"Credits join pass complete. Generated and sent {total_participations_sent} participation records in batches. Processed {len(processed_movie_ids)} movie IDs. Initial state: ({initial_movie_count} M, {initial_credits_count} C). Final state: ({final_movie_count} M, {final_credits_count} C).")
-            logging.info("Sending finished signal for ActorParticipations stream...")
-            self.output_producer.publish(self.protocol.create_finished_actor_participations_msg())
+            logging.info(f"Credits join pass complete for client {client_id}. Generated and sent {total_participations_sent} participation records in batches. Processed {len(processed_movie_ids)} movie IDs. Initial state: ({initial_movie_count} M, {initial_credits_count} C). Final state: ({final_movie_count} M, {final_credits_count} C).")
 
     def _create_participations_for_movie(self, movie_id, credit_csv):
         """Helper function to create ActorParticipation messages for a single movie's credits."""
@@ -402,9 +405,8 @@ class Joiner:
 
         logging.debug(f"Finished creating participations for movie {movie_id}. Skipped {cast_skipped_count}. Added {len(participations)} participations.")
         return participations, cast_skipped_count
-    
 
-    def _send_movie_batch(self, movie_list):
+    def _send_movie_batch(self, movie_list, client_id):
         """Serializes and sends a batch of MovieCSV objects."""
         if not self.output_producer:
             logging.error("Output producer not initialized.")
@@ -414,9 +416,14 @@ class Joiner:
             return
 
         try:
+            # Create batch with client_id
+            batch = files_pb2.MoviesCSV()
+            batch.movies.extend(movie_list)
+            batch.client_id = client_id
+            
             # Use the existing protocol method to send a batch of MovieCSV
-            serialized_batch = self.protocol.create_movie_list(movie_list)
-            log_msg = f"Sent batch of {len(movie_list)} processed MovieCSV items (joined with {self.other_data_type})."
+            serialized_batch = batch.SerializeToString()
+            log_msg = f"Sent batch of {len(movie_list)} processed MovieCSV items (joined with {self.other_data_type}) for client {client_id}."
 
             if serialized_batch:
                 self.output_producer.publish(serialized_batch)
@@ -427,7 +434,7 @@ class Joiner:
         except Exception as e:
             logging.error(f"Failed to send processed MovieCSV batch: {e}", exc_info=True)
 
-    def _send_actor_participations_batch(self, participations_list):
+    def _send_actor_participations_batch(self, participations_list, client_id):
         """Serializes and sends a batch of ActorParticipation objects."""
         if not self.output_producer:
             logging.error("Output producer not initialized.")
@@ -436,9 +443,8 @@ class Joiner:
             logging.info("No actor participation data to send.")
             return
         try:
-            # Use the protocol method for the correct batch type
-            serialized_batch = self.protocol.create_actor_participations_batch(participations_list)
-            log_msg = f"Sent batch of {len(participations_list)} ActorParticipation items."
+            serialized_batch = self.protocol.create_actor_participations_batch(participations_list, client_id)
+            log_msg = f"Sent batch of {len(participations_list)} ActorParticipation items for client {client_id}."
 
             if serialized_batch:
                 self.output_producer.publish(serialized_batch)
@@ -456,112 +462,34 @@ class Joiner:
 
             # Stop consumers and producer (which closes channels/connections)
             consumers = [self.movies_consumer, self.other_consumer, 
-                         self.control_consumer, self.movies_control_consumer]
+                         self.movies_control_consumer]
             for consumer in consumers:
                  if consumer: consumer.stop()
             if self.output_producer: self.output_producer.stop()
 
             logging.info("Joiner Stopped")
 
-    def _process_movies_control_signal(self, ch, method, properties, body):
-         """Callback for the MOVIE control channel (from Filter). Expects full message."""
-         if self._stop_event.is_set(): return
-         processed_signal = False
-         log_msg = ""
-         trigger_processing = False
-         try:
-             if not body or len(body) < (CODE_LENGTH + INT_LENGTH):
-                 logging.warning(f"Received invalid message on movie control channel (too short): {len(body)} bytes")
-                 return
-             
-             # Extract payload and decode as MoviesCSV
-             # We assume the filter correctly sends only movie signals here
-             protobuf_payload = body[CODE_LENGTH + INT_LENGTH:]
-             decoded_msg = self.protocol.decode_movies_msg(protobuf_payload)
+    def _handle_movies_finished_signal(self, client_id):
+        """Helper method to handle movies finished signal."""
+        should_trigger_processing = False
+        with self._lock:
+            if client_id not in self.movies_eof_received:
+                self.movies_eof_received.add(client_id)
+                logging.info(f"Processed MOVIES finished signal for client {client_id}.")
+                if client_id in self.other_eof_received:
+                    should_trigger_processing = True
+            else:
+                logging.info(f"Duplicate MOVIES finished signal for client {client_id}.")
 
-             if decoded_msg and decoded_msg.finished:
-                 with self._lock:
-                     if not self.movies_eof_received:
-                         self.movies_eof_received = True
-                         processed_signal = True
-                         log_msg = "Processed MOVIES finished signal via movie control channel."
-                         # Check if other stream finished
-                         if self.other_eof_received:
-                             trigger_processing = True
-                     else:
-                         log_msg = "Duplicate MOVIES finished signal via movie control channel."
-             else:
-                 log_msg = f"Unexpected non-finished message on movie control channel."
+        if should_trigger_processing:
+            logging.info(f"Both EOF signals received for client {client_id}. Triggering final processing.")
+            self._trigger_final_processing(client_id)
 
-             # Log outcome
-             if processed_signal: logging.warning(log_msg)
-             else: logging.info(log_msg)
 
-             # Trigger outside lock if needed
-             if trigger_processing:
-                 logging.warning("Both EOF signals received (MOVIES last via ctrl). Triggering final processing.")
-                 self._trigger_final_processing()
-
-         except Exception as e:
-             logging.error(f"Error processing movie control signal: {e}", exc_info=True)
-
-    def _process_other_control_signal(self, ch, method, properties, body):
-         """Callback for the unified control channel (from Server - Ratings/Credits). Expects full message."""
-         if self._stop_event.is_set(): return
-         processed_signal = False
-         log_msg = ""
-         trigger_processing = False
-         try:
-             if not body or len(body) < (CODE_LENGTH + INT_LENGTH):
-                 logging.warning(f"Received invalid message on unified control channel (too short): {len(body)} bytes")
-                 return
-             
-             # Decode based on type code in prefix
-             type_code = int.from_bytes(body[:CODE_LENGTH], byteorder='big')
-             protobuf_payload = body[CODE_LENGTH + INT_LENGTH:]
-             decoded_msg = None
-             relevant_type = False
-
-             if type_code == RATINGS_FILE_CODE and self.other_data_type == "RATINGS":
-                 decoded_msg = self.protocol.decode_ratings_msg(protobuf_payload)
-                 relevant_type = True
-             elif type_code == CREDITS_FILE_CODE and self.other_data_type == "CREDITS":
-                 decoded_msg = self.protocol.decode_credits_msg(protobuf_payload)
-                 relevant_type = True
-             else:
-                 # Ignore movie signals (code 1) or irrelevant signals on this channel
-                 log_msg = f"Ignoring signal code {type_code} on unified control channel for joiner type {self.other_data_type}."
-
-             if relevant_type and decoded_msg and decoded_msg.finished:
-                  with self._lock:
-                     if not self.other_eof_received:
-                          self.other_eof_received = True
-                          processed_signal = True
-                          log_msg = f"Processed {self.other_data_type} finished signal via unified control channel."
-                          if self.movies_eof_received:
-                               trigger_processing = True
-                     else:
-                         log_msg = f"Duplicate {self.other_data_type} finished signal via unified control channel."
-             elif relevant_type:
-                  log_msg = f"Unexpected non-finished message type {type_code} on unified control channel."
-             
-             # Log outcome
-             if processed_signal: logging.warning(log_msg)
-             else: logging.info(log_msg)
-
-             # Trigger outside lock if needed
-             if trigger_processing:
-                 logging.warning(f"Both EOF signals received ({self.other_data_type} last via ctrl). Triggering final processing.")
-                 self._trigger_final_processing()
-
-         except Exception as e:
-             logging.error(f"Error processing other control signal: {e}", exc_info=True)
-
-    # Helper method to avoid code duplication in callbacks
-    def _trigger_final_processing(self):
+    def _trigger_final_processing(self, client_id):
         if self.other_data_type == "RATINGS":
-            self._process_ratings_join()
+            self._process_ratings_join(client_id)
         elif self.other_data_type == "CREDITS":
-            self._process_credits_join()
+            self._process_credits_join(client_id)
         else:
             logging.error(f"No final processing logic defined for type: {self.other_data_type}") 
