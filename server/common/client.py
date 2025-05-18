@@ -16,7 +16,7 @@ class Client:
         self.forward_queue = None
         self.result_queue = None
 
-        self.results_received = 0
+        self.results_received = set()
         self.total_expected = 5
 
 
@@ -131,14 +131,9 @@ class Client:
             msg = self.protocol.create_client_result(body)
             self.socket.sendall(msg)
 
-            # decoded_msg = self.protocol.decode_result(body)
-
-            # if decoded_msg.query_id == 1 and not decoded_msg.final:
-            #     return
-
-            self.results_received += 1
-            logging.info(f"Results received: {self.results_received}.")
-            if self.results_received == self.total_expected:
+            self.results_received.add(msg.query_id)
+            logging.info(f"Results received: {len(self.results_received)}.")
+            if len(self.results_received) == self.total_expected:
                 logging.info(f"{self.results_received} results received for client {self.client_id} with total {self.total_expected}.")
                 logging.info(f"All results received for client {self.client_id}. Closing connection.")
                 self.stop_consumer()

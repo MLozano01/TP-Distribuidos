@@ -110,17 +110,17 @@ class Client:
       
       _, msg = protocol.decode_msg(buffer)
       logging.info(f"RESULT {msg}")
-      if msg.query_id == 1:
-        if not len(msg.result_row):
-          cant_results += 1
-          continue
-        if not results[msg.query_id-1]:
-          results[msg.query_id-1] = msg
-        else:
-          results[msg.query_id-1].result_row.extend(msg.result_row)
-      else:
-        results[msg.query_id-1] = msg
-        cant_results += 1
+      # if msg.query_id == 1:
+      #   if not len(msg.result_row):
+      #     cant_results += 1
+      #     continue
+      #   if not results[msg.query_id-1]:
+      #     results[msg.query_id-1] = msg
+      #   else:
+      #     results[msg.query_id-1].result_row.extend(msg.result_row)
+      # else:
+      results[msg.query_id-1] = msg
+      cant_results += 1
     
     self.write_results(results)
 
