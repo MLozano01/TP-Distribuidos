@@ -32,12 +32,14 @@ def parse_reduce_funct(data_to_reduce, reduce_by, result, client_id):
     if args[0] == "avg":
         return reduce_avg(protocol.decode_aggr_batch(data_to_reduce), args, result, client_id)
     
+    if args[0] == "q1":
+        return reduce_query_one(protocol.decode_movies_msg(data_to_reduce), args, result, client_id)
+    
 
 def parse_final_result(reduce_by, partial_results, client_id):
     args = _get_filter_args(reduce_by)
 
     client_partial_results = partial_results.get(client_id, {})
-
 
     if args[0] == "avg":
         return calculate_avg(client_partial_results)
@@ -67,6 +69,11 @@ def parse_final_result(reduce_by, partial_results, client_id):
     if args[0] == "max-min":
         res = {}
         res["max-min"] = client_partial_results
+        return res
+    
+    if args[0] == "q1":
+        res = {}
+        res["movies"] = client_partial_results
         return res
 
 def reduce_top5(data_to_reduce, reduce_args, result, client_id):
@@ -105,6 +112,18 @@ def reduce_avg(data_to_reduce, reduce_args, result, client_id):
 
     return result
 
+def reduce_query_one(data_to_reduce, reduce_args, result, client_id):
+    
+    result.setdefault(client_id, {})
+
+    for data in data_to_reduce.movies:
+        result[client_id].setdefault(data.title, [])
+        genre_names = [genre.name for genre in data.genres if genre.name]
+        result[client_id][data.title] = genre_names
+        continue
+
+    return result
+
 def reduce_max_min(data_to_reduce, reduce_args, result, client_id):
     result.setdefault(client_id, {})
 
@@ -140,3 +159,15 @@ def calculate_avg(partial_result):
 
     res["sentiment"] = result    
     return res
+
+# def movies_into_results(result):
+
+#     res = {}
+
+#     for data in result:
+#         title = getattr(data, "title")
+#         genre_names = [genre.name for genre in data.genres if genre.name]
+#         res[title] = genre_names
+#     final_res = {}
+#     final_res["movies"] = res
+#     return final_res

@@ -83,14 +83,3 @@ def filter_movies_by_dacade(data_to_filter, filter_args):
 
     return result
 
-def movies_into_results(result):
-
-    res = {}
-
-    for data in result:
-        title = getattr(data, "title")
-        genre_names = [genre.name for genre in data.genres if genre.name]
-        res[title] = genre_names
-    final_res = {}
-    final_res["movies"] = res
-    return final_res

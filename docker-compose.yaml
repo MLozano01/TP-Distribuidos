@@ -71,7 +71,24 @@ services:
       - ./filter/filters/filter_2000_movies.ini:/config.ini
     environment:
       - FILTER_REPLICA_ID=1
-      - FILTER_REPLICA_COUNT=1
+      - FILTER_REPLICA_COUNT=2
+    
+  filter_2000_movies-2:
+    container_name: filter_2000_movies-2
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_2000_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=2
+      - FILTER_REPLICA_COUNT=2
     
   filter_arg_spa_movies-1:
     container_name: filter_arg_spa_movies-1
@@ -105,7 +122,24 @@ services:
       - ./filter/filters/filter_Arg_movies.ini:/config.ini
     environment:
       - FILTER_REPLICA_ID=1
-      - FILTER_REPLICA_COUNT=1
+      - FILTER_REPLICA_COUNT=2
+    
+  filter_arg_movies-2:
+    container_name: filter_arg_movies-2
+    image: filter:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./filter/filters/filter_Arg_movies.ini:/config.ini
+    environment:
+      - FILTER_REPLICA_ID=2
+      - FILTER_REPLICA_COUNT=2
     
   filter_single_country_movies-1:
     container_name: filter_single_country_movies-1
@@ -158,7 +192,43 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - DATA_CONTROLLER_REPLICA_ID=1
-      - DATA_CONTROLLER_REPLICA_COUNT=1
+      - DATA_CONTROLLER_REPLICA_COUNT=3
+    
+  data-controller-2:
+    container_name: data-controller-2
+    image: data-controller:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./data_controller/config.ini:/config.ini
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATA_CONTROLLER_REPLICA_ID=2
+      - DATA_CONTROLLER_REPLICA_COUNT=3
+    
+  data-controller-3:
+    container_name: data-controller-3
+    image: data-controller:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./data_controller/config.ini:/config.ini
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATA_CONTROLLER_REPLICA_ID=3
+      - DATA_CONTROLLER_REPLICA_COUNT=3
     
   
   transformer-1:
@@ -231,6 +301,7 @@ services:
       - ./reducer/reducers/top5.ini:/top5.ini
       - ./reducer/reducers/top10.ini:/top10.ini
       - ./reducer/reducers/max-min.ini:/max-min.ini
+      - ./reducer/reducers/query1.ini:/query1.ini
     
   
   joiner-ratings-1:

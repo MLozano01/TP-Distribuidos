@@ -1,10 +1,9 @@
 from protocol.rabbit_protocol import RabbitMQ
-from common.aux import parse_filter_funct, movies_into_results
+from common.aux import parse_filter_funct
 import logging
-import json
-from protocol.protocol import Protocol, FileType
+from protocol.protocol import Protocol
 from queue import Empty
-from multiprocessing import Process, Queue, Event
+from multiprocessing import Process, Queue
 
 logging.getLogger("pika").setLevel(logging.ERROR)
 logging.getLogger("RabbitMQ").setLevel(logging.ERROR)
@@ -93,12 +92,11 @@ class Filter:
                 else:
                     if hasattr(self, 'queue_snd_movies') and self.queue_snd_movies:
                             logging.info(f"Publishing batch of {len(result)} filtered messages with routing key: '{self.queue_snd_movies.key}' to exchange '{self.queue_snd_movies.exchange}' ({self.queue_snd_movies.exc_type}).")
-                            if self.queue_snd_movies.key == "results":
-                                movies_res = movies_into_results(result)
-                                res = self.protocol.create_result(movies_res, decoded_msg.client_id)
-                                self.queue_snd_movies.publish(res, f"{self.routing_snd_key}_{decoded_msg.client_id}")
-                                return
-
+                            # if self.queue_snd_movies.key == "results":
+                            #     movies_res = movies_into_results(result)
+                            #     res = self.protocol.create_result(movies_res, decoded_msg.client_id)
+                            #     self.queue_snd_movies.publish(res, f"{self.routing_snd_key}_{decoded_msg.client_id}")
+                            #     return
                             self.queue_snd_movies.publish(self.protocol.create_movie_list(result, client_id))
                     else:
                             logging.error("Single sender queue not initialized for non-sharded publish.")
@@ -174,11 +172,11 @@ class Filter:
                 logging.info(f"Published movie finished signal for client {msg.client_id} to both joiners.")
             else:
                 msg_to_send = msg.SerializeToString()
-                if self.queue_snd_movies.key == "results":
-                    msg_to_send = self.protocol.create_result({"movies": {}}, msg.client_id, True)
-                    self.queue_snd_movies.publish(msg_to_send, f"{self.routing_snd_key}_{msg.client_id}")
-                else:
-                    self.queue_snd_movies.publish(msg_to_send)
+                # if self.queue_snd_movies.key == "results":
+                #     msg_to_send = self.protocol.create_result({"movies": {}}, msg.client_id, True)
+                #     self.queue_snd_movies.publish(msg_to_send, f"{self.routing_snd_key}_{msg.client_id}")
+                # else:
+                self.queue_snd_movies.publish(msg_to_send)
                 logging.info(f"Published movie finished signal to {self.queue_snd_movies.exchange}")
         elif queue_msg == "STOP_EVENT":
             logging.info(f"Received STOP_EVENT on finish_receive_ctn")

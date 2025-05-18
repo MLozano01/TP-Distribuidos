@@ -26,6 +26,7 @@ REDUCER_COMMANDS_TOP5 = "top5.ini"
 REDUCER_COMMANDS_TOP10 = "top10.ini"
 REDUCER_COMMANDS_MAX_MIN = "max-min.ini"
 REDUCER_COMMANDS_AVERAGE = "average.ini"
+REDUCER_COMMANDS_QUERY1 = "query1.ini"
 
 AGGR_SENT_BY_REV = "aggr_sent_revenue.ini"
 AGGR_COUNTRY_BUDGET = "aggr_country_budget.ini"
@@ -253,6 +254,7 @@ def create_reducer():
       - ./reducer/reducers/{REDUCER_COMMANDS_TOP5}:/{REDUCER_COMMANDS_TOP5}
       - ./reducer/reducers/{REDUCER_COMMANDS_TOP10}:/{REDUCER_COMMANDS_TOP10}
       - ./reducer/reducers/{REDUCER_COMMANDS_MAX_MIN}:/{REDUCER_COMMANDS_MAX_MIN}
+      - ./reducer/reducers/{REDUCER_COMMANDS_QUERY1}:/{REDUCER_COMMANDS_QUERY1}
     """
     return reducer_cont
 

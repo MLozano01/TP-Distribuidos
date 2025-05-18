@@ -437,7 +437,7 @@ class Protocol:
     batch_pb = files_pb2.ResultBatch()
     batch_pb.client_id = client_id
 
-    if final: 
+    if final:
       batch_pb.final = True
 
     for key, results in dict_results.items():

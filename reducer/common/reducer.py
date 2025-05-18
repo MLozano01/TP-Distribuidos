@@ -42,7 +42,7 @@ class Reducer:
                 logging.info(f"ALL Finished msg received on query_id {self.query_id}")
                 result = parse_final_result(self.reduce_by, self.partial_result, msg.client_id)
                 res_proto = protocol.create_result(result, msg.client_id)
-
+                
                 self.queue_snd.publish(res_proto, f'{self.routing_snd_key}_{msg.client_id}')
 
                 res_decoded = protocol.decode_result(res_proto)

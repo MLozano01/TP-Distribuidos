@@ -131,10 +131,10 @@ class Client:
             msg = self.protocol.create_client_result(body)
             self.socket.sendall(msg)
 
-            decoded_msg = self.protocol.decode_result(body)
+            # decoded_msg = self.protocol.decode_result(body)
 
-            if decoded_msg.query_id == 1 and not decoded_msg.final:
-                return
+            # if decoded_msg.query_id == 1 and not decoded_msg.final:
+            #     return
 
             self.results_received += 1
             logging.info(f"Results received: {self.results_received}.")
