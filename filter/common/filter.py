@@ -12,7 +12,7 @@ START = False
 DONE = True
 
 class Filter:
-    def __init__(self, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, stop_event, **kwargs):
+    def __init__(self, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, stop_event, comm_instance, **kwargs):
         self.protocol = Protocol()
         self.queue_rcv = None # For receiving movies data + finished signal
         self.queue_snd_movies_to_ratings_joiner = None
@@ -28,6 +28,8 @@ class Filter:
         self.send_actual_client_id_status = Queue()
         self.finish_signal_checker = None
         self.stop_event = stop_event
+
+        self.comm_instance = comm_instance
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -86,18 +88,19 @@ class Filter:
         try:
             result = parse_filter_funct(decoded_msg, self.filter_by)
             client_id = decoded_msg.client_id
+            logging.info(f"result: {result}")
             if result:
                 if self.publish_to_joiners:
                     self._publish_individually_by_movie_id(result, client_id)
                 else:
                     if hasattr(self, 'queue_snd_movies') and self.queue_snd_movies:
-                            logging.info(f"Publishing batch of {len(result)} filtered messages with routing key: '{self.queue_snd_movies.key}' to exchange '{self.queue_snd_movies.exchange}' ({self.queue_snd_movies.exc_type}).")
-                            self.queue_snd_movies.publish(self.protocol.create_movie_list(result, client_id))
+                        logging.info(f"Publishing batch of {len(result)} filtered messages with routing key: '{self.queue_snd_movies.key}' to exchange '{self.queue_snd_movies.exchange}' ({self.queue_snd_movies.exc_type}).")
+                        self.queue_snd_movies.publish(self.protocol.create_movie_list(result, client_id))
                     else:
-                            logging.error("Single sender queue not initialized for non-sharded publish.")
+                        logging.error("Single sender queue not initialized for non-sharded publish.")
             else:
                 logging.info(f"No matched the filter criteria.")
-
+            logging.info(f"sending status")
             self.send_actual_client_id_status.put([decoded_msg.client_id, DONE])
 
         except Exception as e:
@@ -154,25 +157,20 @@ class Filter:
 
     def _publish_movie_finished_signal(self, msg):
         """Publishes the movie finished signal. If its to joiners it publishis to a specific fanout exchange, otherwise it publishes to the default key of the single sender queue."""
-       
-        self.finish_receive_ntc.put(msg.SerializeToString())
         logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
-
-        queue_msg = self.finish_receive_ctn.get()
-        if queue_msg == True:
-            logging.info("Received SEND finished signal from communication channel.")
-            if self.publish_to_joiners:
-                self.queue_snd_movies_to_ratings_joiner.publish(self.protocol.create_movie_finished_msg(msg.client_id))
-                self.queue_snd_movies_to_credits_joiner.publish(self.protocol.create_movie_finished_msg(msg.client_id))
-                logging.info(f"Published movie finished signal for client {msg.client_id} to both joiners.")
-            else:
-                msg_to_send = msg.SerializeToString()
-                self.queue_snd_movies.publish(msg_to_send)
-                logging.info(f"Published movie finished signal to {self.queue_snd_movies.exchange}")
-        elif queue_msg == "STOP_EVENT":
-            logging.info(f"Received STOP_EVENT on finish_receive_ctn")
-
-        logging.info("FINISHED SENDING THE FINISH MESSAGE")
+        self.comm_instance.start_token_ring(msg.client_id)
+        
+        self.comm_instance.wait_eof_confirmation()
+        logging.info("Received SEND finished signal from communication channel.")
+        if self.publish_to_joiners:
+            self.queue_snd_movies_to_ratings_joiner.publish(self.protocol.create_movie_finished_msg(msg.client_id))
+            self.queue_snd_movies_to_credits_joiner.publish(self.protocol.create_movie_finished_msg(msg.client_id))
+            logging.info(f"Published movie finished signal for client {msg.client_id} to both joiners.")
+        else:
+            msg_to_send = msg.SerializeToString()
+            self.queue_snd_movies.publish(msg_to_send)
+            logging.info(f"Published movie finished signal to {self.queue_snd_movies.exchange}")
+        
 
     def check_finished(self):
         while not self.stop_event.is_set():

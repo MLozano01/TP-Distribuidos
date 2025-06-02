@@ -1,0 +1,18 @@
+// [START declaration]
+syntax = "proto3";
+package comm;
+// [END declaration]
+
+// [START messages]
+message TokenStep {
+  int32 container_id = 1;
+  bool ready = 2;
+}
+
+message TokenFinished {
+  int32 round = 1;
+  int32 started_by = 2;
+  int32 client_id = 3;
+  repeated TokenStep containers = 4;
+}
+// [END messages]

@@ -21,24 +21,18 @@ def config_filter():
     try:
         # LOGGING
         config_params["logging_level"] = os.getenv('LOGGING_LEVEL', filter_config["DEFAULT"]["LOGGING_LEVEL"])
-
+        communication_config["comm_port"] = os.getenv('COMM_PORT', filter_config["DEFAULT"]["COMM_PORT"])
+        communication_config["id"] = os.getenv("FILTER_REPLICA_ID")
         # RCV QUEUE
         config_params["queue_rcv_name"] = os.getenv('QUEUE_RCV_NAME', filter_config["RABBITMQ"]["QUEUE_RCV_NAME"])
         config_params["routing_rcv_key"] = os.getenv('ROUTING_KEY_RCV', filter_config["RABBITMQ"]["ROUTING_KEY_RCV"])
         config_params["exchange_rcv"] = os.getenv('EXCHANGE_RCV', filter_config["RABBITMQ"]["EXCHANGE_RCV"])
         config_params["exc_rcv_type"] = os.getenv('TYPE_RCV', filter_config["RABBITMQ"]["TYPE_RCV"])
 
-        # COMS QUEUE
-        comm_name = os.getenv('QUEUE_COMMUNICATION', filter_config["RABBITMQ"]["QUEUE_COMMUNICATION"])
-        env_id = os.getenv('FILTER_REPLICA_ID')
-        communication_config["queue_communication_name"] = f"{comm_name}_{env_id}" if env_id else comm_name
-        communication_config["routing_communication_key"] = os.getenv('ROUTING_KEY_COMMUNICATION', filter_config["RABBITMQ"]["ROUTING_KEY_COMMUNICATION"])
-        communication_config["exchange_communication"] = os.getenv('EXCHANGE_COMMUNICATION', filter_config["RABBITMQ"]["EXCHANGE_COMMUNICATION"])
-        communication_config["exc_communication_type"] = os.getenv('TYPE_COMMUNICATION', filter_config["RABBITMQ"]["TYPE_COMMUNICATION"])
-
         # FILTER DATA
         config_params[f"filter_by"] = os.getenv("FILTER", filter_config["FILTERING_INFO"]["FILTER"])
         config_params[f"filter_name"] = os.getenv("FILTER_NAME", filter_config["FILTERING_INFO"]["FILTER_NAME"])
+        communication_config[f"filter_name"] = config_params[f"filter_name"]
         communication_config[f"filter_replicas_count"] = int(os.getenv("FILTER_REPLICA_COUNT"))
 
         # JOINER AND SENDER QUEUE

@@ -31,16 +31,16 @@ class Controller:
 
             logging.info(f"Starting filter {filter_name}  with config {self.config}")
 
-            filter_instance = Filter(finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, self.stop_event, **self.config)
-            self.filter = Process(target=filter_instance.run, args=())
-        
-            self.filter.start()
-            logging.info(f"Filter {filter_name} started with PID: {self.filter.pid}")
-
             communicator_instance = FilterCommunicator(self.communication_config, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, self.stop_event)
             self.filter_communicator = Process(target=communicator_instance.run, args=())
             self.filter_communicator.start()
             logging.info(f"Filter communicator started with PID: {self.filter_communicator.pid}")
+
+            filter_instance = Filter(finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, self.stop_event, communicator_instance, **self.config)
+            self.filter = Process(target=filter_instance.run, args=())
+        
+            self.filter.start()
+            logging.info(f"Filter {filter_name} started with PID: {self.filter.pid}")
 
 
             self.filter.join()        
