@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 
 FILE_NAME = "docker-compose.yaml"
 
@@ -47,8 +48,10 @@ FILTER_DECADE_REPLICAS = 9
 AGGR_SENT_REPLICAS = 10
 AGGR_BUDGET_REPLICAS = 11
 DATA_CONTROLLER_REPLICAS = 12
+HEALTHCHECK_REPLICAS = 13
 
-def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas, data_controller_replicas):
+
+def docker_yaml_generator(client_amount, replicas):
     # Check for joiner config files existence
     required_joiner_configs = [JOINER_RATINGS_CONFIG_SOURCE, JOINER_CREDITS_CONFIG_SOURCE]
     for config_path in required_joiner_configs:
@@ -57,39 +60,41 @@ def docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_re
             sys.exit(1)
 
     with open(FILE_NAME, 'w') as f:
-        f.write(create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas, data_controller_replicas))
+        f.write(create_yaml_file(client_amount, replicas))
 
 
-def create_yaml_file(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas, data_controller_replicas):
+def create_yaml_file(client_amount, replicas):
     print(f"Creating:")
     print(f"  Clients: {client_amount}")
-    print(f"  Transformers: {transformer_replicas}")
-    print(f"  Joiners: {joiner_ratings_replicas} (ratings) - {joiner_credits_replicas} (credits)")
-    print(f"  Filters: {f_2000_replicas} (2000) - {f_arg_spa_replicas} (arg/spa) - {f_arg} (arg) - {f_single_country_replicas} (1 country) - {f_decade_replicas} (decade)")
-    print(f"  Aggregators: {aggr_sent_replicas} (sent) - {aggr_budget_replicas} (budget)")
-    print(f"  Data controllers: {data_controller_replicas}")
+    print(f"  Transformers: {replicas['transformer']}")
+    print(f"  Joiners: {replicas['joiner-ratings']} (ratings) - {replicas['joiner-credits']} (credits)")
+    print(f"  Filters: {replicas['filter-2000-movies']} (2000) - {replicas['filter-arg-spa-movies']} (arg/spa) - {replicas['filter-arg-movies']} (arg) - {replicas['filter-single-country-movies']} (1 country) - {replicas['filter-decade-movies']} (decade)")
+    print(f"  Aggregators: {replicas['aggregator-sent']} (sent) - {replicas['aggregator-budget']} (budget)")
+    print(f"  Data controllers: {replicas['data-controller']}")
+    print(f"  Healthcheckers: {replicas['healthcheck_replicas']}")
     clients = join_clients(client_amount)
     server = create_server(client_amount)
     network = create_network()
     rabbit = create_rabbit()
-    filters = write_filters(f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas)
-    transformer = create_transformers(transformer_replicas)
-    aggregator = create_aggregators(aggr_sent_replicas, aggr_budget_replicas)
+    filters = write_filters(replicas['filter-2000-movies'], replicas['filter-arg-spa-movies'], replicas['filter-arg-movies'], replicas['filter-single-country-movies'], replicas['filter-decade-movies'])
+    transformer = create_transformers(replicas['transformer'])
+    aggregator = create_aggregators(replicas['aggregator-sent'], replicas['aggregator-budget'])
     reducer = create_reducer()
+    healthcheckers = create_healthcheckers(replicas)
     
     # Create data controller services
     data_controller_services = ""
-    for i in range(1, data_controller_replicas + 1):
-        data_controller_services += create_data_controller(i, data_controller_replicas)
+    for i in range(1, replicas['data-controller'] + 1):
+        data_controller_services += create_data_controller(i, replicas['data-controller'])
 
     # Loop to create multiple joiner services
     joiner_ratings_services = ""
-    for i in range(1, joiner_ratings_replicas + 1):
-        joiner_ratings_services += create_joiner("joiner-ratings", i, joiner_ratings_replicas, JOINER_RATINGS_CONFIG_SOURCE)
+    for i in range(1, replicas['joiner-ratings'] + 1):
+        joiner_ratings_services += create_joiner("joiner-ratings", i, replicas['joiner-ratings'], JOINER_RATINGS_CONFIG_SOURCE)
         
     joiner_credits_services = ""
-    for i in range(1, joiner_credits_replicas + 1):
-        joiner_credits_services += create_joiner("joiner-credits", i, joiner_credits_replicas, JOINER_CREDITS_CONFIG_SOURCE)
+    for i in range(1, replicas['joiner-credits'] + 1):
+        joiner_credits_services += create_joiner("joiner-credits", i, replicas['joiner-credits'], JOINER_CREDITS_CONFIG_SOURCE)
 
     content = f"""
 version: "3.8"
@@ -104,6 +109,7 @@ services:
   {reducer}
   {joiner_ratings_services}
   {joiner_credits_services}
+  {healthcheckers}
 networks:
   {network}
 """
@@ -199,15 +205,15 @@ def write_filters(filter_2000=1, filter_arg_spa=1, filter_arg=1, filter_single_c
     filters = ""
 
     for i in range(1, filter_2000 + 1):
-        filters += create_filter("filter_2000_movies", i, FILTER_MOVIES_BY_2000, filter_2000)
+        filters += create_filter("filter-2000-movies", i, FILTER_MOVIES_BY_2000, filter_2000)
     for i in range(1, filter_arg_spa + 1):
-        filters += create_filter("filter_arg_spa_movies", i, FILTER_MOVIES_BY_ARG_SPA, filter_arg_spa)
+        filters += create_filter("filter-arg-spa-movies", i, FILTER_MOVIES_BY_ARG_SPA, filter_arg_spa)
     for i in range(1, filter_arg + 1):
-        filters += create_filter("filter_arg_movies", i, FILTER_MOVIES_BY_ARG, filter_arg)
+        filters += create_filter("filter-arg-movies", i, FILTER_MOVIES_BY_ARG, filter_arg)
     for i in range(1, filter_single_country + 1):
-        filters += create_filter("filter_single_country_movies", i, FILTER_MOVIES_BY_SINGLE_COUNTRY, filter_single_country)
+        filters += create_filter("filter-single-country-movies", i, FILTER_MOVIES_BY_SINGLE_COUNTRY, filter_single_country)
     for i in range(1, filter_decade + 1):
-        filters += create_filter("filter_decade_movies", i, FILTER_MOVIES_DECADE, filter_decade)
+        filters += create_filter("filter-decade-movies", i, FILTER_MOVIES_DECADE, filter_decade)
 
     return filters
 
@@ -262,9 +268,9 @@ def create_reducer():
 def create_aggregators(replicas_sent, replicas_budget):
     aggregators = ""
     for i in range(1, replicas_sent + 1):
-        aggregators += create_aggregator("aggregator_sent", AGGR_SENT_BY_REV, i, replicas_sent)
+        aggregators += create_aggregator("aggregator-sent", AGGR_SENT_BY_REV, i, replicas_sent)
     for i in range(1, replicas_budget + 1):
-        aggregators += create_aggregator("aggregator_budget", AGGR_COUNTRY_BUDGET, i, replicas_budget)
+        aggregators += create_aggregator("aggregator-budget", AGGR_COUNTRY_BUDGET, i, replicas_budget)
 
     return aggregators
 
@@ -372,6 +378,52 @@ def create_data_controller(replica_id, total_replicas):
     """
     return data_controller_yaml
 
+def create_healthcheckers(replicas):
+  number_hc = replicas['healthcheck_replicas'] if replicas['healthcheck_replicas'] <= 11 else 11
+
+  hc = {}
+
+  for i in range(1, number_hc + 1):
+    hc[f"healthchecker-{i}"] = {}
+
+  total_hc = replicas.pop("healthcheck_replicas")
+
+  for key, value in sorted(replicas.items(), key=lambda x: x[1]):
+    min_hc = min(hc, key=lambda k: sum(hc[k].values()))
+    hc[min_hc][key] = value
+
+  healthcheckers = ""
+
+  for h in hc:
+      nodes = json.dumps(hc[h])
+      healthcheckers += create_hc(h.split("-")[1], total_hc, nodes)
+  return healthcheckers
+
+
+def create_hc(hc_id, total_hc, nodes):    
+    hc_name = f"healthchecker-{hc_id}"
+
+    hc_cont = f"""
+  {hc_name}:
+    container_name: {hc_name}
+    image: healthcheck:latest
+    networks:
+      - {NETWORK_NAME}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    environment:
+      HEALTHCHECK_REPLICA_ID: {hc_id}
+      HEALTHCHECK_REPLICA_COUNT: {total_hc}
+      PORT: 3030
+      NODES: >
+          {nodes}
+    """
+    return hc_cont
+
 def parse_args(args, arg_to_parse):
     if len(args) <= arg_to_parse:
       return 1
@@ -393,20 +445,25 @@ def main():
         print("Usage: python compose-generator.py <client_amount> [transformer_replicas] [joiner_ratings_replicas] [joiner_credits_replicas] [filter_2000_replicas] [filter_arg_spa_replicas] [filter_arg_replicas] [filter_single_country_replicas] [filter_decade_replicas] [aggr_sent_replicas] [aggr_budget_replicas] [data_controller_replicas]")
         sys.exit(1)
 
-    client_amount = parse_args(sys.argv, CLIENT_AMOUNT)
-    transformer_replicas = parse_args(sys.argv, TRANSFORMER_REPLICAS)
-    joiner_ratings_replicas = parse_args(sys.argv, JOINER_RATINGS_REPLICAS)
-    joiner_credits_replicas = parse_args(sys.argv, JOINER_CREDITS_REPLICAS)
-    f_2000_replicas = parse_args(sys.argv, FILTER_2000_REPLICAS)
-    f_arg_spa_replicas = parse_args(sys.argv, FILTER_ARG_SPA_REPLICAS)
-    f_arg = parse_args(sys.argv, FILTER_ARG_REPLICAS)
-    f_single_country_replicas = parse_args(sys.argv, FILTER_SINGLE_COUNTRY_REPLICAS)
-    f_decade_replicas = parse_args(sys.argv, FILTER_DECADE_REPLICAS)
-    aggr_sent_replicas = parse_args(sys.argv, AGGR_SENT_REPLICAS)
-    aggr_budget_replicas = parse_args(sys.argv, AGGR_BUDGET_REPLICAS)
-    data_controller_replicas = parse_args(sys.argv, DATA_CONTROLLER_REPLICAS)
+    replicas = {}
 
-    docker_yaml_generator(client_amount, transformer_replicas, joiner_ratings_replicas, joiner_credits_replicas, f_2000_replicas, f_arg_spa_replicas, f_arg, f_single_country_replicas, f_decade_replicas, aggr_sent_replicas, aggr_budget_replicas, data_controller_replicas)
+    client_amount = parse_args(sys.argv, CLIENT_AMOUNT)
+    replicas['transformer'] = parse_args(sys.argv, TRANSFORMER_REPLICAS)
+    replicas['joiner-ratings'] = parse_args(sys.argv, JOINER_RATINGS_REPLICAS)
+    replicas['joiner-credits'] = parse_args(sys.argv, JOINER_CREDITS_REPLICAS)
+    replicas['filter-2000-movies'] = parse_args(sys.argv, FILTER_2000_REPLICAS)
+    replicas['filter-arg-spa-movies'] = parse_args(sys.argv, FILTER_ARG_SPA_REPLICAS)
+    replicas['filter-arg-movies'] = parse_args(sys.argv, FILTER_ARG_REPLICAS)
+    replicas['filter-single-country-movies'] = parse_args(sys.argv, FILTER_SINGLE_COUNTRY_REPLICAS)
+    replicas['filter-decade-movies'] = parse_args(sys.argv, FILTER_DECADE_REPLICAS)
+    replicas['aggregator-sent'] = parse_args(sys.argv, AGGR_SENT_REPLICAS)
+    replicas['aggregator-budget'] = parse_args(sys.argv, AGGR_BUDGET_REPLICAS)
+    replicas['data-controller'] = parse_args(sys.argv, DATA_CONTROLLER_REPLICAS)
+    replicas['healthcheck_replicas'] = parse_args(sys.argv, HEALTHCHECK_REPLICAS)
+
+    # replicas['total_replicas'] = sum(replicas.values())
+
+    docker_yaml_generator(client_amount, replicas)
 
 
 if __name__ == "__main__":
