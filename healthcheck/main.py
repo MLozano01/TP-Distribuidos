@@ -7,6 +7,8 @@ def main():
     config = config_init.initialize_config()
     config_logger(config["logging_level"])
 
+    config.pop("logging_level")
+
     try: 
         healthcheck = common.healthcheck.HealthCheck(config)
         healthcheck.start()
