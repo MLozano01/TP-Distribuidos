@@ -415,11 +415,14 @@ def create_hc(hc_id, total_hc, nodes):
         restart: true
     links:
       - rabbitmq
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       HEALTHCHECK_REPLICA_ID: {hc_id}
       HEALTHCHECK_REPLICA_COUNT: {total_hc}
       PORT: 3030
       LOGGING_LEVEL: INFO
+      LISTEN_BACKLOG: 10
       NODES: >
           {nodes}
     """

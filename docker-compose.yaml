@@ -353,12 +353,60 @@ services:
         restart: true
     links:
       - rabbitmq
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       HEALTHCHECK_REPLICA_ID: 1
-      HEALTHCHECK_REPLICA_COUNT: 1
+      HEALTHCHECK_REPLICA_COUNT: 3
       PORT: 3030
+      LOGGING_LEVEL: INFO
+      LISTEN_BACKLOG: 10
       NODES: >
-          {"transformer": 1, "joiner-ratings": 1, "joiner-credits": 1, "filter-arg-spa-movies": 1, "filter-single-country-movies": 1, "filter-decade-movies": 1, "aggregator-sent": 1, "aggregator-budget": 1, "filter-2000-movies": 2, "filter-arg-movies": 2, "data-controller": 3}
+          {"transformer": 1, "filter-arg-spa-movies": 1, "aggregator-sent": 1, "filter-arg-movies": 2}
+    
+  healthchecker-2:
+    container_name: healthchecker-2
+    image: healthcheck:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      HEALTHCHECK_REPLICA_ID: 2
+      HEALTHCHECK_REPLICA_COUNT: 3
+      PORT: 3030
+      LOGGING_LEVEL: INFO
+      LISTEN_BACKLOG: 10
+      NODES: >
+          {"joiner-ratings": 1, "filter-single-country-movies": 1, "aggregator-budget": 1, "data-controller": 3}
+    
+  healthchecker-3:
+    container_name: healthchecker-3
+    image: healthcheck:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      HEALTHCHECK_REPLICA_ID: 3
+      HEALTHCHECK_REPLICA_COUNT: 3
+      PORT: 3030
+      LOGGING_LEVEL: INFO
+      LISTEN_BACKLOG: 10
+      NODES: >
+          {"joiner-credits": 1, "filter-decade-movies": 1, "filter-2000-movies": 2}
     
 networks:
   tp_network:
