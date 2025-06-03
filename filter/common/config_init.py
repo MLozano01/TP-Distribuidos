@@ -32,8 +32,8 @@ def config_filter():
         # FILTER DATA
         config_params[f"filter_by"] = os.getenv("FILTER", filter_config["FILTERING_INFO"]["FILTER"])
         config_params[f"filter_name"] = os.getenv("FILTER_NAME", filter_config["FILTERING_INFO"]["FILTER_NAME"])
-        communication_config[f"filter_name"] = config_params[f"filter_name"]
-        communication_config[f"filter_replicas_count"] = int(os.getenv("FILTER_REPLICA_COUNT"))
+        communication_config[f"name"] = config_params[f"filter_name"]
+        communication_config[f"replicas_count"] = int(os.getenv("FILTER_REPLICA_COUNT"))
 
         # JOINER AND SENDER QUEUE
         publish_by_id_str = os.getenv('PUBLISH_TO_JOINERS', filter_config["RABBITMQ"]["PUBLISH_TO_JOINERS"]).strip().lower()

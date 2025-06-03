@@ -1,37 +1,32 @@
 import socket
-from protocol.rabbit_protocol import RabbitMQ
 import logging
 from multiprocessing import Process, Event
-from protocol.comm_protocol import CommProtocol
-import time
 
 from protocol.utils.socket_utils import recvall
+
+from ..comm_protocol import CommProtocol
 
 logging.getLogger("pika").setLevel(logging.ERROR)
 
 ROUNDS_TOKEN = 3
 
-class FilterCommunicator:
+class Communicator:
     """
-    This class is responsible for communicating between different filter components.
-    It handles the sending and receiving of messages and data between filters.
+    This class is responsible for communicating between different components.
+    It handles the sending and receiving of messages and data between components.
     """
 
-    def __init__(self, config, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, stop_event):
-        self.finish_receive_ntc = finish_receive_ntc
+    def __init__(self, config, finish_notify_ntc, finish_notify_ctn, stop_event):
         self.finish_notify_ntc = finish_notify_ntc
-        self.finish_receive_ctn = finish_receive_ctn
         self.finish_notify_ctn = finish_notify_ctn
         self.stop_event = stop_event
-        self.config = config
         self.protocol = CommProtocol()
-        self.filters_acked = {}
         self.continue_running = True
 
-        self.filter_id = int(config["id"])
-        self.name = config["filter_name"]
+        self.id = int(config["id"])
+        self.name = config["name"]
         self.comm_port = int(config["comm_port"])
-        self.filter_replicas_count = int(config["filter_replicas_count"])
+        self.replicas_count = int(config["replicas_count"])
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind(('', self.comm_port))
         self.socket.listen(10)
@@ -49,7 +44,7 @@ class FilterCommunicator:
         self.processes = active_processes
     def run(self):
         """
-        Register a filter instance with a unique name.
+        Start accepting socket for token ring.
         """
         
         while self.continue_running:
@@ -61,7 +56,6 @@ class FilterCommunicator:
 
 
     def manage_comm(self, sock, addr):
-        logging.info("manage_comm started")
         read_amount = self.protocol.define_initial_buffer_size()
         buffer = bytearray()
         closed_socket = recvall(sock, buffer, read_amount)
@@ -74,16 +68,13 @@ class FilterCommunicator:
         
         sock.close()
         msg = self.protocol.decode_msg(buffer)
-        logging.info(f"msg comm: {msg}")
         if msg:
             self.manage_eof_ring(msg)
 
     def wait_eof_confirmation(self):
         if self.finished_ring.is_set():
-            logging.info("AREADY FINISHED")
             return
         self.finished_ring.wait()
-        logging.info("FINISHED WAIT")
 
     def start_token_ring(self, client_id):
         """
@@ -91,7 +82,7 @@ class FilterCommunicator:
         """
         logging.info(f"STARTING RING: {client_id}")
         self.finished_ring.clear()
-        msg = self.protocol.create_eof_token(self.filter_id, client_id)
+        msg = self.protocol.create_eof_token(self.id, client_id)
     
         try:
             if not self.send_to_ring(msg):
@@ -111,25 +102,21 @@ class FilterCommunicator:
         return True
 
     def get_socket_ring(self):
-        if self.filter_replicas_count == 1:
+        if self.replicas_count == 1:
             return None
         
-        current_step = self.filter_id + 1
-        while current_step != self.filter_id:
-            logging.info(f"trying: {current_step} | {self.filter_id}")
-            if current_step > self.filter_replicas_count:
+        current_step = self.id + 1
+        while current_step != self.id:
+            if current_step > self.replicas_count:
                 current_step = 1
-            if current_step == self.filter_id:
-                logging.info("SAME")
+            if current_step == self.id:
                 return None
             try:
-                logging.info(f"trying {self.name}-{current_step}")
                 sock = socket.create_connection((f"{self.name}-{current_step}", self.comm_port))
                 logging.info(f"sending to: {self.name}-{current_step}")
                 return sock
             except:
                 current_step += 1
-        logging.info("NONE")
         return None
 
     def validate_ring(self, msg):
@@ -141,7 +128,7 @@ class FilterCommunicator:
     def manage_eof_ring(self, msg):
         logging.info("Got EOF from ring")
         is_mine = False
-        if msg.started_by == self.filter_id:
+        if msg.started_by == self.id:
             msg.round += 1
             is_mine = True
             if msg.round > ROUNDS_TOKEN and self.validate_ring(msg):
@@ -151,12 +138,12 @@ class FilterCommunicator:
             
         step_msg = None
         for step in msg.containers:
-            if step.container_id == self.filter_id:
+            if step.container_id == self.id:
                 step_msg = step
                 break
         if not step_msg:
             step_msg = msg.containers.add()
-            step_msg.container_id = self.filter_id
+            step_msg.container_id = self.id
 
         self.finish_notify_ctn.put([msg.client_id, False])
         done_with_client = self.finish_notify_ntc.get()
@@ -166,7 +153,6 @@ class FilterCommunicator:
 
         logging.info(f"{done_with_client}")
         step_msg.ready = done_with_client[1]
-        logging.info(f"ROUND: {msg}")
         msg_to_send = self.protocol.complete_eof_token(msg)
         if not self.send_to_ring(msg_to_send) and is_mine:
             self.finished_ring.set()
