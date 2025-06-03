@@ -34,9 +34,11 @@ class HealthCheck:
         logging.info("Starting checkers")
         while self.running:
             time.sleep(5)
-            # self._check_workers
-            self._check_healthcheckers()
-
+            try:
+                # self._check_workers
+                self._check_healthcheckers()
+            except Exception as e:
+                logging.error(f"Error {e}")
 
     def _check_workers(self):
         i = 1
@@ -56,7 +58,7 @@ class HealthCheck:
         i = self.id
         while checking:
             hc_id_to_check = i % self.healthcheckers_count + 1
-            if hc_id_to_check == self.id: continue
+            if hc_id_to_check == self.id: checking= False
 
             hc_to_check = f"healthchecker-{hc_id_to_check}"
             logging.info(f"Checking on the node {hc_to_check}")
@@ -69,8 +71,7 @@ class HealthCheck:
             except socket.error:
                 logging.error(f"The node {hc_to_check} needs to be revived")
                 self.revive_node(hc_to_check)
-                i = hc_id_to_check + 1
-                if i == self.id: checking = False
+                i += 1
 
     def revive_node(self, node_info):
         try:
