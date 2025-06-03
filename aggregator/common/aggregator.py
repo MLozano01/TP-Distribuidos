@@ -12,7 +12,7 @@ DONE = True
 logging.getLogger("pika").setLevel(logging.ERROR)
 logging.getLogger("RabbitMQ").setLevel(logging.ERROR)
 class Aggregator:
-    def __init__(self, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, **kwargs):
+    def __init__(self, finish_notify_ntc, finish_notify_ctn, communicator_instance, **kwargs):
         self.queue_rcv = None
         self.queue_snd = None
 
@@ -22,13 +22,13 @@ class Aggregator:
         self.is_alive = True
         self.protocol = Protocol()
          
-        self.finish_receive_ntc = finish_receive_ntc
         self.finish_notify_ntc = finish_notify_ntc
-        self.finish_receive_ctn = finish_receive_ctn
         self.finish_notify_ctn = finish_notify_ctn
 
         self.finish_signal_checker = None
         self.send_actual_client_id_status = Queue()
+
+        self.comm_instance = communicator_instance
 
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type)
@@ -65,16 +65,15 @@ class Aggregator:
     
     def publish_finished_msg(self, decoded_msg):
         msg = decoded_msg.SerializeToString()
-        self.finish_receive_ntc.put(msg)
+
         logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
-
-        if self.finish_receive_ctn.get() == True:
-            logging.info("Received SEND finished signal from communication channel.")
+        self.comm_instance.start_token_ring(decoded_msg.client_id)
+        self.comm_instance.wait_eof_confirmation()
+        logging.info("Received SEND finished signal from communication channel.")
            
-            self.queue_snd.publish(msg)
-            logging.info(f"Published finished signal to {self.queue_snd.exchange}")
+        self.queue_snd.publish(msg)
+        logging.info(f"Published finished signal to {self.queue_snd.exchange}")
 
-        logging.info("FINISHED SENDING THE FINISH MESSAGE")
 
     def check_finished(self):
         while self.is_alive:
