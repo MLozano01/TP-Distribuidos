@@ -12,7 +12,7 @@ START = False
 DONE = True
 
 class Filter:
-    def __init__(self, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, stop_event, comm_instance, **kwargs):
+    def __init__(self, finish_notify_ntc, finish_notify_ctn, stop_event, comm_instance, **kwargs):
         self.protocol = Protocol()
         self.queue_rcv = None # For receiving movies data + finished signal
         self.queue_snd_movies_to_ratings_joiner = None
@@ -20,9 +20,7 @@ class Filter:
         self.queue_snd_movies = None  # For publishing movies data
 
         self.finished_filter_arg_step_publisher = None # for notifying joiners
-        self.finish_receive_ntc = finish_receive_ntc
         self.finish_notify_ntc = finish_notify_ntc
-        self.finish_receive_ctn = finish_receive_ctn
         self.finish_notify_ctn = finish_notify_ctn
 
         self.send_actual_client_id_status = Queue()
