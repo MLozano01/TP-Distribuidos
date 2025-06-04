@@ -3,7 +3,7 @@ from common.aux import parse_filter_funct
 import logging
 from protocol.protocol import Protocol
 from queue import Empty
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Value
 
 logging.getLogger("pika").setLevel(logging.ERROR)
 logging.getLogger("RabbitMQ").setLevel(logging.ERROR)
@@ -23,7 +23,9 @@ class Filter:
         self.finish_notify_ntc = finish_notify_ntc
         self.finish_notify_ctn = finish_notify_ctn
 
-        self.send_actual_client_id_status = Queue()
+        self.actual_client_id = Value('i', 0)
+        self.actual_status = Value('b', True)
+        
         self.finish_signal_checker = None
         self.stop_event = stop_event
 
@@ -36,6 +38,9 @@ class Filter:
             logging.warning("'publish_to_joiners' not found in config, defaulting to False.")
             self.publish_to_joiners = False
 
+    def update_actual_client_id_status(self, client_id, status): 
+        self.actual_client_id.value = client_id
+        self.actual_status.value = status
 
 
     def _settle_queues(self):
@@ -75,11 +80,12 @@ class Filter:
         logging.debug(f"Received message, with routing key: {method.routing_key}")
         decoded_msg = self.protocol.decode_movies_msg(body)
             
+        self.update_actual_client_id_status(decoded_msg.client_id, START)
         if decoded_msg.finished:
             logging.info("Received MOVIES finished signal from server on data channel.")
+            self.update_actual_client_id_status(decoded_msg.client_id, DONE)
             self._publish_movie_finished_signal(decoded_msg)
             return
-        self.send_actual_client_id_status.put([decoded_msg.client_id, START])
         self.filter(decoded_msg)
 
     def filter(self, decoded_msg):
@@ -99,7 +105,7 @@ class Filter:
             else:
                 logging.info(f"No matched the filter criteria.")
             logging.info(f"sending status")
-            self.send_actual_client_id_status.put([decoded_msg.client_id, DONE])
+            self.update_actual_client_id_status(decoded_msg.client_id, DONE)
 
         except Exception as e:
             logging.error(f"Error processing message: {e}")
@@ -196,11 +202,8 @@ class Filter:
                 break
 
     def get_last(self):
-        client_id = None
-        status = None
-
-        while not self.send_actual_client_id_status.empty():
-            client_id, status = self.send_actual_client_id_status.get_nowait()
+        client_id = self.actual_client_id.value
+        status = self.actual_status.value
 
         logging.info(f"Last client ID: {client_id}, status: {status}")
         return client_id, status
