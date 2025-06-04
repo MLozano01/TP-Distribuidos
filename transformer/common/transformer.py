@@ -1,16 +1,13 @@
 import logging
-from multiprocessing import Condition, Manager, Process, Queue
+from multiprocessing import Condition, Manager, Process, Queue, Value
 import signal
 import threading
 from transformers import pipeline
-import json
-from protocol import files_pb2
 from protocol.rabbit_protocol import RabbitMQ
 from protocol.utils.parsing_proto_utils import *
 from protocol.protocol import Protocol
 from queue import Empty
 
-from protocol.rabbit_wrapper import RabbitMQConsumer, RabbitMQProducer
 
 logging.getLogger('pika').setLevel(logging.WARNING)
 
@@ -20,7 +17,7 @@ START = False
 DONE = True
 
 class Transformer:
-    def __init__(self, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, **kwargs):
+    def __init__(self, finish_notify_ntc, finish_notify_ctn, communicator_instance, **kwargs):
         self.sentiment_analyzer = None
         self.queue_rcv = None
         self.queue_snd = None
@@ -30,14 +27,15 @@ class Transformer:
         self._finished_message_body = None
 
         self.finished_filter_arg_step_publisher = None # for notifying joiners
-        self.finish_receive_ntc = finish_receive_ntc
         self.finish_notify_ntc = finish_notify_ntc
-        self.finish_receive_ctn = finish_receive_ctn
         self.finish_notify_ctn = finish_notify_ctn
+
+        self.comm_instance = communicator_instance
 
         self.data_thread = None
 
-        self.send_actual_client_id_status = Queue()
+        self.actual_client_id = Value('i', 0)
+        self.actual_status = Value('b', True)
         self.finish_signal_checker = None
 
         self.is_alive = True
@@ -45,6 +43,10 @@ class Transformer:
 
         for key, value in kwargs.items():
             setattr(self, key, value)
+
+    def update_actual_client_id_status(self, client_id, status): 
+        self.actual_client_id.value = client_id
+        self.actual_status.value = status
 
     def _setup_signal_handlers(self):
         signal.signal(signal.SIGTERM, self._handle_shutdown)
@@ -55,11 +57,6 @@ class Transformer:
         self.stop()
         logging.info("Shutdown complete.")
 
-    def _create_comm_queue(self, number):
-        name = self.communication_config["queue_communication_name"] + f"_{number}"
-        key = self.communication_config["routing_communication_key"] + f"_{number}"
-        return RabbitMQ(self.communication_config["exchange_communication"], name, key, self.communication_config["exc_communication_type"])
-        
 
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type)
@@ -72,13 +69,14 @@ class Transformer:
         """Callback function to process messages."""
         logging.info(f"Received message, with routing key: {method.routing_key}")
         decoded_msg = self.protocol.decode_movies_msg(body)
+        self.update_actual_client_id_status(decoded_msg.client_id, START)
             
         if decoded_msg.finished:
             logging.info("Received MOVIES finished signal from server on data channel.")
+            self.update_actual_client_id_status(decoded_msg.client_id, DONE)
             self._publish_movie_finished_signal(decoded_msg)
             return
         
-        self.send_actual_client_id_status.put([decoded_msg.client_id, START])
         self._process_message(decoded_msg)
         
         
@@ -184,15 +182,14 @@ class Transformer:
 
 
     def _publish_movie_finished_signal(self, msg):
-        self.finish_receive_ntc.put(msg.SerializeToString())
         logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
+        self.comm_instance.start_token_ring(msg.client_id)
+        
+        self.comm_instance.wait_eof_confirmation()
+        logging.info("Received SEND finished signal from communication channel.")
+        self.queue_snd.publish(msg.SerializeToString())
+        logging.info(f"Published movie finished signal to {self.queue_snd.exchange}")
 
-        if self.finish_receive_ctn.get() == True:
-            logging.info("Received SEND finished signal from communication channel.")
-            self.queue_snd.publish(msg.SerializeToString())
-            logging.info(f"Published movie finished signal to {self.queue_snd.exchange}")
-
-        logging.info("FINISHED SENDING THE FINISH MESSAGE")
 
         
     def _process_movie(self, incoming_movie):
@@ -221,7 +218,7 @@ class Transformer:
             else:
                 self._send_processed_batch(processed_movies_list, incoming_movies_msg.client_id)
 
-            self.send_actual_client_id_status.put([incoming_movies_msg.client_id, DONE])
+            self.update_actual_client_id_status(incoming_movies_msg.client_id, DONE)
         except Exception as e:
             logging.error(f"Error processing message batch: {e}", exc_info=True)
 
@@ -248,12 +245,8 @@ class Transformer:
                 break
 
     def get_last(self):
-        client_id = None
-        status = None
-
-        while not self.send_actual_client_id_status.empty():
-
-            client_id, status = self.send_actual_client_id_status.get_nowait()
+        client_id = self.actual_client_id.value
+        status = self.actual_status.value
 
         logging.info(f"Last client ID: {client_id}, status: {status}")
 

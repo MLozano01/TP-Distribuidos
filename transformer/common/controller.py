@@ -1,7 +1,7 @@
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, Event
 import logging
-from common.transform_comm import TransformerCommunicator
 from common.transformer import Transformer
+from protocol.utils.communicator import Communicator
 
 logging.getLogger("pika").setLevel(logging.ERROR)
 
@@ -12,28 +12,28 @@ class Controller:
         self.transformer_communicator = None
         self.config = config
         self.communication_config = communication_config
+        self.stop_event = Event()
 
     def start(self):
         logging.info("Starting transformer")
 
         try:
 
-            finish_receive_ntc = Queue()
             finish_notify_ntc = Queue()
-            finish_receive_ctn = Queue()
             finish_notify_ctn = Queue()
 
 
-            transformer_instance = Transformer(finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, **self.config)
+
+            communicator_instance = Communicator(self.communication_config, finish_notify_ntc, finish_notify_ctn, self.stop_event)
+
+            self.transformer_communicator = Process(target=communicator_instance.run, args=())
+            self.transformer_communicator.start()
+            
+            transformer_instance = Transformer(finish_notify_ntc, finish_notify_ctn, communicator_instance, **self.config)
 
             self.transformer = Process(target=transformer_instance.start, args=())
         
             self.transformer.start()
-
-            communicator_instance = TransformerCommunicator(self.communication_config, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn)
-
-            self.transformer_communicator = Process(target=communicator_instance.run, args=())
-            self.transformer_communicator.start()
             logging.info(f"Transformer communicator started with PID: {self.transformer_communicator.pid}")
 
 
