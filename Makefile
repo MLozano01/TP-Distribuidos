@@ -22,6 +22,7 @@ docker-image:
 	docker build -f ./aggregator/Dockerfile -t "aggregator:latest" .
 	docker build -f ./reducer/Dockerfile -t "reducer:latest" .
 	docker build -f ./joiner/Dockerfile -t "joiner:latest" .
+	docker build -f ./healthcheck/Dockerfile -t "healthcheck:latest" .
 .PHONY: docker-image
 
 docker-compose-up: docker-image
@@ -35,6 +36,10 @@ docker-compose-up-system: docker-image
 docker-run-system:
 	docker compose -f docker-compose.yaml up --build -d
 .PHONY: docker-run-system
+
+docker-run-hc:
+	docker compose --profile "*" -f docker-compose.yaml up --build -d healthchecker-1
+.PHONY: docker-run-hc
 
 docker-compose-up-clients: docker-image-client
 	docker compose --profile clients -f docker-compose.yaml up -d
