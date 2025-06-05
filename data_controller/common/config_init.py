@@ -16,62 +16,44 @@ def initialize_config():
     """
 
     config = ConfigParser(os.environ)
-    movies_communication_config = {}
-    credits_communication_config = {}
-    ratings_communication_config = {}
+    communication_config = {}
     # If config.ini does not exists original config object is not modified
     config.read(CONFIG_FILE)
     config_params = {}
 
     try:
         config_params["logging_level"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"])
-        config_params["rabbit_host"] = os.getenv('RABBIT_HOST', config["RABBITMQ"]["RABBIT_HOST"])
         
         # Input configuration
-        config_params["input_exchange"] = os.getenv('INPUT_EXCHANGE', config["input"]["server_exchange"])
-        config_params["input_routing_key"] = os.getenv('INPUT_ROUTING_KEY', config["input"]["server_routing_key"])
-        config_params["input_queue"] = os.getenv('INPUT_QUEUE', config["input"]["queue_rcv"])
-        
-        # Output movies configuration
-        config_params["movies_queue"] = os.getenv('MOVIES_QUEUE', config["output_movies"]["queue"])
-        config_params["movies_exchange"] = os.getenv('MOVIES_EXCHANGE', config["output_movies"]["exchange"])
-        config_params["movies_routing_key"] = os.getenv('MOVIES_ROUTING_KEY', config["output_movies"]["routing_key"])
-        
-        # Output ratings configuration
-        config_params["ratings_exchange"] = os.getenv('RATINGS_EXCHANGE', config["output_ratings"]["exchange"])
-        
-        # Output credits configuration
-        config_params["credits_exchange"] = os.getenv('CREDITS_EXCHANGE', config["output_credits"]["exchange"])
+        config_params["queue_rcv_name"] = os.getenv('QUEUE_RCV_NAME', config["RABBITMQ"]["QUEUE_RCV_NAME"])
+        config_params["routing_rcv_key"] = os.getenv('ROUTING_KEY_RCV', config["RABBITMQ"]["ROUTING_KEY_RCV"])
+        config_params["exchange_rcv"] = os.getenv('EXCHANGE_RCV', config["RABBITMQ"]["EXCHANGE_RCV"])
+        config_params["exc_rcv_type"] = os.getenv('TYPE_RCV', config["RABBITMQ"]["TYPE_RCV"])
+
+        # Output configuration
+        config_params["exchange_snd"] = os.getenv('EXCHANGE_SND', config["RABBITMQ"]["EXCHANGE_SND"])
+        config_params["exc_snd_type"] = os.getenv('TYPE_SND', config["RABBITMQ"]["TYPE_SND"])
+        if config_params["exc_snd_type"] == "direct":
+            config_params["queue_snd_name"] = os.getenv('QUEUE_SND_NAME', config["RABBITMQ"]["QUEUE_SND_NAME"])
+            config_params["routing_snd_key"] = os.getenv('ROUTING_KEY_SND', config["RABBITMQ"]["ROUTING_KEY_SND"])
+        else:
+            config_params["queue_snd_name"] = ""
+            config_params["routing_snd_key"] = ""
         
         # Inter replica communication configuration
-        movies_comm_name = os.getenv('QUEUE_COMMUNICATION', config["replicas_control"]["movies_queue_communication"])
-        credits_comm_name = os.getenv('CREDITS_QUEUE_COMMUNICATION', config["replicas_control"]["credits_queue_communication"])
-        ratings_comm_name = os.getenv('RATINGS_QUEUE_COMMUNICATION', config["replicas_control"]["ratings_queue_communication"])
-
         env_id = os.getenv('DATA_CONTROLLER_REPLICA_ID')
         config_params["replica_id"] = env_id if env_id else "unknown"
-        movies_communication_config["queue_communication_name"] = f"{movies_comm_name}_{env_id}" if env_id else movies_comm_name
-        movies_communication_config["routing_communication_key"] = os.getenv('ROUTING_KEY_COMMUNICATION', config["replicas_control"]["movies_routing_key_communication"])
-        movies_communication_config["exchange_communication"] = os.getenv('EXCHANGE_COMMUNICATION', config["replicas_control"]["movies_exchange_communication"])
-        movies_communication_config["exc_communication_type"] = os.getenv('TYPE_COMMUNICATION', config["replicas_control"]["TYPE_COMMUNICATION"])
-        movies_communication_config["data_controller_replicas_count"] = int(os.getenv("DATA_CONTROLLER_REPLICA_COUNT"))
 
-        credits_communication_config["queue_communication_name"] = f"{credits_comm_name}_{env_id}" if env_id else credits_comm_name
-        credits_communication_config["routing_communication_key"] = os.getenv('ROUTING_KEY_COMMUNICATION', config["replicas_control"]["credits_routing_key_communication"])
-        credits_communication_config["exchange_communication"] = os.getenv('EXCHANGE_COMMUNICATION', config["replicas_control"]["credits_exchange_communication"])
-        credits_communication_config["exc_communication_type"] = os.getenv('TYPE_COMMUNICATION', config["replicas_control"]["TYPE_COMMUNICATION"])
-        credits_communication_config["data_controller_replicas_count"] = int(os.getenv("DATA_CONTROLLER_REPLICA_COUNT"))
+        communication_config["comm_port"] = os.getenv('COMM_PORT', config["COMM"]["COMM_PORT"])
+        communication_config["id"] = os.getenv("DATA_CONTROLLER_REPLICA_ID")
+        communication_config["name"] = os.getenv('COMM_NAME', config["COMM"]["COMM_NAME"])
+        communication_config[f"replicas_count"] = int(os.getenv("DATA_CONTROLLER_REPLICA_COUNT"))
 
-        ratings_communication_config["queue_communication_name"] = f"{ratings_comm_name}_{env_id}" if env_id else ratings_comm_name
-        ratings_communication_config["routing_communication_key"] = os.getenv('ROUTING_KEY_COMMUNICATION', config["replicas_control"]["ratings_routing_key_communication"])
-        ratings_communication_config["exchange_communication"] = os.getenv('EXCHANGE_COMMUNICATION', config["replicas_control"]["ratings_exchange_communication"])
-        ratings_communication_config["exc_communication_type"] = os.getenv('TYPE_COMMUNICATION', config["replicas_control"]["TYPE_COMMUNICATION"])
-        ratings_communication_config["data_controller_replicas_count"] = int(os.getenv("DATA_CONTROLLER_REPLICA_COUNT"))
-
+        
 
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
     except ValueError as e:
         raise ValueError("Key could not be parsed. Error: {}. Aborting server".format(e))
 
-    return config_params, movies_communication_config, credits_communication_config, ratings_communication_config
+    return config_params, communication_config

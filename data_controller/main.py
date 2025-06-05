@@ -4,11 +4,11 @@ from common.config_init import initialize_config
 from common.data_controller import DataController
 
 def main():
-    config, movies_comm_config, credits_comm_config, ratings_comm_config = initialize_config()
+    config, comm_config = initialize_config()
     logging.basicConfig(level=config["logging_level"])
     
     try:
-        controller = Controller(config, movies_comm_config, credits_comm_config, ratings_comm_config)
+        controller = Controller(config, comm_config)
         controller.start()
     except KeyboardInterrupt:
         logging.info("DataController stopped by user")
