@@ -41,17 +41,17 @@ class HealthCheck:
                 logging.error(f"Error {e}")
 
     def _check_workers(self):
-        i = 1
-        for key, _ in self.my_nodes:
-            node = {key}-{i}
-            try:
-                socket.create_connection((node, self.port))
-                logging.info(f"The node {node} is ok")
-                i += 1
+        for key, value in self.my_nodes:
+            for i in range(1,  value + 1):
+                node = {key}-{i}
+                try:
+                    socket.create_connection((node, self.port))
+                    logging.info(f"The node {node} is ok")
+                    i += 1
 
-            except socket.error:
-                logging.error(f"The node {node} needs to be revived")
-                self.revive_node(node)
+                except socket.error:
+                    logging.error(f"The node {node} needs to be revived")
+                    self.revive_node(node)
 
     def _check_healthcheckers(self):
         checking = True
