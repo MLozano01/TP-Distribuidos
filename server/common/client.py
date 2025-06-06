@@ -94,7 +94,7 @@ class Client:
 
     def handle_connection(self, conn: socket.socket):
         # Initialize the forward queue for data messages
-        self.forward_queue = RabbitMQ("server_to_data_controller", "", "forward", "direct")
+        self.forward_queue = RabbitMQ("server_to_data_controller", "forward", "", "direct")
     
         closed_socket = False
         while not closed_socket:
@@ -114,8 +114,8 @@ class Client:
     def _forward_to_data_controller(self, message):
         try:
             # Add client ID to the message
-            message_with_client_id = self.protocol.add_client_id(message, self.client_id)
-            self.forward_queue.publish(message_with_client_id)
+            file_type, message_with_client_id = self.protocol.add_client_id(message, self.client_id)
+            self.forward_queue.publish(message_with_client_id, file_type)
         except Exception as e:
             logging.error(f"Failed to forward message to data controller: {e}")
 
@@ -131,7 +131,8 @@ class Client:
             msg = self.protocol.create_client_result(body)
             self.socket.sendall(msg)
 
-            self.results_received.add(msg.query_id)
+            _type, result = self.protocol.decode_msg(msg)
+            self.results_received.add(result.query_id)
             logging.info(f"Results received: {len(self.results_received)}.")
             if len(self.results_received) == self.total_expected:
                 logging.info(f"{self.results_received} results received for client {self.client_id} with total {self.total_expected}.")

@@ -36,13 +36,11 @@ def initialize_config():
         config_params["exc_snd_type"] = os.getenv('TYPE_SND', config["RABBITMQ"]["TYPE_SND"])
         
 
-        comm_name = os.getenv('QUEUE_COMMUNICATION', config["RABBITMQ"]["QUEUE_COMMUNICATION"])
-        env_id = os.getenv('TRANSFORMER_REPLICA_ID')
-        communication_config["queue_communication_name"] = f"{comm_name}_{env_id}" if env_id else comm_name
-        communication_config["routing_communication_key"] = os.getenv('ROUTING_KEY_COMMUNICATION', config["RABBITMQ"]["ROUTING_KEY_COMMUNICATION"])
-        communication_config["exchange_communication"] = os.getenv('EXCHANGE_COMMUNICATION', config["RABBITMQ"]["EXCHANGE_COMMUNICATION"])
-        communication_config["exc_communication_type"] = os.getenv('TYPE_COMMUNICATION', config["RABBITMQ"]["TYPE_COMMUNICATION"])
-        communication_config[f"transformer_replicas_count"] = int(os.getenv("TRANSFORMER_REPLICAS_COUNT"))
+
+        communication_config["comm_port"] = os.getenv('COMM_PORT', config["COMM"]["COMM_PORT"])
+        communication_config["id"] = os.getenv("TRANSFORMER_REPLICA_ID")
+        communication_config[f"replicas_count"] = int(os.getenv("TRANSFORMER_REPLICAS_COUNT"))
+        communication_config[f"name"] = "transformer"
 
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))

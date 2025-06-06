@@ -43,6 +43,9 @@ class Protocol:
     self.__codes_to_types = {MOVIES_FILE_CODE: FileType.MOVIES, 
                             RATINGS_FILE_CODE: FileType.RATINGS, 
                             CREDITS_FILE_CODE: FileType.CREDITS}
+    self.__codes_to_string = {MOVIES_FILE_CODE: "movies", 
+                            RATINGS_FILE_CODE: "ratings", 
+                            CREDITS_FILE_CODE: "credits"}
     self.__headers = {
       FileType.MOVIES: self.MOVIES_HEADERS,
       FileType.RATINGS: self.RATINGS_HEADERS,
@@ -116,7 +119,9 @@ class Protocol:
     new_message.extend((length + INT_LENGTH).to_bytes(INT_LENGTH, byteorder='big'))
     new_message.extend(new_data)
     
-    return new_message
+    type = int.from_bytes(data, byteorder='big') if code == END_FILE_CODE else code
+    file_type = self.__codes_to_string[type]
+    return file_type, new_message
 
   def decode_client_msg(self, msg_buffer, columns):
     code = int.from_bytes(msg_buffer[:CODE_LENGTH], byteorder='big')

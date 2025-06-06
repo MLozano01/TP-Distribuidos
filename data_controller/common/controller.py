@@ -1,23 +1,23 @@
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, Event
 import logging
 import signal
 import os
 import threading
 from common.data_controller import DataController
-from common.data_controller_communicator import DataControllerCommunicator
+from protocol.utils.communicator import Communicator
+
 
 logging.getLogger("pika").setLevel(logging.ERROR)
 
 
 class Controller:
-    def __init__(self, config, movies_communication_config, credits_communication_config, ratings_communication_config):
+    def __init__(self, config, communication_config):
         self.data_controller = None
         self.data_controller_communicator = None
         self.config = config
-        self.movies_communication_config = movies_communication_config
-        self.credits_communication_config = credits_communication_config
-        self.ratings_communication_config = ratings_communication_config
+        self.communication_config = communication_config
         self.queues = []
+        self.stop_event = Event()
         
     def start(self):
         logging.info("Starting DataController")
@@ -25,60 +25,26 @@ class Controller:
 
         try:
             # Movies communication
-            movies_finish_receive_ntc = Queue()
-            movies_finish_notify_ntc = Queue()
-            movies_finish_receive_ctn = Queue()
-            movies_finish_notify_ctn = Queue()
-            self.queues.append(movies_finish_receive_ntc)
-            self.queues.append(movies_finish_notify_ntc)
-            self.queues.append(movies_finish_receive_ctn)
-            self.queues.append(movies_finish_notify_ctn)
+            finish_notify_ntc = Queue()
+            finish_notify_ctn = Queue()
+            self.queues.append(finish_notify_ntc)
+            self.queues.append(finish_notify_ctn)
 
-            # Credits communication
-            credits_finish_receive_ntc = Queue()
-            credits_finish_notify_ntc = Queue()
-            credits_finish_receive_ctn = Queue()
-            credits_finish_notify_ctn = Queue()
 
-            self.queues.append(credits_finish_receive_ntc)
-            self.queues.append(credits_finish_notify_ntc)
-            self.queues.append(credits_finish_receive_ctn)
-            self.queues.append(credits_finish_notify_ctn)
-            # Ratings communication
-            ratings_finish_receive_ntc = Queue()
-            ratings_finish_notify_ntc = Queue()
-            ratings_finish_receive_ctn = Queue()
-            ratings_finish_notify_ctn = Queue()
-
-            self.queues.append(ratings_finish_receive_ntc)
-            self.queues.append(ratings_finish_notify_ntc)
-            self.queues.append(ratings_finish_receive_ctn)
-            self.queues.append(ratings_finish_notify_ctn)
-
-            data_controller_instance = DataController(movies_finish_receive_ntc, movies_finish_notify_ntc, movies_finish_receive_ctn, movies_finish_notify_ctn, credits_finish_receive_ntc, credits_finish_notify_ntc, credits_finish_receive_ctn, credits_finish_notify_ctn, ratings_finish_receive_ntc, ratings_finish_notify_ntc, ratings_finish_receive_ctn, ratings_finish_notify_ctn, **self.config)
+            communicator_instance = Communicator(self.communication_config, finish_notify_ntc, finish_notify_ctn, self.stop_event)
+            
+            self.data_controller_communicator = Process(target=communicator_instance.run, args=())
+            self.data_controller_communicator.start()
+            data_controller_instance = DataController(finish_notify_ntc, finish_notify_ctn, communicator_instance, **self.config)
 
             self.data_controller = Process(target=data_controller_instance.run, args=())
             self.data_controller.start()
             logging.info(f"DataController started with PID: {self.data_controller.pid}")
 
-            movies_communicator_instance = DataControllerCommunicator(self.movies_communication_config, movies_finish_receive_ntc, movies_finish_notify_ntc, movies_finish_receive_ctn, movies_finish_notify_ctn, "MOVIES")
-            credits_communicator_instance = DataControllerCommunicator(self.credits_communication_config, credits_finish_receive_ntc, credits_finish_notify_ntc, credits_finish_receive_ctn, credits_finish_notify_ctn, "CREDITS")
-            ratings_communicator_instance = DataControllerCommunicator(self.ratings_communication_config, ratings_finish_receive_ntc, ratings_finish_notify_ntc, ratings_finish_receive_ctn, ratings_finish_notify_ctn, "RATINGS")
-
-            self.movies_data_controller_communicator = Process(target=movies_communicator_instance.run, args=())
-            self.movies_data_controller_communicator.start()
-
-            self.credits_data_controller_communicator = Process(target=credits_communicator_instance.run, args=())
-            self.credits_data_controller_communicator.start()
-
-            self.ratings_data_controller_communicator = Process(target=ratings_communicator_instance.run, args=())
-            self.ratings_data_controller_communicator.start()
 
 
             self.data_controller.join()   
-            self.movies_data_controller_communicator.join()
-            self.credits_data_controller_communicator.join()
-            self.ratings_data_controller_communicator.join()
+            self.data_controller_communicator.join()
 
         except KeyboardInterrupt:
             logging.info("DataController stopped by user")
@@ -106,23 +72,16 @@ class Controller:
                 logging.info("Stopping DataController process...")
                 self.data_controller.terminate()
 
-            # Then stop all communicators
-            communicators = [
-                (self.movies_data_controller_communicator, "Movies"),
-                (self.credits_data_controller_communicator, "Credits"),
-                (self.ratings_data_controller_communicator, "Ratings")
-            ]
-            
-            for comm, name in communicators:
-                if comm:
-                    logging.info(f"Stopping {name} communicator process...")
-                    comm.terminate()
+            if self.data_controller_communicator:
+                logging.info(f"Stopping communicator process...")
+                self.data_controller_communicator.terminate()
             
             self.data_controller.join() 
             logging.info("DataController process stopped")
-            for comm, name in communicators:
-                comm.join()
-                logging.info(f"{name} communicator process stopped")
+            
+            if self.data_controller_communicator:
+                self.data_controller_communicator.join()
+                logging.info(f"Communicator process stopped")
             
             logging.info("All processes stopped successfully")
         except Exception as e:

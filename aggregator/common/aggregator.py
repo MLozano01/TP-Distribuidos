@@ -4,7 +4,7 @@ from protocol.rabbit_protocol import RabbitMQ
 import logging
 from protocol.protocol import Protocol
 from queue import Empty
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Value
 
 START = False
 DONE = True
@@ -12,7 +12,7 @@ DONE = True
 logging.getLogger("pika").setLevel(logging.ERROR)
 logging.getLogger("RabbitMQ").setLevel(logging.ERROR)
 class Aggregator:
-    def __init__(self, finish_receive_ntc, finish_notify_ntc, finish_receive_ctn, finish_notify_ctn, **kwargs):
+    def __init__(self, finish_notify_ntc, finish_notify_ctn, communicator_instance, **kwargs):
         self.queue_rcv = None
         self.queue_snd = None
 
@@ -22,13 +22,18 @@ class Aggregator:
         self.is_alive = True
         self.protocol = Protocol()
          
-        self.finish_receive_ntc = finish_receive_ntc
         self.finish_notify_ntc = finish_notify_ntc
-        self.finish_receive_ctn = finish_receive_ctn
         self.finish_notify_ctn = finish_notify_ctn
 
         self.finish_signal_checker = None
-        self.send_actual_client_id_status = Queue()
+        self.actual_client_id = Value('i', 0)
+        self.actual_status = Value('b', True)
+
+        self.comm_instance = communicator_instance
+
+    def update_actual_client_id_status(self, client_id, status): 
+        self.actual_client_id.value = client_id
+        self.actual_status.value = status
 
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type)
@@ -47,10 +52,11 @@ class Aggregator:
         """Callback function to process messages."""
         logging.debug(f"Received message, with routing key: {method.routing_key}")
         decoded_msg = self.protocol.decode_movies_msg(body)
+        self.update_actual_client_id_status(decoded_msg.client_id, START)
         if decoded_msg.finished:
+            self.update_actual_client_id_status(decoded_msg.client_id, DONE)
             self.publish_finished_msg(decoded_msg)
             return 
-        self.send_actual_client_id_status.put([decoded_msg.client_id, START])
         self.aggregate(decoded_msg)
 
     def aggregate(self, decoded_msg):
@@ -58,23 +64,22 @@ class Aggregator:
             result = parse_aggregate_func(decoded_msg, self.key, self.field, self.operations, self.file_name)
             logging.info(f"Result: {result}")
             self.queue_snd.publish(self.protocol.create_aggr_batch(result, decoded_msg.client_id))
-            self.send_actual_client_id_status.put([decoded_msg.client_id, DONE])
+            self.update_actual_client_id_status(decoded_msg.client_id, DONE)
         except Exception as e:
             logging.error(f"Error processing message: {e}")
             return
     
     def publish_finished_msg(self, decoded_msg):
         msg = decoded_msg.SerializeToString()
-        self.finish_receive_ntc.put(msg)
+
         logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
-
-        if self.finish_receive_ctn.get() == True:
-            logging.info("Received SEND finished signal from communication channel.")
+        self.comm_instance.start_token_ring(decoded_msg.client_id)
+        self.comm_instance.wait_eof_confirmation()
+        logging.info("Received SEND finished signal from communication channel.")
            
-            self.queue_snd.publish(msg)
-            logging.info(f"Published finished signal to {self.queue_snd.exchange}")
+        self.queue_snd.publish(msg)
+        logging.info(f"Published finished signal to {self.queue_snd.exchange}")
 
-        logging.info("FINISHED SENDING THE FINISH MESSAGE")
 
     def check_finished(self):
         while self.is_alive:
@@ -99,12 +104,8 @@ class Aggregator:
                 break
 
     def get_last(self):
-        client_id = None
-        status = None
-
-        while not self.send_actual_client_id_status.empty():
-
-            client_id, status = self.send_actual_client_id_status.get_nowait()
+        client_id = self.actual_client_id.value
+        status = self.actual_status.value
 
         logging.info(f"Last client ID: {client_id}, status: {status}")
 
