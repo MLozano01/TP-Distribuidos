@@ -372,8 +372,8 @@ services:
       - AGGR_REPLICA_COUNT=1
     
   
-  reducer:
-    container_name: reducer
+  reducer-top5:
+    container_name: reducer-top5
     image: reducer:latest
     networks:
       - tp_network
@@ -384,12 +384,63 @@ services:
     links:
       - rabbitmq
     volumes:
-      - ./reducer/config.ini:/config.ini
-      - ./reducer/reducers/average.ini:/average.ini
-      - ./reducer/reducers/top5.ini:/top5.ini
-      - ./reducer/reducers/top10.ini:/top10.ini
-      - ./reducer/reducers/max-min.ini:/max-min.ini
-      - ./reducer/reducers/query1.ini:/query1.ini
+      - ./reducer/reducers/top5.ini:/config.ini
+    
+  reducer-top10:
+    container_name: reducer-top10
+    image: reducer:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./reducer/reducers/top10.ini:/config.ini
+    
+  reducer-max-min:
+    container_name: reducer-max-min
+    image: reducer:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./reducer/reducers/max-min.ini:/config.ini
+    
+  reducer-average:
+    container_name: reducer-average
+    image: reducer:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./reducer/reducers/average.ini:/config.ini
+    
+  reducer-query1:
+    container_name: reducer-query1
+    image: reducer:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./reducer/reducers/query1.ini:/config.ini
     
   
   joiner-ratings-1:

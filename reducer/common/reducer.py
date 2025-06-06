@@ -9,19 +9,20 @@ logging.getLogger("pika").setLevel(logging.ERROR)
 logging.getLogger("RabbitMQ").setLevel(logging.DEBUG)
 
 class Reducer:
-    def __init__(self, **kwargs):
+    def __init__(self, config):
+        self.config = config
         self.queue_rcv = None
         self.queue_snd = None
-        for key, value in kwargs.items():
-            setattr(self, key, value)
         self.is_alive = True
         self.partial_result = {}
+        self.query_id = config["query_id"]
+        self.reduce_by = config['reduce_by']
 
     def _settle_queues(self):
-        self.queue_rcv = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type)
-        self.queue_snd = RabbitMQ(self.exchange_snd, self.queue_snd_name, self.routing_snd_key, self.exc_snd_type)
+        self.queue_rcv = RabbitMQ(self.config["exchange_rcv"], self.config['queue_rcv_name'], self.config['routing_rcv_key'], self.config['exc_rcv_type'])
+        self.queue_snd = RabbitMQ(self.config['exchange_snd'], self.config['queue_snd_name'], self.config['routing_snd_key'], self.config['exc_snd_type'])
         
-    def run(self):
+    def start(self):
         """Start the reduce to consume messages from the queue."""
         self._settle_queues()
         self.queue_rcv.consume(self.callback)
@@ -42,8 +43,10 @@ class Reducer:
                 logging.info(f"ALL Finished msg received on query_id {self.query_id}")
                 result = parse_final_result(self.reduce_by, self.partial_result, msg.client_id)
                 res_proto = protocol.create_result(result, msg.client_id)
+
+                key = f'{self.config["routing_snd_key"]}_{msg.client_id}'
                 
-                self.queue_snd.publish(res_proto, f'{self.routing_snd_key}_{msg.client_id}')
+                self.queue_snd.publish(res_proto, key)
 
                 res_decoded = protocol.decode_result(res_proto)
                 logging.info(f"Final result: {res_decoded}")
@@ -56,10 +59,10 @@ class Reducer:
             logging.error(f"Failed to decode JSON: {e}")
             return
         except Exception as e:
-            logging.error(f"ERROR processing message in {self.queue_rcv_name}: {e}")
+            logging.error(f"ERROR processing message in {self.config['queue_rcv_name']}: {e}")
             return
 
-    def end_reduce(self):
+    def stop(self):
         """End the reduce and close the queue."""
         if self.queue_rcv:
             self.queue_rcv.close_channel()

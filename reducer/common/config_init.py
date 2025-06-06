@@ -4,37 +4,7 @@ import logging
 
 CONFIG_FILE = "config.ini"
 
-def initialize_config():
-    """ Parse env variables or config file to find program config params
-
-    Function that search and parse program configuration parameters in the
-    program environment variables first and the in a config file. 
-    If at least one of the config parameters is not found a KeyError exception 
-    is thrown. If a parameter could not be parsed, a ValueError is thrown. 
-    If parsing succeeded, the function returns a ConfigParser object 
-    with config parameters
-    """
-
-    config_params = {}
-
-    config = ConfigParser(os.environ)
-    # If config.ini does not exists original config object is not modified
-    config.read(CONFIG_FILE)
-    config_params = {}
-
-    try:
-        config_params["logging_level"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"])
-        config_params["reducer_num"] = int(os.getenv('REDUCER_NUM', config["DEFAULT"]["REDUCER_NUM"]))
-        for i in range(config_params["reducer_num"]):
-            config_params[f"reducer_{i}"] = os.getenv(f'REDUCER_{i}', config["DEFAULT"][f"REDUCER_{i}"])
-    except KeyError as e:
-        raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
-    except ValueError as e:
-        raise ValueError("Key could not be parsed. Error: {}. Aborting server".format(e))
-
-    return config_params
-
-def config_reducer(filter_file):
+def config_reducer():
     """ Parse env variables or config file to find program config params
 
     Function that search and parse program configuration parameters in the
@@ -46,11 +16,11 @@ def config_reducer(filter_file):
     """
     config_params = {}
 
-    
     reducer_config = ConfigParser(os.environ)
-    reducer_config.read(filter_file)
+    reducer_config.read(CONFIG_FILE)
 
     try:
+        config_params["logging_level"] = os.getenv('LOGGING_LEVEL', reducer_config["DEFAULT"]["LOGGING_LEVEL"])
         config_params["queue_rcv_name"] = os.getenv('QUEUE_RCV_NAME', reducer_config["DEFAULT"]["QUEUE_RCV_NAME"])
         config_params["routing_rcv_key"] = os.getenv('ROUTING_KEY_RCV', reducer_config["DEFAULT"]["ROUTING_KEY_RCV"])
         config_params["exchange_rcv"] = os.getenv('EXCHANGE_RCV', reducer_config["DEFAULT"]["EXCHANGE_RCV"])
@@ -61,8 +31,7 @@ def config_reducer(filter_file):
         config_params["exc_snd_type"] = os.getenv('TYPE_SND', reducer_config["DEFAULT"]["TYPE_SND"])
 
         config_params[f"reduce_by"] = os.getenv("REDUCER", reducer_config["DEFAULT"]["REDUCER"])
-        config_params["expected_finished_msg_amount"] = int(os.getenv('EXPECTED_FINISHED_MSG_AMOUNT', reducer_config["DEFAULT"].get('EXPECTED_FINISHED_MSG_AMOUNT', 1)))
-        # Load QUERY_ID, default to 0 if not found
+
         config_params["query_id"] = int(os.getenv('QUERY_ID', reducer_config["DEFAULT"].get('QUERY_ID', 0)))
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))

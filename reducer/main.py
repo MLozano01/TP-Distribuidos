@@ -1,14 +1,15 @@
 import logging
 import common.config_init as config_init
 from utils.utils import config_logger
-import common.controller
+import common.reducer
 
 def main():
-    config = config_init.initialize_config()
+    config = config_init.config_reducer()
     config_logger(config["logging_level"])
+    config.pop("logging_level")
 
     try: 
-        controller = common.controller.Controller(config)
+        controller = common.reducer.Reducer(config)
         controller.start()
     except KeyboardInterrupt:
         logging.info("Reducer stopped by user")

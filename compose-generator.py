@@ -54,7 +54,7 @@ def create_yaml_file(replicas, datasets, config_files):
     filters = write_filters(replicas, config_files)
     transformer = create_transformers(replicas['transformer'])
     aggregator = create_aggregators(replicas, config_files)
-    reducer = create_reducer()
+    reducer = create_reducers()
     healthcheckers = create_healthcheckers(replicas)
     data_controller_services = write_data_controllers(replicas, config_files)
     
@@ -206,10 +206,21 @@ def create_filter(filter_name, filter_replica, filter_path, replica_count):
     """
     return filter_cont
 
-def create_reducer():
+def create_reducers():
+    reducers = ""
+    reducers_files = ["top5", "top10", "max-min", "average", "query1"]
+
+    for reducer in reducers_files:
+      reducer_name = f'reducer-{reducer}'
+      reducer_file = f'{reducer}.ini'
+      reducers += create_reducer(reducer_name, reducer_file)
+    
+    return reducers
+
+def create_reducer(reducer_name, file_name):
     reducer_cont = f"""
-  reducer:
-    container_name: reducer
+  {reducer_name}:
+    container_name: {reducer_name}
     image: reducer:latest
     networks:
       - {NETWORK_NAME}
@@ -220,12 +231,7 @@ def create_reducer():
     links:
       - rabbitmq
     volumes:
-      - ./reducer/{CONFIG_FILE}:/{CONFIG_FILE}
-      - ./reducer/reducers/{REDUCER_COMMANDS_AVERAGE}:/{REDUCER_COMMANDS_AVERAGE}
-      - ./reducer/reducers/{REDUCER_COMMANDS_TOP5}:/{REDUCER_COMMANDS_TOP5}
-      - ./reducer/reducers/{REDUCER_COMMANDS_TOP10}:/{REDUCER_COMMANDS_TOP10}
-      - ./reducer/reducers/{REDUCER_COMMANDS_MAX_MIN}:/{REDUCER_COMMANDS_MAX_MIN}
-      - ./reducer/reducers/{REDUCER_COMMANDS_QUERY1}:/{REDUCER_COMMANDS_QUERY1}
+      - ./reducer/reducers/{file_name}:/{CONFIG_FILE}
     """
     return reducer_cont
 
