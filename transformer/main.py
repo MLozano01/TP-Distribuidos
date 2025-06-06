@@ -1,7 +1,7 @@
 import logging
 from common.controller import Controller
 import common.config_init as config_init
-from utils.utils import config_logger
+from protocol.utils.logger import config_logger
 
 def main():
     config, comms = config_init.initialize_config()

@@ -55,7 +55,6 @@ def create_yaml_file(replicas, datasets, config_files):
     transformer = create_transformers(replicas['transformer'])
     aggregator = create_aggregators(replicas, config_files)
     reducer = create_reducers()
-    healthcheckers = create_healthcheckers(replicas)
     data_controller_services = write_data_controllers(replicas, config_files)
     
     # Loop to create multiple joiner services
@@ -67,6 +66,7 @@ def create_yaml_file(replicas, datasets, config_files):
     for i in range(1, replicas['joiner-credits'] + 1):
         joiner_credits_services += create_joiner("joiner-credits", i, replicas['joiner-credits'], JOINER_CREDITS_CONFIG_SOURCE)
 
+    healthcheckers = create_healthcheckers(replicas)
     content = f"""
 version: "3.8"
 services:
@@ -361,9 +361,14 @@ def create_data_controller(replica_name, replica_id, total_replicas, config_file
     return data_controller_yaml
 
 def create_healthcheckers(replicas):
+
   number_hc = replicas['healthcheck_replicas'] if replicas['healthcheck_replicas'] <= 11 else 11
 
   hc = {}
+
+  replicas.pop('client_amount')
+  replicas.pop('joiner-credits')
+  replicas.pop('joiner-ratings')
 
   for i in range(1, number_hc + 1):
     hc[f"healthchecker-{i}"] = {}

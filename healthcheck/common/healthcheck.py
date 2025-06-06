@@ -15,6 +15,7 @@ class HealthCheck:
         self.port = config['port']
         self.id = config['hc_id']
         self.nodes = config['nodes_info']
+        logging.info(f'Nodes: {self.nodes}')
         self.healthcheckers_count = config['hc_count']
 
         self.sckt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -35,18 +36,20 @@ class HealthCheck:
         while self.running:
             time.sleep(5)
             try:
-                # self._check_workers
+                self._check_workers()
                 self._check_healthcheckers()
             except Exception as e:
                 logging.error(f"Error {e}")
 
     def _check_workers(self):
-        for key, value in self.my_nodes:
+        for key, value in self.nodes.items():
             for i in range(1,  value + 1):
-                node = {key}-{i}
+                node = f'{key}-{i}'
                 try:
-                    socket.create_connection((node, self.port))
+                    con = socket.create_connection((node, self.port))
                     logging.info(f"The node {node} is ok")
+                    con.shutdown(socket.SHUT_RDWR)
+                    con.close()
                     i += 1
 
                 except socket.error:

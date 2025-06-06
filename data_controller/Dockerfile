@@ -2,7 +2,6 @@ FROM python:3.9.7-slim
 
 COPY data_controller /
 COPY protocol /protocol
-COPY utils /utils
 COPY requirements.txt /
 
 RUN pip install -r requirements.txt

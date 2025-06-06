@@ -2,7 +2,7 @@
 import logging
 from common.server import Server
 from common.config_init import initialize_config
-from utils.utils import config_logger
+from protocol.utils.logger import config_logger
 
 def main():
 

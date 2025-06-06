@@ -283,41 +283,7 @@ services:
       - ./transformer/config.ini:/config.ini
     environment:
       - TRANSFORMER_REPLICA_ID=1
-      - TRANSFORMER_REPLICAS_COUNT=3
-    
-  transformer-2:
-    container_name: transformer-2
-    image: transformer:latest
-    networks:
-      - tp_network
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-        restart: true
-    links:
-      - rabbitmq
-    volumes:
-      - ./transformer/config.ini:/config.ini
-    environment:
-      - TRANSFORMER_REPLICA_ID=2
-      - TRANSFORMER_REPLICAS_COUNT=3
-    
-  transformer-3:
-    container_name: transformer-3
-    image: transformer:latest
-    networks:
-      - tp_network
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-        restart: true
-    links:
-      - rabbitmq
-    volumes:
-      - ./transformer/config.ini:/config.ini
-    environment:
-      - TRANSFORMER_REPLICA_ID=3
-      - TRANSFORMER_REPLICAS_COUNT=3
+      - TRANSFORMER_REPLICAS_COUNT=1
     
   
   aggregator-sent-1:
@@ -501,7 +467,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          {"client_amount": 1, "filter-arg-spa-movies": 1, "filter-decade-movies": 1, "filter-2000-movies": 2, "transformer": 3}
+          {"transformer": 1, "filter-single-country-movies": 1, "data-controller-credits": 1, "data-controller-movies": 2}
     
   healthchecker-2:
     container_name: healthchecker-2
@@ -523,7 +489,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          {"joiner-ratings": 1, "filter-arg-movies": 1, "aggregator-budget": 1, "aggregator-sent": 2, "data-controller-ratings": 3}
+          {"filter-arg-spa-movies": 1, "filter-decade-movies": 1, "filter-2000-movies": 2, "data-controller-ratings": 3}
     
   healthchecker-3:
     container_name: healthchecker-3
@@ -545,7 +511,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          {"joiner-credits": 1, "filter-single-country-movies": 1, "data-controller-credits": 1, "data-controller-movies": 2}
+          {"filter-arg-movies": 1, "aggregator-budget": 1, "aggregator-sent": 2}
     
 networks:
   tp_network:

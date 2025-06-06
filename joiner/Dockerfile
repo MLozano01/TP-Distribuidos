@@ -2,7 +2,6 @@ FROM python:3.9.7-slim
 
 COPY joiner /
 COPY protocol /protocol
-COPY utils /utils
 
 COPY requirements.txt /
 

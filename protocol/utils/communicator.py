@@ -32,6 +32,7 @@ class Communicator:
         self.socket.listen(10)
         self.finished_ring = Event()
         self.processes = []
+        self.alive = True
 
     def clean_processes(self):
         active_processes = []
@@ -42,6 +43,11 @@ class Communicator:
                 active_processes.append(process)
 
         self.processes = active_processes
+
+    def check_alive(self):
+        return self.alive()
+    
+
     def run(self):
         """
         Start accepting socket for token ring.
@@ -56,20 +62,23 @@ class Communicator:
 
 
     def manage_comm(self, sock, addr):
-        read_amount = self.protocol.define_initial_buffer_size()
-        buffer = bytearray()
-        closed_socket = recvall(sock, buffer, read_amount)
-        if closed_socket:
-            return
-        read_amount = self.protocol.define_buffer_size(buffer)
-        closed_socket = recvall(sock, buffer, read_amount)
-        if closed_socket:
-            return
-        
-        sock.close()
-        msg = self.protocol.decode_msg(buffer)
-        if msg:
-            self.manage_eof_ring(msg)
+        try:
+            read_amount = self.protocol.define_initial_buffer_size()
+            buffer = bytearray()
+            closed_socket = recvall(sock, buffer, read_amount)
+            if closed_socket:
+                return
+            read_amount = self.protocol.define_buffer_size(buffer)
+            closed_socket = recvall(sock, buffer, read_amount)
+            if closed_socket:
+                return
+            
+            sock.close()
+            msg = self.protocol.decode_msg(buffer)
+            if msg:
+                self.manage_eof_ring(msg)
+        except socket.error as e:
+            self.alive = False
 
     def wait_eof_confirmation(self):
         if self.finished_ring.is_set():

@@ -1,6 +1,6 @@
 import logging
 import common.config_init as config_init
-from utils.utils import config_logger
+from protocol.utils.logger import config_logger
 import common.reducer
 
 def main():

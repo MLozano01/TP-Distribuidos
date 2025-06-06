@@ -1,7 +1,8 @@
 FROM python:3.9.7-alpine
 
 COPY healthcheck /
-COPY utils /utils
+COPY protocol /protocol
+
 
 RUN apk update
 RUN apk add docker
