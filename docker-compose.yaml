@@ -122,24 +122,7 @@ services:
       - ./filter/filters/filter_Arg_movies.ini:/config.ini
     environment:
       - FILTER_REPLICA_ID=1
-      - FILTER_REPLICA_COUNT=2
-    
-  filter-arg-movies-2:
-    container_name: filter-arg-movies-2
-    image: filter:latest
-    networks:
-      - tp_network
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-        restart: true
-    links:
-      - rabbitmq
-    volumes:
-      - ./filter/filters/filter_Arg_movies.ini:/config.ini
-    environment:
-      - FILTER_REPLICA_ID=2
-      - FILTER_REPLICA_COUNT=2
+      - FILTER_REPLICA_COUNT=1
     
   filter-single-country-movies-1:
     container_name: filter-single-country-movies-1
@@ -176,8 +159,8 @@ services:
       - FILTER_REPLICA_COUNT=1
     
   
-  data-controller-1:
-    container_name: data-controller-1
+  data-controller-movies-1:
+    container_name: data-controller-movies-1
     image: data-controller:latest
     networks:
       - tp_network
@@ -188,14 +171,50 @@ services:
     links:
       - rabbitmq
     volumes:
-      - ./data_controller/config.ini:/config.ini
+      - ./data_controller/data_controllers/movies.ini:/config.ini
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATA_CONTROLLER_REPLICA_ID=1
+      - DATA_CONTROLLER_REPLICA_COUNT=2
+    
+  data-controller-movies-2:
+    container_name: data-controller-movies-2
+    image: data-controller:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./data_controller/data_controllers/movies.ini:/config.ini
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATA_CONTROLLER_REPLICA_ID=2
+      - DATA_CONTROLLER_REPLICA_COUNT=2
+    
+  data-controller-ratings-1:
+    container_name: data-controller-ratings-1
+    image: data-controller:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./data_controller/data_controllers/ratings.ini:/config.ini
     environment:
       - PYTHONUNBUFFERED=1
       - DATA_CONTROLLER_REPLICA_ID=1
       - DATA_CONTROLLER_REPLICA_COUNT=3
     
-  data-controller-2:
-    container_name: data-controller-2
+  data-controller-ratings-2:
+    container_name: data-controller-ratings-2
     image: data-controller:latest
     networks:
       - tp_network
@@ -206,14 +225,14 @@ services:
     links:
       - rabbitmq
     volumes:
-      - ./data_controller/config.ini:/config.ini
+      - ./data_controller/data_controllers/ratings.ini:/config.ini
     environment:
       - PYTHONUNBUFFERED=1
       - DATA_CONTROLLER_REPLICA_ID=2
       - DATA_CONTROLLER_REPLICA_COUNT=3
     
-  data-controller-3:
-    container_name: data-controller-3
+  data-controller-ratings-3:
+    container_name: data-controller-ratings-3
     image: data-controller:latest
     networks:
       - tp_network
@@ -224,11 +243,29 @@ services:
     links:
       - rabbitmq
     volumes:
-      - ./data_controller/config.ini:/config.ini
+      - ./data_controller/data_controllers/ratings.ini:/config.ini
     environment:
       - PYTHONUNBUFFERED=1
       - DATA_CONTROLLER_REPLICA_ID=3
       - DATA_CONTROLLER_REPLICA_COUNT=3
+    
+  data-controller-credits-1:
+    container_name: data-controller-credits-1
+    image: data-controller:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./data_controller/data_controllers/credits.ini:/config.ini
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATA_CONTROLLER_REPLICA_ID=1
+      - DATA_CONTROLLER_REPLICA_COUNT=1
     
   
   transformer-1:
@@ -246,7 +283,41 @@ services:
       - ./transformer/config.ini:/config.ini
     environment:
       - TRANSFORMER_REPLICA_ID=1
-      - TRANSFORMER_REPLICAS_COUNT=1
+      - TRANSFORMER_REPLICAS_COUNT=3
+    
+  transformer-2:
+    container_name: transformer-2
+    image: transformer:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./transformer/config.ini:/config.ini
+    environment:
+      - TRANSFORMER_REPLICA_ID=2
+      - TRANSFORMER_REPLICAS_COUNT=3
+    
+  transformer-3:
+    container_name: transformer-3
+    image: transformer:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./transformer/config.ini:/config.ini
+    environment:
+      - TRANSFORMER_REPLICA_ID=3
+      - TRANSFORMER_REPLICAS_COUNT=3
     
   
   aggregator-sent-1:
@@ -264,7 +335,24 @@ services:
       - ./aggregator/aggregators/aggr_sent_revenue.ini:/config.ini
     environment:
       - AGGR_REPLICA_ID=1
-      - AGGR_REPLICA_COUNT=1
+      - AGGR_REPLICA_COUNT=2
+    
+  aggregator-sent-2:
+    container_name: aggregator-sent-2
+    image: aggregator:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./aggregator/aggregators/aggr_sent_revenue.ini:/config.ini
+    environment:
+      - AGGR_REPLICA_ID=2
+      - AGGR_REPLICA_COUNT=2
     
   aggregator-budget-1:
     container_name: aggregator-budget-1
@@ -319,8 +407,8 @@ services:
       - ./joiner/config/joiner-ratings.ini:/config.ini
     environment:
       - PYTHONUNBUFFERED=1
-      - JOINER_REPLICA_ID=1 # Direct integer ID
-      - JOINER_REPLICA_COUNT=1 # Direct integer count
+      - JOINER_REPLICA_ID=1
+      - JOINER_REPLICA_COUNT=1
     
   
   joiner-credits-1:
@@ -338,8 +426,8 @@ services:
       - ./joiner/config/joiner-credits.ini:/config.ini
     environment:
       - PYTHONUNBUFFERED=1
-      - JOINER_REPLICA_ID=1 # Direct integer ID
-      - JOINER_REPLICA_COUNT=1 # Direct integer count
+      - JOINER_REPLICA_ID=1
+      - JOINER_REPLICA_COUNT=1
     
   
   healthchecker-1:
@@ -362,7 +450,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          {"transformer": 1, "filter-arg-spa-movies": 1, "aggregator-sent": 1, "filter-arg-movies": 2}
+          {"client_amount": 1, "filter-arg-spa-movies": 1, "filter-decade-movies": 1, "filter-2000-movies": 2, "transformer": 3}
     
   healthchecker-2:
     container_name: healthchecker-2
@@ -384,7 +472,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          {"joiner-ratings": 1, "filter-single-country-movies": 1, "aggregator-budget": 1, "data-controller": 3}
+          {"joiner-ratings": 1, "filter-arg-movies": 1, "aggregator-budget": 1, "aggregator-sent": 2, "data-controller-ratings": 3}
     
   healthchecker-3:
     container_name: healthchecker-3
@@ -406,7 +494,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          {"joiner-credits": 1, "filter-decade-movies": 1, "filter-2000-movies": 2}
+          {"joiner-credits": 1, "filter-single-country-movies": 1, "data-controller-credits": 1, "data-controller-movies": 2}
     
 networks:
   tp_network:
