@@ -485,3 +485,41 @@ class Protocol:
     result = files_pb2.ResultBatch()
     result.ParseFromString(buffer)
     return result
+
+  def encode_movies_msg(self, movies_list, client_id, finished=False):
+      """Encodes a list of MovieCSV objects into a serialized MoviesCSV message.
+
+      Args:
+          movies_list (list[files_pb2.MovieCSV]): The list of movies to include in the batch.
+          client_id (int): The client identifier.
+          finished (bool): Whether this is a FINISHED signal (defaults to False).
+
+      Returns:
+          bytes: Serialized MoviesCSV protobuf message.
+      """
+      movies_pb = files_pb2.MoviesCSV()
+      if movies_list:
+          movies_pb.movies.extend(movies_list)
+      movies_pb.client_id = client_id
+      if finished:
+          movies_pb.finished = True
+      return movies_pb.SerializeToString()
+
+  def encode_actor_participations_msg(self, participations_list, client_id, finished=False):
+      """Encodes a list of ActorParticipation objects into a serialized ActorParticipationsBatch.
+
+      Args:
+          participations_list (list[files_pb2.ActorParticipation]): Actor participations to include.
+          client_id (int): The client identifier.
+          finished (bool): Whether this is a FINISHED signal (defaults to False).
+
+      Returns:
+          bytes: Serialized ActorParticipationsBatch protobuf message.
+      """
+      batch_pb = files_pb2.ActorParticipationsBatch()
+      if participations_list:
+          batch_pb.participations.extend(participations_list)
+      batch_pb.client_id = client_id
+      if finished:
+          batch_pb.finished = True
+      return batch_pb.SerializeToString()
