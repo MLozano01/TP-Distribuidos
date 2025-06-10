@@ -69,9 +69,9 @@ class Filter:
             self.update_actual_client_id_status(decoded_msg.client_id, DONE)
             self._publish_movie_finished_signal(decoded_msg)
             return
-        self.handle_filter(decoded_msg)
+        self.filter(decoded_msg)
 
-    def handle_filter(self, decoded_msg):
+    def filter(self, decoded_msg):
         try:
             result = parse_filter_funct(decoded_msg, self.filter_by)
             client_id = decoded_msg.client_id
