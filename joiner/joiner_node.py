@@ -147,48 +147,9 @@ class JoinerNode:
             return
 
         try:
-            if self.other_data_type == "RATINGS":
-                self._handle_ratings_message(body)
-            elif self.other_data_type == "CREDITS":
-                self._handle_credits_message(body)
-            else:
-                logging.error(f"Unsupported OTHER_DATA_TYPE: {self.other_data_type}")
+            self.join_strategy.process_other_message(body, self.state, self.output_producer)
         except Exception as e:
             logging.error(f"[Node] Error processing other message: {e}", exc_info=True)
-
-    def _handle_ratings_message(self, body):
-        ratings_msg = self.protocol.decode_ratings_msg(body)
-        if not ratings_msg:
-            logging.warning("[Node] Could not decode ratings message.")
-            return
-
-        client_id = ratings_msg.client_id
-        logging.info(f"[Node] Processing ratings message for client {client_id}. Finished: {ratings_msg.finished}, Items: {len(ratings_msg.ratings)}")
-
-        if ratings_msg.finished:
-            if self.state.set_other_eof(client_id):
-                self.join_strategy.trigger_final_processing(client_id, self.state, self.output_producer)
-            return
-
-        for rating in ratings_msg.ratings:
-            self.state.add_other_data(client_id, rating.movieId, (rating.rating, 1), aggregate=True)
-
-    def _handle_credits_message(self, body):
-        credits_msg = self.protocol.decode_credits_msg(body)
-        if not credits_msg:
-            logging.warning("[Node] Could not decode credits message.")
-            return
-
-        client_id = credits_msg.client_id
-        logging.info(f"[Node] Processing credits message for client {client_id}. Finished: {credits_msg.finished}, Items: {len(credits_msg.credits)}")
-
-        if credits_msg.finished:
-            if self.state.set_other_eof(client_id):
-                self.join_strategy.trigger_final_processing(client_id, self.state, self.output_producer)
-            return
-
-        for credit in credits_msg.credits:
-            self.state.add_other_data(client_id, credit.id, credit)
 
     def _setup_signal_handlers(self):
         signal.signal(signal.SIGTERM, self._handle_shutdown)

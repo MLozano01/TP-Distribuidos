@@ -11,6 +11,23 @@ class CreditsJoinStrategy(JoinStrategy):
     def __init__(self):
         self.protocol = Protocol()
 
+    def process_other_message(self, body, state, producer):
+        credits_msg = self.protocol.decode_credits_msg(body)
+        if not credits_msg:
+            logging.warning("[Node] Could not decode credits message.")
+            return
+
+        client_id = credits_msg.client_id
+        logging.info(f"[Node] Processing credits message for client {client_id}. Finished: {credits_msg.finished}, Items: {len(credits_msg.credits)}")
+
+        if credits_msg.finished:
+            if state.set_other_eof(client_id):
+                self.trigger_final_processing(client_id, state, producer)
+            return
+
+        for credit in credits_msg.credits:
+            state.add_other_data(client_id, credit.id, credit)
+
     def trigger_final_processing(self, client_id, state, producer):
         logging.info(f"Triggering final processing for CREDITS join, client {client_id}")
         

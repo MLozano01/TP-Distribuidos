@@ -16,4 +16,16 @@ class JoinStrategy(ABC):
             state: The shared state manager.
             producer: The RabbitMQ producer for sending results.
         """
+        pass
+
+    @abstractmethod
+    def process_other_message(self, body, state, producer):
+        """
+        Process a message of the 'other' data type.
+
+        Args:
+            body: The message body.
+            state: The shared state manager.
+            producer: The RabbitMQ producer for sending results.
+        """
         pass 
