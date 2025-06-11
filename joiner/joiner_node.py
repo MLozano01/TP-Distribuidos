@@ -18,7 +18,6 @@ class JoinerNode:
         self.output_producer = None
         self._stop_event = threading.Event()
         self._threads = []
-        self._consumer_creation_lock = threading.Lock()
 
     def start(self):
         self._setup_signal_handlers()
@@ -74,14 +73,13 @@ class JoinerNode:
         """Runs the movie consumer loop using rabbit_protocol."""
         while not self._stop_event.is_set():
             try:
-                with self._consumer_creation_lock:
-                    consumer = RabbitMQ(
-                        exchange=self.config['exchange_movies'],
-                        q_name=self.config['queue_movies_name'],
-                        key="1",
-                        exc_type='x-consistent-hash',
-                        prefetch_count=100
-                    )
+                consumer = RabbitMQ(
+                    exchange=self.config['exchange_movies'],
+                    q_name=self.config['queue_movies_name'],
+                    key="1",
+                    exc_type='x-consistent-hash',
+                    prefetch_count=100
+                )
                 consumer.consume(self._process_movie_message, stop_event=self._stop_event)
             except Exception as e:
                 logging.error(f"Error in movies consumer loop: {e}. Reconnecting...", exc_info=True)
@@ -94,14 +92,13 @@ class JoinerNode:
         """Runs the other data consumer loop using rabbit_protocol."""
         while not self._stop_event.is_set():
             try:
-                with self._consumer_creation_lock:
-                    consumer = RabbitMQ(
-                        exchange=self.config['exchange_other'],
-                        q_name=self.config['queue_other_name'],
-                        key="1",
-                        exc_type='x-consistent-hash',
-                        prefetch_count=100
-                    )
+                consumer = RabbitMQ(
+                    exchange=self.config['exchange_other'],
+                    q_name=self.config['queue_other_name'],
+                    key="1",
+                    exc_type='x-consistent-hash',
+                    prefetch_count=100
+                )
                 consumer.consume(self._process_other_message, stop_event=self._stop_event)
             except Exception as e:
                 logging.error(f"Error in other consumer loop: {e}. Reconnecting...", exc_info=True)
