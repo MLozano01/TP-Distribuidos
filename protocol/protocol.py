@@ -362,6 +362,27 @@ class Protocol:
     credits.ParseFromString(msg_buffer)
     return credits
   
+  def decode_joined_ratings_batch(self, buffer):
+      """Deserializes a JoinedRatingsBatch message."""
+      try:
+          batch = files_pb2.JoinedRatingsBatch()
+          batch.ParseFromString(buffer)
+          return batch
+      except Exception as e:
+          logging.error(f"Error decoding JoinedRatingsBatch: {e}")
+          return None
+
+  def encode_joined_rating_msg(self, client_id, movie_id, title, rating, timestamp):
+      """Encodes a single joined rating into a JoinedRatingsBatch of one."""
+      rating_pb = files_pb2.JoinedRating(
+          movie_id=movie_id,
+          title=title,
+          rating=rating,
+          timestamp=timestamp,
+      )
+      batch_pb = files_pb2.JoinedRatingsBatch(client_id=client_id)
+      batch_pb.ratings.append(rating_pb)
+      return batch_pb.SerializeToString()
 
   def create_client_result(self, data):
     message = bytearray()
@@ -400,7 +421,7 @@ class Protocol:
 
     for key, results in dict_results.items():
       aggr_pb = batch_pb.aggr_row.add()
-      aggr_pb.key = key
+      aggr_pb.key = str(key)
       if "sum" in results:
         aggr_pb.sum =  to_float(results.get("sum"))
       if "count" in results:

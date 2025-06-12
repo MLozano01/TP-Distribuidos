@@ -187,4 +187,17 @@ message ResultBatch {
 
 // [END] ResultBatch messages
 
+message JoinedRating {
+    int32 movie_id = 1;
+    string title = 2;
+    float rating = 3;
+    string timestamp = 4;
+}
+
+message JoinedRatingsBatch {
+    repeated JoinedRating ratings = 1;
+    optional bool finished = 2;
+    int32 client_id = 3;
+}
+
 // [END messages]

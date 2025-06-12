@@ -27,7 +27,7 @@ def parse_reduce_funct(data_to_reduce, reduce_by, result, client_id):
         return reduce_top10(protocol.decode_actor_participations_batch(data_to_reduce), args, result, client_id)
     
     if args[0] == "max-min":
-        return reduce_max_min(protocol.decode_movies_msg(data_to_reduce), args, result, client_id)
+        return reduce_max_min(protocol.decode_aggr_batch(data_to_reduce), args, result, client_id)
     
     if args[0] == "avg":
         return reduce_avg(protocol.decode_aggr_batch(data_to_reduce), args, result, client_id)
@@ -67,8 +67,29 @@ def parse_final_result(reduce_by, partial_results, client_id):
         logging.debug(f"[parse_final_result] Returning: {res}")
         return res
     if args[0] == "max-min":
-        res = {}
-        res["max-min"] = client_partial_results
+        if not client_partial_results:
+            return {}
+
+        # Compute average rating per movie
+        avg_per_movie = {}
+        for title, sc in client_partial_results.items():
+            total_sum = sc.get("sum", 0)
+            total_count = sc.get("count", 0)
+            if total_count > 0:
+                avg_per_movie[title] = total_sum / total_count
+
+        if not avg_per_movie:
+            return {}
+
+        max_title = max(avg_per_movie, key=avg_per_movie.get)
+        min_title = min(avg_per_movie, key=avg_per_movie.get)
+
+        res = {
+            "max-min": {
+                max_title: avg_per_movie[max_title],
+                min_title: avg_per_movie[min_title],
+            }
+        }
         return res
     
     if args[0] == "q1":
@@ -125,22 +146,13 @@ def reduce_query_one(data_to_reduce, reduce_args, result, client_id):
     return result
 
 def reduce_max_min(data_to_reduce, reduce_args, result, client_id):
+    """Accumulates sum and count per movie so that the final average can be computed in parse_final_result."""
     result.setdefault(client_id, {})
 
-    for data in data_to_reduce.movies:
-        client_result = result[client_id]
-        if len(client_result) < 2:
-            client_result[data.title] = data.average_rating
-        else: 
-            max_rating = max(client_result, key=client_result.get)
-            min_rating = min(client_result, key=client_result.get)
-
-            if client_result[max_rating] < data.average_rating:
-                client_result.pop(max_rating)
-                client_result[data.title] = data.average_rating
-            elif client_result[min_rating] > data.average_rating:
-                client_result.pop(min_rating)
-                client_result[data.title] = data.average_rating
+    for row in data_to_reduce.aggr_row:
+        movie_dict = result[client_id].setdefault(row.key, {"sum": 0, "count": 0})
+        movie_dict["sum"] += row.sum
+        movie_dict["count"] += row.count
 
     logging.info(f"[REDUCE_MAX_MIN] client_id: {client_id}, result: {result}")
 

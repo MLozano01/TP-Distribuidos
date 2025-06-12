@@ -108,7 +108,7 @@ class JoinerNode:
         logging.info("Other consumer thread finished.")
 
     def _process_movie_message(self, ch, method, properties, body):
-        logging.debug(f"[Node] Received a movie message. Size: {len(body)} bytes.")
+        logging.info(f"[Node] Received a movie message. Size: {len(body)} bytes.")
         if self._stop_event.is_set():
             logging.info("[Node] Stop event set, ignoring movie message.")
             return
@@ -122,23 +122,22 @@ class JoinerNode:
             logging.info(f"[Node] Processing movie message for client {client_id}. Finished: {movies_msg.finished}, Items: {len(movies_msg.movies)}")
 
             if movies_msg.finished:
-                logging.info(f"[Node] Movie EOF received for client {client_id}. Checking if other EOF is present.")
-                should_trigger = self.state.set_movies_eof(client_id)
-                logging.info(f"[Node] Result of EOF check for client {client_id}: {should_trigger}")
-                if should_trigger:
-                    logging.info(f"[Node] Both EOFs present for client {client_id}. Triggering final processing.")
-                    self.join_strategy.trigger_final_processing(client_id, self.state, self.output_producer)
+                logging.info(f"[Node] Movie EOF received for client {client_id}.")
+                self.state.set_movies_eof(client_id)
                 return
 
             for movie in movies_msg.movies:
-                self.state.add_movie(client_id, movie)
+                unmatched_data = self.state.add_movie_and_process_unmatched(client_id, movie)
+                if unmatched_data:
+                    self.join_strategy.process_unmatched_data(unmatched_data, movie, client_id, self.output_producer)
+            
             logging.debug(f"[Node] Added {len(movies_msg.movies)} movies to buffer for client {client_id}")
 
         except Exception as e:
             logging.error(f"[Node] Error processing movie message: {e}", exc_info=True)
 
     def _process_other_message(self, ch, method, properties, body):
-        logging.debug(f"[Node] Received an other message. Size: {len(body)} bytes.")
+        logging.info(f"[Node] Received an other message. Size: {len(body)} bytes.")
         if self._stop_event.is_set():
             logging.info("[Node] Stop event set, ignoring other message.")
             return

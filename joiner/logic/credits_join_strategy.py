@@ -1,15 +1,15 @@
 import logging
 from logic.join_strategy import JoinStrategy
 from protocol.protocol import Protocol
-from messaging.messaging_utils import send_movie_batch, send_actor_participations_batch, send_finished_signal, BATCH_SIZE
+from messaging.messaging_utils import send_finished_signal
 from protocol import files_pb2
 
 class CreditsJoinStrategy(JoinStrategy):
     """
-    Joining strategy for movie credits.
+    Joining strategy for movie credits in a streaming fashion.
     """
     def __init__(self):
-        self.protocol = Protocol()
+        super().__init__()
 
     def process_other_message(self, body, state, producer):
         credits_msg = self.protocol.decode_credits_msg(body)
@@ -18,50 +18,62 @@ class CreditsJoinStrategy(JoinStrategy):
             return
 
         client_id = credits_msg.client_id
-        logging.info(f"[Node] Processing credits message for client {client_id}. Finished: {credits_msg.finished}, Items: {len(credits_msg.credits)}")
-
+        
         if credits_msg.finished:
-            if state.set_other_eof(client_id):
-                self.trigger_final_processing(client_id, state, producer)
+            logging.info(f"Credits EOF received for client {client_id}.")
+            self.process_other_eof(client_id, state)
+            # Forward the EOF signal
+            send_finished_signal(producer, client_id, self.protocol)
             return
 
         for credit in credits_msg.credits:
-            state.add_other_data(client_id, credit.id, credit)
+            movie_data = state.get_movie(client_id, credit.id)
+            if movie_data:
+                # Movie is already in our buffer, join and send immediately
+                self._join_and_send([credit], movie_data, client_id, producer)
+            else:
+                # Movie not seen yet. Check if movie stream has ended.
+                if state.has_movies_eof(client_id):
+                    logging.warning(f"Credit for movie {credit.id} for client {client_id} arrived after movies EOF, and movie not in buffer. Discarding.")
+                else:
+                    # Movie stream is still active, so buffer the credit.
+                    state.add_unmatched_other(client_id, credit.id, credit)
 
-    def trigger_final_processing(self, client_id, state, producer):
-        logging.info(f"Triggering final processing for CREDITS join, client {client_id}")
+    def _join_and_send(self, credits, movie_data, client_id, producer):
+        if not credits:
+            return
         
-        movies_buffer, other_buffer = state.pop_buffers_for_processing(client_id)
-        if not movies_buffer:
-            logging.warning(f"No movie data to process for client {client_id}, ending.")
-            send_finished_signal(producer, client_id, self.protocol)
+        credit = credits[0] # Process one by one
+        participations = []
+        for cast_member in credit.cast:
+            actor_name = cast_member.name.strip()
+            if not actor_name or actor_name in {'\\N', 'NULL', 'null', 'N/A', '-'}:
+                continue
+            participation = self._create_participation(movie_data, actor_name)
+            participations.append(participation)
+
+        if not participations:
             return
             
-        participations_batch = []
+        try:
+            # This will probably send a list of ActorParticipation
+            msg = self.protocol.encode_actor_participations_msg(participations, client_id)
+            producer.publish(msg)
 
-        for movie_id, credits_list in other_buffer.items():
-            if movie_id in movies_buffer:
-                for credit in credits_list:
-                    for cast_member in credit.cast:
-                        actor_name = cast_member.name.strip()
-                        if not actor_name or actor_name in {'\\N', 'NULL', 'null', 'N/A', '-'}:
-                            continue
-                        participation = self._create_participation(movies_buffer[movie_id], actor_name)
-                        participations_batch.append(participation)
+        except Exception as e:
+            logging.error(f"Error sending actor participations for client {client_id}, movie {movie_data.id}: {e}", exc_info=True)
 
-                if len(participations_batch) >= BATCH_SIZE:
-                    send_actor_participations_batch(producer, participations_batch, client_id, self.protocol)
-                    participations_batch = []
+    def process_unmatched_data(self, unmatched_credits, movie_data, client_id, producer):
+        logging.info(f"Processing {len(unmatched_credits)} unmatched credits for movie {movie_data.id}, client {client_id}")
+        # In credits, we can batch the previously unmatched credits for a movie
+        self._join_and_send(unmatched_credits, movie_data, client_id, producer)
 
-        if participations_batch:
-            send_actor_participations_batch(producer, participations_batch, client_id, self.protocol)
-
-        send_finished_signal(producer, client_id, self.protocol)
-        logging.info(f"Finished processing for CREDITS join, client {client_id}")
+    def process_other_eof(self, client_id, state):
+        logging.info(f"Processing credits EOF for client {client_id}. Clearing all related state.")
+        state.clear_client_state(client_id)
 
     def _create_participation(self, movie, actor_name):
         """Return an ActorParticipation with just actor_name and movie_id."""
-
         return files_pb2.ActorParticipation(
             actor_name=actor_name,
             movie_id=movie.id,
