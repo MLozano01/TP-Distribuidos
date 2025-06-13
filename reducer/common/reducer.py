@@ -9,12 +9,12 @@ logging.getLogger("pika").setLevel(logging.ERROR)
 logging.getLogger("RabbitMQ").setLevel(logging.DEBUG)
 
 class Reducer:
-    def __init__(self, config):
+    def __init__(self, config, backup):
         self.config = config
         self.queue_rcv = None
         self.queue_snd = None
         self.is_alive = True
-        self.partial_result = {}
+        self.partial_result = backup
         self.query_id = config["query_id"]
         self.reduce_by = config['reduce_by']
 
@@ -54,6 +54,7 @@ class Reducer:
                 return
             
             self.partial_result = parse_reduce_funct(data, self.reduce_by, self.partial_result, msg.client_id)
+            # logging.info(f"KEYS: {self.partial_result.keys()}")
 
         except json.JSONDecodeError as e:
             logging.error(f"Failed to decode JSON: {e}")

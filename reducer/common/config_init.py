@@ -21,6 +21,7 @@ def config_reducer():
 
     try:
         config_params["logging_level"] = os.getenv('LOGGING_LEVEL', reducer_config["DEFAULT"]["LOGGING_LEVEL"])
+        config_params["port"] = int(os.getenv('PORT', reducer_config["DEFAULT"]["PORT"]))
         config_params["queue_rcv_name"] = os.getenv('QUEUE_RCV_NAME', reducer_config["DEFAULT"]["QUEUE_RCV_NAME"])
         config_params["routing_rcv_key"] = os.getenv('ROUTING_KEY_RCV', reducer_config["DEFAULT"]["ROUTING_KEY_RCV"])
         config_params["exchange_rcv"] = os.getenv('EXCHANGE_RCV', reducer_config["DEFAULT"]["EXCHANGE_RCV"])
