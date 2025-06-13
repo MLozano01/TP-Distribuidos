@@ -5,6 +5,8 @@ from protocol.protocol import Protocol
 from queue import Empty
 from multiprocessing import Process, Value
 
+import time
+
 logging.getLogger("pika").setLevel(logging.ERROR)
 logging.getLogger("RabbitMQ").setLevel(logging.ERROR)
 
@@ -100,6 +102,7 @@ class Filter:
                     if hasattr(self, 'queue_snd_movies') and self.queue_snd_movies:
                         logging.info(f"Publishing batch of {len(result)} filtered messages with routing key: '{self.queue_snd_movies.key}' to exchange '{self.queue_snd_movies.exchange}' ({self.queue_snd_movies.exc_type}).")
                         self.queue_snd_movies.publish(self.protocol.create_movie_list(result, client_id))
+                        time.sleep(0.5)
                     else:
                         logging.error("Single sender queue not initialized for non-sharded publish.")
             else:

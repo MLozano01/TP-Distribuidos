@@ -218,6 +218,8 @@ def create_reducers():
     return reducers
 
 def create_reducer(reducer_name, file_name):
+    backup_file = f"backup_{reducer_name}.json"
+
     reducer_cont = f"""
   {reducer_name}:
     container_name: {reducer_name}
@@ -230,8 +232,11 @@ def create_reducer(reducer_name, file_name):
         restart: true
     links:
       - rabbitmq
+    environment:
+      - BACKUP_FILE={backup_file}
     volumes:
       - ./reducer/reducers/{file_name}:/{CONFIG_FILE}
+      - ./reducer/backup:/backup
     """
     return reducer_cont
 

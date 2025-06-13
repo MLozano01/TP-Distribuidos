@@ -3,7 +3,7 @@ import common.communicator
 import common.config_init as config_init
 from protocol.utils.logger import config_logger
 import common.reducer, common.communicator
-# from backup import backup
+from backup import partial_results_backup
 
 from multiprocessing import Process
 
@@ -12,8 +12,8 @@ def main():
     config_logger(config["logging_level"])
     config.pop("logging_level")
 
-    # backup_info = backup.from_backup(config['backup_file'])
-    # logging.info(f"Backup Info: {backup_info}")
+    backup_info = partial_results_backup.from_backup(config['backup_file'])
+    logging.info(f"Backup Info: {backup_info}")
 
     try: 
         comms = common.communicator.Communicator(config['port'])
@@ -22,7 +22,7 @@ def main():
         comms_process = Process(target=comms.start, args=())
         comms_process.start()
 
-        red = common.reducer.Reducer(config, {})
+        red = common.reducer.Reducer(config, backup_info)
         red.start()
         comms_process.join()
     except KeyboardInterrupt:
