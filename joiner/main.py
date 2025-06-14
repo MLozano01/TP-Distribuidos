@@ -1,19 +1,32 @@
 import logging
-import common.config_init as config_init
+import os
+import sys
+
+# Add the parent directory of 'joiner' to the Python path
+# This is to allow imports from 'protocol' and other packages in the parent directory
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+
+from config.config_init import initialize_config
+from logic.strategy_factory import get_join_strategy
+from joiner_node import JoinerNode
 from protocol.utils.logger import config_logger
-from common.joiner import Joiner
 
 def main():
-    joiner_instance = None # Define outside try for finally block
+    joiner_instance = None
     try:
-        config = config_init.initialize_config()
+        config = initialize_config()
         config_logger(config["logging_level"])
 
-        replica_id = config.get("replica_id", "N/A") # Get replica ID for logging
+        replica_id = config.get("replica_id", "N/A")
         logging.info(f"Joiner Replica {replica_id} started")
+        
+        # Get the join strategy from the factory
+        join_strategy_name = config.get("other_data_type", "RATINGS")
+        join_strategy = get_join_strategy(join_strategy_name)
 
-        joiner_instance = Joiner(**config)
-        joiner_instance.start() # This will block until stopped
+        joiner_instance = JoinerNode(config, join_strategy)
+        joiner_instance.start()
 
     except KeyboardInterrupt:
         logging.info(f"Joiner Replica {replica_id} stopped by user")

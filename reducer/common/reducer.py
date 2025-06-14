@@ -38,8 +38,16 @@ class Reducer:
         try:
             protocol = Protocol()
 
+            # Try to decode as AggregationBatch first (used by several reducers)
+            aggr_msg = protocol.decode_aggr_batch(data)
 
-            msg = protocol.decode_movies_msg(data)
+            is_aggr_msg = (len(aggr_msg.aggr_row) > 0) or aggr_msg.finished
+
+            if is_aggr_msg:
+                msg = aggr_msg
+            else:
+                # Fallback to MoviesCSV (max-min older version, query1, etc.)
+                msg = protocol.decode_movies_msg(data)
 
             if msg.finished:
                 logging.info(f"ALL Finished msg received on query_id {self.query_id}")
@@ -57,7 +65,7 @@ class Reducer:
             
             self.partial_result = parse_reduce_funct(data, self.reduce_by, self.partial_result, str(msg.client_id))
             partial_results_backup.make_new_backup(self.partial_result, self.config['backup_file'])
-            
+
 
         except json.JSONDecodeError as e:
             logging.error(f"Failed to decode JSON: {e}")

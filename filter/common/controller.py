@@ -3,6 +3,9 @@ import logging
 import signal
 from common.filter import Filter
 from protocol.utils.communicator import Communicator
+from protocol.protocol import Protocol
+from common.publisher.single_publisher import SinglePublisher
+from common.publisher.sharded_publisher import ShardedPublisher
 logging.getLogger("pika").setLevel(logging.ERROR)
 
 
@@ -33,7 +36,26 @@ class Controller:
             self.filter_communicator.start()
             logging.info(f"Filter communicator started with PID: {self.filter_communicator.pid}")
 
-            filter_instance = Filter( finish_notify_ntc, finish_notify_ctn, self.stop_event, communicator_instance, **self.config)
+            # Determine publisher based on config
+            protocol = Protocol()
+            if self.config.get("publish_to_joiners", False):
+                publisher_instance = ShardedPublisher(
+                    protocol=protocol,
+                    exchange_snd_ratings=self.config["exchange_snd_ratings"],
+                    exc_snd_type_ratings=self.config["exc_snd_type_ratings"],
+                    exchange_snd_credits=self.config["exchange_snd_credits"],
+                    exc_snd_type_credits=self.config["exc_snd_type_credits"],
+                )
+            else:
+                publisher_instance = SinglePublisher(
+                    protocol=protocol,
+                    exchange_snd=self.config["exchange_snd"],
+                    queue_snd_name=self.config["queue_snd_name"],
+                    routing_snd_key=self.config["routing_snd_key"],
+                    exc_snd_type=self.config["exc_snd_type"],
+                )
+
+            filter_instance = Filter( finish_notify_ntc, finish_notify_ctn, self.stop_event, communicator_instance, publisher_instance, **self.config)
             self.filter = Process(target=filter_instance.run, args=())
         
             self.filter.start()
