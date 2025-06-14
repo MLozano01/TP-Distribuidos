@@ -325,6 +325,8 @@ def create_joiner(service_base_name, replica_id, total_replicas, config_source_p
       - PYTHONUNBUFFERED=1
       - JOINER_REPLICA_ID={replica_id}
       - JOINER_REPLICA_COUNT={total_replicas}
+      - JOINER_NAME={service_base_name}
+      - COMM_PORT=3030
     """
     return joiner_yaml
 
@@ -372,8 +374,6 @@ def create_healthcheckers(replicas):
   hc = {}
 
   replicas.pop('client_amount')
-  replicas.pop('joiner-credits')
-  replicas.pop('joiner-ratings')
   replicas.pop("healthcheck_replicas")
 
   for i in range(1, number_hc + 1):

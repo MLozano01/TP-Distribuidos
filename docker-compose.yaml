@@ -349,8 +349,11 @@ services:
         restart: true
     links:
       - rabbitmq
+    environment:
+      - BACKUP_FILE=backup_reducer-top5.json
     volumes:
       - ./reducer/reducers/top5.ini:/config.ini
+      - ./reducer/backup:/backup
     
   reducer-top10:
     container_name: reducer-top10
@@ -363,8 +366,11 @@ services:
         restart: true
     links:
       - rabbitmq
+    environment:
+      - BACKUP_FILE=backup_reducer-top10.json
     volumes:
       - ./reducer/reducers/top10.ini:/config.ini
+      - ./reducer/backup:/backup
     
   reducer-max-min:
     container_name: reducer-max-min
@@ -377,8 +383,11 @@ services:
         restart: true
     links:
       - rabbitmq
+    environment:
+      - BACKUP_FILE=backup_reducer-max-min.json
     volumes:
       - ./reducer/reducers/max-min.ini:/config.ini
+      - ./reducer/backup:/backup
     
   reducer-average:
     container_name: reducer-average
@@ -391,8 +400,11 @@ services:
         restart: true
     links:
       - rabbitmq
+    environment:
+      - BACKUP_FILE=backup_reducer-average.json
     volumes:
       - ./reducer/reducers/average.ini:/config.ini
+      - ./reducer/backup:/backup
     
   reducer-query1:
     container_name: reducer-query1
@@ -405,8 +417,11 @@ services:
         restart: true
     links:
       - rabbitmq
+    environment:
+      - BACKUP_FILE=backup_reducer-query1.json
     volumes:
       - ./reducer/reducers/query1.ini:/config.ini
+      - ./reducer/backup:/backup
     
   
   joiner-ratings-1:
@@ -467,7 +482,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          ["transformer-1", "filter-single-country-movies-1", "data-controller-credits-1", "reducer-max-min", "filter-2000-movies-1", "aggregator-sent-2", "data-controller-ratings-1"]
+          ["transformer-1", "filter-arg-spa-movies-1", "filter-decade-movies-1", "reducer-top5", "reducer-average", "filter-2000-movies-2", "data-controller-movies-1", "data-controller-ratings-2"]
     
   healthchecker-2:
     container_name: healthchecker-2
@@ -489,7 +504,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          ["filter-arg-spa-movies-1", "filter-decade-movies-1", "reducer-top5", "reducer-average", "filter-2000-movies-2", "data-controller-movies-1", "data-controller-ratings-2"]
+          ["joiner-ratings-1", "filter-arg-movies-1", "aggregator-budget-1", "reducer-top10", "reducer-query1", "aggregator-sent-1", "data-controller-movies-2", "data-controller-ratings-3"]
     
   healthchecker-3:
     container_name: healthchecker-3
@@ -511,7 +526,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          ["filter-arg-movies-1", "aggregator-budget-1", "reducer-top10", "reducer-query1", "aggregator-sent-1", "data-controller-movies-2", "data-controller-ratings-3"]
+          ["joiner-credits-1", "filter-single-country-movies-1", "data-controller-credits-1", "reducer-max-min", "filter-2000-movies-1", "aggregator-sent-2", "data-controller-ratings-1"]
     
 networks:
   tp_network:

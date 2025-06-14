@@ -11,10 +11,15 @@ BATCH_SIZE = 60000
 logging.getLogger("pika").setLevel(logging.ERROR)
 
 class Joiner:
-    def __init__(self, **kwargs):
+    def __init__(self, finish_notify_ntc, finish_notify_ctn, stop_event, communicator, **kwargs):
         # Configuration
         self.config = kwargs
         self.replica_id = self.config['replica_id']
+        
+        self.communicator = communicator
+        self.finish_notify_ntc = finish_notify_ntc
+        self.finish_notify_ctn = finish_notify_ctn
+
         # Store other_data_type read from config
         self.other_data_type = kwargs.get('other_data_type', '').upper() # e.g., "RATINGS" or "CREDITS"
         logging.info(f"Initializing Joiner Replica ID: {self.replica_id} for joining with {self.other_data_type}")
@@ -34,11 +39,10 @@ class Joiner:
         self.output_producer = None
 
         # Stop event for graceful shutdown
-        self._stop_event = threading.Event()
+        self._stop_event = stop_event
 
     def _setup_signal_handlers(self):
-        signal.signal(signal.SIGTERM, self._handle_shutdown)
-        signal.signal(signal.SIGINT, self._handle_shutdown)
+        pass
 
     def _handle_shutdown(self, signum, frame):
         logging.warning(f"Received signal {signum}. Initiating shutdown...")
@@ -87,7 +91,7 @@ class Joiner:
              raise # Reraise to prevent application from continuing in broken state
 
 
-    def start(self):
+    def run(self):
         """Start the Joiner consuming messages."""
         self._setup_signal_handlers()
         try:
@@ -123,7 +127,8 @@ class Joiner:
             logging.error(f"Failed to start Joiner: {e}", exc_info=True)
         finally:
             # Ensure stop is called regardless of where the error occurred
-            self.stop()
+            if not self._stop_event.is_set():
+                self.stop()
 
     def _process_movie_message(self, ch, method, properties, body):
         """Callback for processing movie messages."""
