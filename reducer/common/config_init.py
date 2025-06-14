@@ -29,8 +29,10 @@ def config_reducer():
         config_params["routing_snd_key"] = os.getenv('ROUTING_KEY_SND', reducer_config["DEFAULT"]["ROUTING_KEY_SND"])
         config_params["exchange_snd"] = os.getenv('EXCHANGE_SND', reducer_config["DEFAULT"]["EXCHANGE_SND"])
         config_params["exc_snd_type"] = os.getenv('TYPE_SND', reducer_config["DEFAULT"]["TYPE_SND"])
-
         config_params[f"reduce_by"] = os.getenv("REDUCER", reducer_config["DEFAULT"]["REDUCER"])
+
+        config_params["port"] = int(os.getenv('PORT', reducer_config["DEFAULT"]["PORT"]))
+        config_params["backup_file"] = os.getenv("BACKUP_FILE")
 
         config_params["query_id"] = int(os.getenv('QUERY_ID', reducer_config["DEFAULT"].get('QUERY_ID', 0)))
     except KeyError as e:

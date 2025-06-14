@@ -467,7 +467,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          {"transformer": 1, "filter-single-country-movies": 1, "data-controller-credits": 1, "data-controller-movies": 2}
+          ["transformer-1", "filter-single-country-movies-1", "data-controller-credits-1", "reducer-max-min", "filter-2000-movies-1", "aggregator-sent-2", "data-controller-ratings-1"]
     
   healthchecker-2:
     container_name: healthchecker-2
@@ -489,7 +489,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          {"filter-arg-spa-movies": 1, "filter-decade-movies": 1, "filter-2000-movies": 2, "data-controller-ratings": 3}
+          ["filter-arg-spa-movies-1", "filter-decade-movies-1", "reducer-top5", "reducer-average", "filter-2000-movies-2", "data-controller-movies-1", "data-controller-ratings-2"]
     
   healthchecker-3:
     container_name: healthchecker-3
@@ -511,7 +511,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          {"filter-arg-movies": 1, "aggregator-budget": 1, "aggregator-sent": 2}
+          ["filter-arg-movies-1", "aggregator-budget-1", "reducer-top10", "reducer-query1", "aggregator-sent-1", "data-controller-movies-2", "data-controller-ratings-3"]
     
 networks:
   tp_network:

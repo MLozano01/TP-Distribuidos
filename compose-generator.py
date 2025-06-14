@@ -218,6 +218,8 @@ def create_reducers():
     return reducers
 
 def create_reducer(reducer_name, file_name):
+    backup_file = f"backup_{reducer_name}.json"
+
     reducer_cont = f"""
   {reducer_name}:
     container_name: {reducer_name}
@@ -230,8 +232,11 @@ def create_reducer(reducer_name, file_name):
         restart: true
     links:
       - rabbitmq
+    environment:
+      - BACKUP_FILE={backup_file}
     volumes:
       - ./reducer/reducers/{file_name}:/{CONFIG_FILE}
+      - ./reducer/backup:/backup
     """
     return reducer_cont
 
@@ -362,28 +367,29 @@ def create_data_controller(replica_name, replica_id, total_replicas, config_file
 
 def create_healthcheckers(replicas):
 
-  number_hc = replicas['healthcheck_replicas'] if replicas['healthcheck_replicas'] <= 11 else 11
+  number_hc = replicas['healthcheck_replicas']
 
   hc = {}
 
   replicas.pop('client_amount')
   replicas.pop('joiner-credits')
   replicas.pop('joiner-ratings')
+  replicas.pop("healthcheck_replicas")
 
   for i in range(1, number_hc + 1):
-    hc[f"healthchecker-{i}"] = {}
-
-  total_hc = replicas.pop("healthcheck_replicas")
+    hc[f"healthchecker-{i}"] = []
 
   for key, value in sorted(replicas.items(), key=lambda x: x[1]):
-    min_hc = min(hc, key=lambda k: sum(hc[k].values()))
-    hc[min_hc][key] = value
+    for i in range(1, value +1):
+      min_hc = min(hc, key=lambda k: len(hc[k]))
+      node = f"{key}-{i}" if key.split('-')[0] != 'reducer' else key
+      hc[min_hc].append(node)
 
   healthcheckers = ""
 
   for h in hc:
       nodes = json.dumps(hc[h])
-      healthcheckers += create_hc(h.split("-")[1], total_hc, nodes)
+      healthcheckers += create_hc(h.split("-")[1], number_hc, nodes)
   return healthcheckers
 
 
@@ -434,6 +440,11 @@ def create_replicas_dict(config):
     replicas['data-controller-credits'] = int(config["REPLICAS"]["DATA_CONTROLLER_CREDITS_REPLICAS"])
     replicas['data-controller-ratings'] = int(config["REPLICAS"]["DATA_CONTROLLER_RATINGS_REPLICAS"])
     replicas['healthcheck_replicas'] = int(config["REPLICAS"]["HEALTHCHECK_REPLICAS"])
+    replicas['reducer-top5'] = 1
+    replicas['reducer-top10'] = 1
+    replicas['reducer-max-min'] = 1
+    replicas['reducer-average'] = 1
+    replicas['reducer-query1'] = 1
 
     return replicas
 

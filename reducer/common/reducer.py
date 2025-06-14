@@ -1,19 +1,22 @@
+
 from protocol.rabbit_protocol import RabbitMQ
 from common.aux import parse_reduce_funct, parse_final_result
 import logging
 import json
 from protocol.protocol import Protocol
+from backup import partial_results_backup
+
 
 logging.getLogger("pika").setLevel(logging.ERROR)   
 logging.getLogger("RabbitMQ").setLevel(logging.DEBUG)
 
 class Reducer:
-    def __init__(self, config):
+    def __init__(self, config, backup):
         self.config = config
         self.queue_rcv = None
         self.queue_snd = None
         self.is_alive = True
-        self.partial_result = {}
+        self.partial_result = backup
         self.query_id = config["query_id"]
         self.reduce_by = config['reduce_by']
 
@@ -48,7 +51,7 @@ class Reducer:
 
             if msg.finished:
                 logging.info(f"ALL Finished msg received on query_id {self.query_id}")
-                result = parse_final_result(self.reduce_by, self.partial_result, msg.client_id)
+                result = parse_final_result(self.reduce_by, self.partial_result, str(msg.client_id))
                 res_proto = protocol.create_result(result, msg.client_id)
 
                 key = f'{self.config["routing_snd_key"]}_{msg.client_id}'
@@ -60,8 +63,9 @@ class Reducer:
 
                 return
             
-            # Update partial result using raw data buffer for flexibility
-            self.partial_result = parse_reduce_funct(data, self.reduce_by, self.partial_result, msg.client_id)
+            self.partial_result = parse_reduce_funct(data, self.reduce_by, self.partial_result, str(msg.client_id))
+            partial_results_backup.make_new_backup(self.partial_result, self.config['backup_file'])
+
 
         except json.JSONDecodeError as e:
             logging.error(f"Failed to decode JSON: {e}")

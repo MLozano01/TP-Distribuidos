@@ -84,18 +84,16 @@ class Transformer:
         """Start the Transformer with separate threads for data and control messages."""
         self._setup_signal_handlers()
         try:
+            self._initialize_sentiment_analyzer()
 
             self._settle_queues()
 
             if not all([self.queue_rcv, self.queue_snd]):
                 logging.error("Not all required RabbitMQ connections were initialized. Aborting start.")
                 return
-            
-
+        
             self.finish_signal_checker = Process(target=self.check_finished, args=())
             self.finish_signal_checker.start()
-
-            self._initialize_sentiment_analyzer()
 
             self.queue_rcv.consume(self.callback)
 

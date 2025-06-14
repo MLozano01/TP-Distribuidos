@@ -1,4 +1,3 @@
-
 import logging
 import socket
 import subprocess
@@ -42,19 +41,16 @@ class HealthCheck:
                 logging.error(f"Error {e}")
 
     def _check_workers(self):
-        for key, value in self.nodes.items():
-            for i in range(1,  value + 1):
-                node = f'{key}-{i}'
-                try:
-                    con = socket.create_connection((node, self.port))
-                    logging.info(f"The node {node} is ok")
-                    con.shutdown(socket.SHUT_RDWR)
-                    con.close()
-                    i += 1
+        for node in self.nodes:
+            try:
+                con = socket.create_connection((node, self.port))
+                logging.info(f"The node {node} is ok")
+                con.shutdown(socket.SHUT_RDWR)
+                con.close()
 
-                except socket.error:
-                    logging.error(f"The node {node} needs to be revived")
-                    self.revive_node(node)
+            except socket.error:
+                logging.error(f"The node {node} needs to be revived")
+                self.revive_node(node)
 
     def _check_healthcheckers(self):
         checking = True

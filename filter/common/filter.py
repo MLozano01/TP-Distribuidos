@@ -15,10 +15,10 @@ DONE = True
 class Filter:
     def __init__(self, finish_notify_ntc, finish_notify_ctn, stop_event, comm_instance, publisher: Publisher, **kwargs):
         self.protocol = Protocol()
-        self.queue_rcv = None 
+        self.queue_rcv = None
         self.publisher = publisher
 
-        self.finished_filter_arg_step_publisher = None 
+        self.finished_filter_arg_step_publisher = None
         self.finish_notify_ntc = finish_notify_ntc
         self.finish_notify_ctn = finish_notify_ctn
 
@@ -95,7 +95,7 @@ class Filter:
         self.comm_instance.wait_eof_confirmation()
         logging.info("Received SEND finished signal from communication channel.")
         self.publisher.publish_finished_signal(msg)
-        
+
     def check_finished(self):
         while not self.stop_event.is_set():
             try:
