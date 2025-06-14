@@ -3,3 +3,5 @@ data
 .idea
 results_ratings.json
 results_ratings_small.json
+reducer/backup/*.json
+reducer/backup/__pycache__/
