@@ -38,12 +38,30 @@ services:
       - ./data/movies_metadata.csv:/movies_metadata.csv
       - ./data/results_client1.json:/results.json
     
+  client2:
+    container_name: client2
+    image: client:latest
+    profiles: [clients]
+    environment:
+      - CLI_ID=2
+    networks:
+      - tp_network
+    depends_on:
+      server:
+        condition: service_started
+    volumes:
+      - ./client/config.ini:/config.ini
+      - ./data/credits.csv:/credits.csv
+      - ./data/ratings_small.csv:/ratings.csv
+      - ./data/movies_metadata.csv:/movies_metadata.csv
+      - ./data/results_client2.json:/results.json
+    
   server:
     container_name: server
     image: server:latest
     entrypoint: python3 /main.py
     environment:
-      - NUM_CLIENTS=1
+      - NUM_CLIENTS=2
     networks:
       - tp_network
     depends_on:
@@ -283,7 +301,24 @@ services:
       - ./transformer/config.ini:/config.ini
     environment:
       - TRANSFORMER_REPLICA_ID=1
-      - TRANSFORMER_REPLICAS_COUNT=1
+      - TRANSFORMER_REPLICAS_COUNT=2
+    
+  transformer-2:
+    container_name: transformer-2
+    image: transformer:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./transformer/config.ini:/config.ini
+    environment:
+      - TRANSFORMER_REPLICA_ID=2
+      - TRANSFORMER_REPLICAS_COUNT=2
     
   
   aggregator-sent-1:
@@ -440,7 +475,29 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - JOINER_REPLICA_ID=1
-      - JOINER_REPLICA_COUNT=1
+      - JOINER_REPLICA_COUNT=2
+      - JOINER_NAME=joiner-ratings
+      - COMM_PORT=3030
+    
+  joiner-ratings-2:
+    container_name: joiner-ratings-2
+    image: joiner:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./joiner/config/joiner-ratings.ini:/config.ini
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JOINER_REPLICA_ID=2
+      - JOINER_REPLICA_COUNT=2
+      - JOINER_NAME=joiner-ratings
+      - COMM_PORT=3030
     
   
   joiner-credits-1:
@@ -459,7 +516,29 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - JOINER_REPLICA_ID=1
-      - JOINER_REPLICA_COUNT=1
+      - JOINER_REPLICA_COUNT=2
+      - JOINER_NAME=joiner-credits
+      - COMM_PORT=3030
+    
+  joiner-credits-2:
+    container_name: joiner-credits-2
+    image: joiner:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./joiner/config/joiner-credits.ini:/config.ini
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JOINER_REPLICA_ID=2
+      - JOINER_REPLICA_COUNT=2
+      - JOINER_NAME=joiner-credits
+      - COMM_PORT=3030
     
   
   healthchecker-1:
@@ -482,7 +561,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          ["transformer-1", "filter-arg-spa-movies-1", "filter-decade-movies-1", "reducer-top5", "reducer-average", "filter-2000-movies-2", "data-controller-movies-1", "data-controller-ratings-2"]
+          ["filter-arg-spa-movies-1", "filter-decade-movies-1", "reducer-top5", "reducer-average", "transformer-2", "joiner-credits-1", "filter-2000-movies-2", "data-controller-movies-1", "data-controller-ratings-2"]
     
   healthchecker-2:
     container_name: healthchecker-2
@@ -504,7 +583,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          ["joiner-ratings-1", "filter-arg-movies-1", "aggregator-budget-1", "reducer-top10", "reducer-query1", "aggregator-sent-1", "data-controller-movies-2", "data-controller-ratings-3"]
+          ["filter-arg-movies-1", "aggregator-budget-1", "reducer-top10", "reducer-query1", "joiner-ratings-1", "joiner-credits-2", "aggregator-sent-1", "data-controller-movies-2", "data-controller-ratings-3"]
     
   healthchecker-3:
     container_name: healthchecker-3
@@ -526,7 +605,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          ["joiner-credits-1", "filter-single-country-movies-1", "data-controller-credits-1", "reducer-max-min", "filter-2000-movies-1", "aggregator-sent-2", "data-controller-ratings-1"]
+          ["filter-single-country-movies-1", "data-controller-credits-1", "reducer-max-min", "transformer-1", "joiner-ratings-2", "filter-2000-movies-1", "aggregator-sent-2", "data-controller-ratings-1"]
     
 networks:
   tp_network:

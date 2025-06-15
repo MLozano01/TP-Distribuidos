@@ -31,6 +31,7 @@ class Joiner:
         # Track EOF signals per client
         self.movies_eof_received = set()  # Set of client_ids that have received movies EOF
         self.other_eof_received = set()   # Set of client_ids that have received other EOF
+        self.finished_clients = set() # Set of client_ids that have completed processing
         self._lock = threading.Lock() # To protect shared buffers and EOF flags
 
         # RabbitMQ Connections
@@ -104,7 +105,6 @@ class Joiner:
                  return
 
             # Setup consumer callbacks (before starting threads)
-            # Note: auto_ack=True used as requested
             self.movies_consumer.consume(self._process_movie_message, auto_ack=True)
             self.other_consumer.consume(self._process_other_message, auto_ack=True)
 
@@ -112,6 +112,7 @@ class Joiner:
             threads = []
             threads.append(threading.Thread(target=self.movies_consumer.start_consuming, daemon=True))
             threads.append(threading.Thread(target=self.other_consumer.start_consuming, daemon=True))
+            threads.append(threading.Thread(target=self._handle_communicator_requests, daemon=True))
 
             for t in threads:
                 t.start()
@@ -459,6 +460,27 @@ class Joiner:
         except Exception as e:
             logging.error(f"Failed to send ActorParticipation batch: {e}", exc_info=True)
 
+    def _handle_communicator_requests(self):
+        """
+        Listens for messages from the Communicator process and responds with the
+        joiner's readiness state for a given client.
+        """
+        while not self._stop_event.is_set():
+            try:
+                msg = self.finish_notify_ctn.get()
+                if msg == "STOP_EVENT":
+                    break
+                
+                client_id, _ = msg
+                with self._lock:
+                    is_ready = client_id in self.finished_clients
+                
+                self.finish_notify_ntc.put([client_id, is_ready])
+            except Exception as e:
+                if self._stop_event.is_set():
+                    break
+                logging.error(f"Error in communicator request handler: {e}")
+
     def stop(self):
         """Stops the Joiner gracefully."""
         if not self._stop_event.is_set():
@@ -475,7 +497,6 @@ class Joiner:
             logging.info("Joiner Stopped")
 
     def _handle_movies_finished_signal(self, client_id):
-        """Helper method to handle movies finished signal."""
         should_trigger_processing = False
         with self._lock:
             if client_id not in self.movies_eof_received:
@@ -485,16 +506,63 @@ class Joiner:
                     should_trigger_processing = True
             else:
                 logging.info(f"Duplicate MOVIES finished signal for client {client_id}.")
-
+        
         if should_trigger_processing:
-            logging.info(f"Both EOF signals received for client {client_id}. Triggering final processing.")
             self._trigger_final_processing(client_id)
 
-
     def _trigger_final_processing(self, client_id):
-        if self.other_data_type == "RATINGS":
+        # First, mark this client as finished so we correctly answer ring queries
+        with self._lock:
+            # Avoid re-processing if another thread triggered it simultaneously
+            if client_id in self.finished_clients:
+                return
+            self.finished_clients.add(client_id)
+
+        # This method is called when BOTH EOFs are received for a client.
+        # It's safe to start the final join and cleanup process.
+        logging.info(f"Triggering final processing for client_id: {client_id}")
+        
+        # Determine which join logic to run based on the configured data type
+        if self.other_data_type == 'RATINGS':
             self._process_ratings_join(client_id)
-        elif self.other_data_type == "CREDITS":
+        elif self.other_data_type == 'CREDITS':
             self._process_credits_join(client_id)
-        else:
-            logging.error(f"No final processing logic defined for type: {self.other_data_type}") 
+        
+        # After processing, signal EOF to downstream consumers
+        self._send_final_eof(client_id)
+
+        # Now that local processing is done, start the EOF token ring with other replicas
+        logging.info(f"Starting EOF token ring for client {client_id}.")
+        self.communicator.start_token_ring(client_id)
+        
+        # Wait for the ring to complete before cleaning up buffers
+        self.communicator.wait_eof_confirmation()
+        logging.info(f"EOF token ring completed for client {client_id}. Cleaning up buffers.")
+
+        # Safely remove the client's data from buffers after processing is complete
+        with self._lock:
+            self.movies_buffer.pop(client_id, None)
+            self.other_buffer.pop(client_id, None)
+            self.movies_eof_received.discard(client_id)
+            self.other_eof_received.discard(client_id)
+
+    def _send_final_eof(self, client_id):
+        """Sends a final EOF message downstream for a specific client."""
+        logging.info(f"Sending final EOF downstream for client {client_id}")
+        try:
+            # Depending on the join type, the structure of the final message might differ.
+            # Here, we assume a generic "finished" message is appropriate.
+            # For a more specific protocol, you might need different message types.
+            if self.other_data_type == 'RATINGS':
+                eof_message = self.protocol.create_movies_msg(client_id=client_id, movies=[], finished=True)
+            elif self.other_data_type == 'CREDITS':
+                # For credits, we might send two types of EOFs, one for movies and one for participations
+                # Or a single one. Let's send a movie EOF as an example.
+                eof_message = self.protocol.create_movies_msg(client_id=client_id, movies=[], finished=True)
+            else:
+                logging.warning(f"No specific final EOF message defined for type: {self.other_data_type}")
+                return
+
+            self.output_producer.send_message(eof_message, routing_key=self.config['routing_key_output'])
+        except Exception as e:
+            logging.error(f"Failed to send final EOF for client {client_id}: {e}", exc_info=True) 
