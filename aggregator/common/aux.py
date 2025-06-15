@@ -1,8 +1,8 @@
-
-
 def parse_aggregate_func(data_to_filter, key, field, operations, file_name):
     if file_name == "movies" and key == "countries":
         return aggr_movies_by_country(data_to_filter, field, operations)
+    if file_name == "joined_ratings":
+        return aggr_joined_ratings(data_to_filter, key, field, operations)
     
     result = dict()
     for data in getattr(data_to_filter, file_name):
@@ -34,3 +34,9 @@ def apply_operations(operations_partial, row_data, field, operations):
             operations_partial.setdefault("count", 0)
             operations_partial["count"] += 1
     return operations_partial
+
+def aggr_joined_ratings(data_to_filter, key, field, operations):
+    result = dict()
+    for rating in data_to_filter.ratings:
+        result = update_results(rating, key, field, operations, result)
+    return result

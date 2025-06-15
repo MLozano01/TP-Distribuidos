@@ -43,7 +43,7 @@ def create_yaml_file(replicas, datasets, config_files):
     print(f"  Transformers: {replicas['transformer']}")
     print(f"  Joiners: {replicas['joiner-ratings']} (ratings) - {replicas['joiner-credits']} (credits)")
     print(f"  Filters: {replicas['filter-2000-movies']} (2000) - {replicas['filter-arg-spa-movies']} (arg/spa) - {replicas['filter-arg-movies']} (arg) - {replicas['filter-single-country-movies']} (1 country) - {replicas['filter-decade-movies']} (decade)")
-    print(f"  Aggregators: {replicas['aggregator-sent']} (sent) - {replicas['aggregator-budget']} (budget)")
+    print(f"  Aggregators: {replicas['aggregator-sent']} (sent) - {replicas['aggregator-budget']} (budget) - {replicas['aggregator-ratings']} (ratings)")
     print(f"  Data controllers: {replicas['data-controller-movies']} (movies) - {replicas['data-controller-credits']} (credits) - {replicas['data-controller-ratings']} (ratings)")
     print(f"  Healthcheckers: {replicas['healthcheck_replicas']}")
     
@@ -243,7 +243,7 @@ def create_reducer(reducer_name, file_name):
 
 def create_aggregators(replicas, config_files):
     aggregators = ""
-    aggregator_names = ["aggregator-sent", "aggregator-budget"]
+    aggregator_names = ["aggregator-sent", "aggregator-budget", "aggregator-ratings"]
     for aggregator in aggregator_names:
         for i in range(1, replicas[aggregator] + 1):
             aggregators += create_aggregator(aggregator, config_files[aggregator], i, replicas[aggregator])
@@ -435,6 +435,7 @@ def create_replicas_dict(config):
     replicas['filter-decade-movies'] = int(config["REPLICAS"]["FILTER_DECADE_REPLICAS"])
     replicas['aggregator-sent'] = int(config["REPLICAS"]["AGGR_SENT_REPLICAS"])
     replicas['aggregator-budget'] = int(config["REPLICAS"]["AGGR_BUDGET_REPLICAS"])
+    replicas['aggregator-ratings'] = int(config["REPLICAS"]["AGGR_RATINGS_REPLICAS"])
     replicas['data-controller-movies'] = int(config["REPLICAS"]["DATA_CONTROLLER_MOVIES_REPLICAS"])
     replicas['data-controller-credits'] = int(config["REPLICAS"]["DATA_CONTROLLER_CREDITS_REPLICAS"])
     replicas['data-controller-ratings'] = int(config["REPLICAS"]["DATA_CONTROLLER_RATINGS_REPLICAS"])
@@ -470,6 +471,7 @@ def create_config_files_dict(config):
     
     config_files["aggregator-sent"] = config["CONFIGS_NAMES"]["AGGR_SENT_BY_REV"]
     config_files["aggregator-budget"] = config["CONFIGS_NAMES"]["AGGR_COUNTRY_BUDGET"]
+    config_files["aggregator-ratings"] = config["CONFIGS_NAMES"]["AGGR_RATINGS"]
     
     config_files["joiner-ratings"] = config["CONFIGS_NAMES"]["JOINER_RATINGS_CONFIG_SOURCE"]
     config_files["joiner-credits"] = config["CONFIGS_NAMES"]["JOINER_CREDITS_CONFIG_SOURCE"]

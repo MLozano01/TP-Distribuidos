@@ -301,24 +301,7 @@ services:
       - ./transformer/config.ini:/config.ini
     environment:
       - TRANSFORMER_REPLICA_ID=1
-      - TRANSFORMER_REPLICAS_COUNT=2
-    
-  transformer-2:
-    container_name: transformer-2
-    image: transformer:latest
-    networks:
-      - tp_network
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-        restart: true
-    links:
-      - rabbitmq
-    volumes:
-      - ./transformer/config.ini:/config.ini
-    environment:
-      - TRANSFORMER_REPLICA_ID=2
-      - TRANSFORMER_REPLICAS_COUNT=2
+      - TRANSFORMER_REPLICAS_COUNT=1
     
   
   aggregator-sent-1:
@@ -368,6 +351,23 @@ services:
       - rabbitmq
     volumes:
       - ./aggregator/aggregators/aggr_country_budget.ini:/config.ini
+    environment:
+      - AGGR_REPLICA_ID=1
+      - AGGR_REPLICA_COUNT=1
+    
+  aggregator-ratings-1:
+    container_name: aggregator-ratings-1
+    image: aggregator:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./aggregator/aggregators/aggr_ratings.ini:/config.ini
     environment:
       - AGGR_REPLICA_ID=1
       - AGGR_REPLICA_COUNT=1
@@ -475,29 +475,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - JOINER_REPLICA_ID=1
-      - JOINER_REPLICA_COUNT=2
-      - JOINER_NAME=joiner-ratings
-      - COMM_PORT=3030
-    
-  joiner-ratings-2:
-    container_name: joiner-ratings-2
-    image: joiner:latest
-    networks:
-      - tp_network
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-        restart: true
-    links:
-      - rabbitmq
-    volumes:
-      - ./joiner/config/joiner-ratings.ini:/config.ini
-    environment:
-      - PYTHONUNBUFFERED=1
-      - JOINER_REPLICA_ID=2
-      - JOINER_REPLICA_COUNT=2
-      - JOINER_NAME=joiner-ratings
-      - COMM_PORT=3030
+      - JOINER_REPLICA_COUNT=1
     
   
   joiner-credits-1:
@@ -516,29 +494,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - JOINER_REPLICA_ID=1
-      - JOINER_REPLICA_COUNT=2
-      - JOINER_NAME=joiner-credits
-      - COMM_PORT=3030
-    
-  joiner-credits-2:
-    container_name: joiner-credits-2
-    image: joiner:latest
-    networks:
-      - tp_network
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-        restart: true
-    links:
-      - rabbitmq
-    volumes:
-      - ./joiner/config/joiner-credits.ini:/config.ini
-    environment:
-      - PYTHONUNBUFFERED=1
-      - JOINER_REPLICA_ID=2
-      - JOINER_REPLICA_COUNT=2
-      - JOINER_NAME=joiner-credits
-      - COMM_PORT=3030
+      - JOINER_REPLICA_COUNT=1
     
   
   healthchecker-1:
@@ -561,7 +517,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          ["filter-arg-spa-movies-1", "filter-decade-movies-1", "reducer-top5", "reducer-average", "transformer-2", "joiner-credits-1", "filter-2000-movies-2", "data-controller-movies-1", "data-controller-ratings-2"]
+          ["transformer-1", "filter-single-country-movies-1", "aggregator-ratings-1", "reducer-top10", "reducer-query1", "aggregator-sent-1", "data-controller-movies-2", "data-controller-ratings-3"]
     
   healthchecker-2:
     container_name: healthchecker-2
@@ -583,7 +539,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          ["filter-arg-movies-1", "aggregator-budget-1", "reducer-top10", "reducer-query1", "joiner-ratings-1", "joiner-credits-2", "aggregator-sent-1", "data-controller-movies-2", "data-controller-ratings-3"]
+          ["filter-arg-spa-movies-1", "filter-decade-movies-1", "data-controller-credits-1", "reducer-max-min", "filter-2000-movies-1", "aggregator-sent-2", "data-controller-ratings-1"]
     
   healthchecker-3:
     container_name: healthchecker-3
@@ -605,7 +561,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          ["filter-single-country-movies-1", "data-controller-credits-1", "reducer-max-min", "transformer-1", "joiner-ratings-2", "filter-2000-movies-1", "aggregator-sent-2", "data-controller-ratings-1"]
+          ["filter-arg-movies-1", "aggregator-budget-1", "reducer-top5", "reducer-average", "filter-2000-movies-2", "data-controller-movies-1", "data-controller-ratings-2"]
     
 networks:
   tp_network:

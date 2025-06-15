@@ -1,4 +1,3 @@
-
 from common.aux import parse_aggregate_func
 from protocol.rabbit_protocol import RabbitMQ
 import logging
@@ -50,8 +49,14 @@ class Aggregator:
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
-        logging.debug(f"Received message, with routing key: {method.routing_key}")
-        decoded_msg = self.protocol.decode_movies_msg(body)
+        logging.info(f"Received message, with routing key: {method.routing_key}")
+        
+        if getattr(self, 'file_name', '') == 'joined_ratings':
+            decoded_msg = self.protocol.decode_joined_ratings_batch(body)
+            logging.info(f"Received rating: {decoded_msg}")
+        else:
+            decoded_msg = self.protocol.decode_movies_msg(body)
+
         self.update_actual_client_id_status(decoded_msg.client_id, START)
         if decoded_msg.finished:
             self.update_actual_client_id_status(decoded_msg.client_id, DONE)
@@ -62,7 +67,7 @@ class Aggregator:
     def aggregate(self, decoded_msg):
         try:
             result = parse_aggregate_func(decoded_msg, self.key, self.field, self.operations, self.file_name)
-            logging.info(f"Result: {result}")
+            logging.info(f"Aggregation result: {result}")
             self.queue_snd.publish(self.protocol.create_aggr_batch(result, decoded_msg.client_id))
             self.update_actual_client_id_status(decoded_msg.client_id, DONE)
         except Exception as e:
@@ -70,16 +75,21 @@ class Aggregator:
             return
     
     def publish_finished_msg(self, decoded_msg):
-        msg = decoded_msg.SerializeToString()
+        """Publishes an AggregationBatch with finished=True to downstream consumers."""
+        # Build an empty AggregationBatch finished message
+        finished_batch = self.protocol.create_aggr_batch({}, decoded_msg.client_id)
+        # Mark finished flag using protobuf (since create_aggr_batch doesn't set it)
+        aggr_pb = self.protocol.decode_aggr_batch(finished_batch)
+        aggr_pb.finished = True
+        finished_serialized = aggr_pb.SerializeToString()
 
-        logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
+        logging.info("Published finished signal to communication channel, here the encoded message: %s", finished_serialized)
         self.comm_instance.start_token_ring(decoded_msg.client_id)
         self.comm_instance.wait_eof_confirmation()
         logging.info("Received SEND finished signal from communication channel.")
-           
-        self.queue_snd.publish(msg)
-        logging.info(f"Published finished signal to {self.queue_snd.exchange}")
 
+        self.queue_snd.publish(finished_serialized)
+        logging.info(f"Published finished signal to {self.queue_snd.exchange}")
 
     def check_finished(self):
         while self.is_alive:

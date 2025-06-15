@@ -362,6 +362,27 @@ class Protocol:
     credits.ParseFromString(msg_buffer)
     return credits
   
+  def decode_joined_ratings_batch(self, buffer):
+      """Deserializes a JoinedRatingsBatch message."""
+      try:
+          batch = files_pb2.JoinedRatingsBatch()
+          batch.ParseFromString(buffer)
+          return batch
+      except Exception as e:
+          logging.error(f"Error decoding JoinedRatingsBatch: {e}")
+          return None
+
+  def encode_joined_rating_msg(self, client_id, movie_id, title, rating, timestamp):
+      """Encodes a single joined rating into a JoinedRatingsBatch of one."""
+      rating_pb = files_pb2.JoinedRating(
+          movie_id=movie_id,
+          title=title,
+          rating=rating,
+          timestamp=timestamp,
+      )
+      batch_pb = files_pb2.JoinedRatingsBatch(client_id=client_id)
+      batch_pb.ratings.append(rating_pb)
+      return batch_pb.SerializeToString()
 
   def create_client_result(self, data):
     message = bytearray()
@@ -400,7 +421,7 @@ class Protocol:
 
     for key, results in dict_results.items():
       aggr_pb = batch_pb.aggr_row.add()
-      aggr_pb.key = key
+      aggr_pb.key = str(key)
       if "sum" in results:
         aggr_pb.sum =  to_float(results.get("sum"))
       if "count" in results:
@@ -485,3 +506,41 @@ class Protocol:
     result = files_pb2.ResultBatch()
     result.ParseFromString(buffer)
     return result
+
+  def encode_movies_msg(self, movies_list, client_id, finished=False):
+      """Encodes a list of MovieCSV objects into a serialized MoviesCSV message.
+
+      Args:
+          movies_list (list[files_pb2.MovieCSV]): The list of movies to include in the batch.
+          client_id (int): The client identifier.
+          finished (bool): Whether this is a FINISHED signal (defaults to False).
+
+      Returns:
+          bytes: Serialized MoviesCSV protobuf message.
+      """
+      movies_pb = files_pb2.MoviesCSV()
+      if movies_list:
+          movies_pb.movies.extend(movies_list)
+      movies_pb.client_id = client_id
+      if finished:
+          movies_pb.finished = True
+      return movies_pb.SerializeToString()
+
+  def encode_actor_participations_msg(self, participations_list, client_id, finished=False):
+      """Encodes a list of ActorParticipation objects into a serialized ActorParticipationsBatch.
+
+      Args:
+          participations_list (list[files_pb2.ActorParticipation]): Actor participations to include.
+          client_id (int): The client identifier.
+          finished (bool): Whether this is a FINISHED signal (defaults to False).
+
+      Returns:
+          bytes: Serialized ActorParticipationsBatch protobuf message.
+      """
+      batch_pb = files_pb2.ActorParticipationsBatch()
+      if participations_list:
+          batch_pb.participations.extend(participations_list)
+      batch_pb.client_id = client_id
+      if finished:
+          batch_pb.finished = True
+      return batch_pb.SerializeToString()
