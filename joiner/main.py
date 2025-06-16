@@ -2,8 +2,6 @@ import logging
 import os
 import sys
 
-# Add the parent directory of 'joiner' to the Python path
-# This is to allow imports from 'protocol' and other packages in the parent directory
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
@@ -21,7 +19,6 @@ def main():
         replica_id = config.get("replica_id", "N/A")
         logging.info(f"Joiner Replica {replica_id} started")
         
-        # Get the join strategy from the factory
         join_strategy_name = config.get("other_data_type", "RATINGS")
         join_strategy = get_join_strategy(join_strategy_name)
 

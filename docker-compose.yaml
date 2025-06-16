@@ -475,7 +475,25 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - JOINER_REPLICA_ID=1
-      - JOINER_REPLICA_COUNT=1
+      - JOINER_REPLICA_COUNT=2
+    
+  joiner-ratings-2:
+    container_name: joiner-ratings-2
+    image: joiner:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./joiner/config/joiner-ratings.ini:/config.ini
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JOINER_REPLICA_ID=2
+      - JOINER_REPLICA_COUNT=2
     
   
   joiner-credits-1:

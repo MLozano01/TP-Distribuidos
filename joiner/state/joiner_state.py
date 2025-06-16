@@ -3,8 +3,8 @@ import logging
 
 class JoinerState:
     def __init__(self):
-        self.movies_buffer = {}  # {client_id: {movie_id: movie_data}}
-        self.unmatched_other_buffer = {}  # {client_id: {movie_id: [data, data, ...]}}
+        self.movies_buffer = {} 
+        self.unmatched_other_buffer = {} 
         self.movies_eof_received = set()
         self._lock = threading.Lock()
         logging.info("JoinerState initialized.")
@@ -62,7 +62,6 @@ class JoinerState:
                     del self.unmatched_other_buffer[client_id]
 
     def has_movies_eof(self, client_id):
-        # No lock needed for simple set lookup (atomic)
         return client_id in self.movies_eof_received
 
     def clear_client_state(self, client_id):
