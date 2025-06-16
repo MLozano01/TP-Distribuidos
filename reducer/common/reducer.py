@@ -56,6 +56,9 @@ class Reducer:
                 
                 self.queue_snd.publish(res_proto, key)
 
+                self.partial_result.pop(str(msg.client_id))
+                partial_results_backup.make_new_backup(self.partial_result, self.config['backup_file'])
+
                 res_decoded = protocol.decode_result(res_proto)
                 logging.info(f"Final result: {res_decoded}")
 
