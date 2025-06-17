@@ -75,9 +75,8 @@ class Filter:
         try:
             result = parse_filter_funct(decoded_msg, self.filter_by)
             client_id = decoded_msg.client_id
-            logging.info(f"result: {result}")
             if result:
-                self.publisher.publish(result, client_id)
+                self.publisher.publish(result, client_id, decoded_msg.secuence_number)
             else:
                 logging.info(f"No matched the filter criteria.")
             logging.info(f"sending status")

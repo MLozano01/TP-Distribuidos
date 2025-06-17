@@ -18,6 +18,7 @@ class Client:
 
         self.results_received = set()
         self.total_expected = 5
+        self.secuence_number= {"movies":0, "ratings":0, "credits":0}
 
 
     def run(self):
@@ -114,8 +115,11 @@ class Client:
     def _forward_to_data_controller(self, message):
         try:
             # Add client ID to the message
-            file_type, message_with_client_id = self.protocol.add_client_id(message, self.client_id)
-            self.forward_queue.publish(message_with_client_id, file_type)
+            file_type = self.protocol.get_file_type(message)
+
+            message_with_metadata = self.protocol.add_metadata(message, self.client_id, self.secuence_number[file_type])
+            self.secuence_number[file_type] += 1 
+            self.forward_queue.publish(message_with_metadata, file_type)
         except Exception as e:
             logging.error(f"Failed to forward message to data controller: {e}")
 

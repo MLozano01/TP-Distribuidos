@@ -102,16 +102,25 @@ class Protocol:
     message.extend(data)
     return message
 
+  def get_file_type(self, message):
+    """Reads the message and returns the file type of the data received."""
+    code = int.from_bytes(message[:CODE_LENGTH], byteorder='big')
+    data = message[CODE_LENGTH + INT_LENGTH:]
+    
+    type = int.from_bytes(data, byteorder='big') if code == END_FILE_CODE else code
+    
+    return self.__codes_to_string[type]
 
-  def add_client_id(self, message, client_id):
+  def add_metadata(self, message, client_id, secuence_number):
     """Adds client ID to the message to call before forwarding to the distributed system."""
     code = int.from_bytes(message[:CODE_LENGTH], byteorder='big')
     length = int.from_bytes(message[CODE_LENGTH:CODE_LENGTH + INT_LENGTH], byteorder='big')
     data = message[CODE_LENGTH + INT_LENGTH:]
     
-    # Add client ID to the data
+    # Add metadata to the data
     client_id_bytes = client_id.to_bytes(INT_LENGTH, byteorder='big')
-    new_data = client_id_bytes + data
+    secuence_number_bytes = secuence_number.to_bytes(INT_LENGTH, byteorder='big')
+    new_data = client_id_bytes + secuence_number_bytes + data
     
     # Create new message with updated length
     new_message = bytearray()
@@ -119,17 +128,20 @@ class Protocol:
     new_message.extend((length + INT_LENGTH).to_bytes(INT_LENGTH, byteorder='big'))
     new_message.extend(new_data)
     
-    type = int.from_bytes(data, byteorder='big') if code == END_FILE_CODE else code
-    file_type = self.__codes_to_string[type]
-    return file_type, new_message
+    return new_message
 
   def decode_client_msg(self, msg_buffer, columns):
     code = int.from_bytes(msg_buffer[:CODE_LENGTH], byteorder='big')
-    length = int.from_bytes(msg_buffer[CODE_LENGTH:CODE_LENGTH + INT_LENGTH], byteorder='big')
-    
+    amount_read = CODE_LENGTH
+    length = int.from_bytes(msg_buffer[amount_read:amount_read + INT_LENGTH], byteorder='big')
+    amount_read += INT_LENGTH 
     # Extract client ID
-    client_id = int.from_bytes(msg_buffer[CODE_LENGTH + INT_LENGTH:CODE_LENGTH + 2*INT_LENGTH], byteorder='big')
-    msg = msg_buffer[CODE_LENGTH + 2*INT_LENGTH:]
+    client_id = int.from_bytes(msg_buffer[amount_read:amount_read + INT_LENGTH], byteorder='big')
+    amount_read += INT_LENGTH 
+    secuence_number = int.from_bytes(msg_buffer[amount_read:amount_read + INT_LENGTH], byteorder='big')
+    amount_read += INT_LENGTH 
+    
+    msg = msg_buffer[amount_read:]
     
     if code == END_FILE_CODE:
       file_code = int.from_bytes(msg[:CODE_LENGTH], byteorder='big')
@@ -137,6 +149,7 @@ class Protocol:
       msg_finished = self.__file_classes[file_type]
       msg_finished.finished = True
       msg_finished.client_id = client_id
+      msg_finished.secuence_number = secuence_number
       return file_type, msg_finished
 
     file_type = self.__codes_to_types[code]
@@ -147,6 +160,7 @@ class Protocol:
     # Then process the batch and add client_id to the final message
     batch = self.lines_to_batch(csv_batch, columns, file_type)
     batch.client_id = client_id
+    batch.secuence_number = secuence_number
     return file_type, batch
 
   def lines_to_batch(self, csv_batch, columns, file_type):
@@ -404,20 +418,22 @@ class Protocol:
     actor_participations_pb.client_id = client_id
     return actor_participations_pb.SerializeToString()
 
-  def create_movie_list(self, movies, client_id):
+  def create_movie_list(self, movies, client_id, secuence_number):
     movies_pb = files_pb2.MoviesCSV()
 
     for movie in movies:
       movies_pb.movies.append(movie)
 
     movies_pb.client_id = client_id
+    movies_pb.secuence_number = secuence_number
     movies_pb_str = movies_pb.SerializeToString()
     return movies_pb_str
 
-  def create_aggr_batch(self, dict_results, client_id):
+  def create_aggr_batch(self, dict_results, client_id, secuence_number):
     batch_pb = files_pb2.AggregationBatch()
 
     batch_pb.client_id = client_id
+    batch_pb.secuence_number = secuence_number
 
     for key, results in dict_results.items():
       aggr_pb = batch_pb.aggr_row.add()
