@@ -23,7 +23,6 @@ def parse_reduce_funct(data_to_reduce, reduce_by, result, client_id):
         return reduce_top5(protocol.decode_aggr_batch(data_to_reduce), args, result, client_id)
     
     if args[0] == "top" and args[1] == "10":
-        logging.info(f"[parse_reduce_funct] client_id: {client_id}")
         return reduce_top10(protocol.decode_actor_participations_batch(data_to_reduce), args, result, client_id)
     
     if args[0] == "max-min":
@@ -44,33 +43,29 @@ def parse_final_result(reduce_by, partial_results, client_id):
     if args[0] == "avg":
         return calculate_avg(client_partial_results)
     if args[0] == "top" and args[1] == "5":
-        # Sort countries by sum (value) in descending order
+
 
         sorted_countries = sorted(client_partial_results.items(), key=operator.itemgetter(1), reverse=True)
-        # Take the top 5
         top_5_countries = dict(sorted_countries[:int(args[1])])
-        logging.debug(f"[parse_final_result] top_5_countries: {top_5_countries}") # Log calculated top 5
+        logging.debug(f"[parse_final_result] top_5_countries: {top_5_countries}")
 
         res = {}
-        res["country"] = top_5_countries # Assign the actual top 5 dictionary
-        logging.debug(f"[parse_final_result] Returning: {res}") # Log return value
+        res["country"] = top_5_countries 
+        logging.debug(f"[parse_final_result] Returning: {res}") 
         return res
     if args[0] == "top" and args[1] == "10":
-        # Sort actors by count (value) in descending order
         sorted_actors = sorted(client_partial_results.items(), key=operator.itemgetter(1), reverse=True)
-        # Take the top 10
         top_10_actors = dict(sorted_actors[:int(args[1])]) 
         logging.debug(f"[parse_final_result] top_10_actors: {top_10_actors}")
         
         res = {}
-        res["actor"] = top_10_actors # Assign the actual top 10 dictionary
+        res["actor"] = top_10_actors
         logging.debug(f"[parse_final_result] Returning: {res}")
         return res
     if args[0] == "max-min":
         if not client_partial_results:
             return {}
 
-        # Compute average rating per movie
         avg_per_movie = {}
         for title, sc in client_partial_results.items():
             total_sum = sc.get("sum", 0)
@@ -153,8 +148,6 @@ def reduce_max_min(data_to_reduce, reduce_args, result, client_id):
         movie_dict = result[client_id].setdefault(row.key, {"sum": 0, "count": 0})
         movie_dict["sum"] += row.sum
         movie_dict["count"] += row.count
-
-    logging.info(f"[REDUCE_MAX_MIN] client_id: {client_id}, result: {result}")
 
     return result
 

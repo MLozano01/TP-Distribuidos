@@ -56,7 +56,6 @@ class JoinerNode:
 
     def _setup_producer(self):
         try:
-            # The producer in rabbit_protocol.py does not need a queue name
             self.output_producer = RabbitMQ(
                 exchange=self.config['exchange_output'],
                 q_name=None, 
