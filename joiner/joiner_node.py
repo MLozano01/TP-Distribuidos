@@ -2,6 +2,7 @@ import logging
 import signal
 import threading
 import time
+import socket
 from protocol.rabbit_protocol import RabbitMQ
 from protocol.protocol import Protocol
 from state.joiner_state import JoinerState
@@ -18,6 +19,7 @@ class JoinerNode:
         self.output_producer = None
         self._stop_event = threading.Event()
         self._threads = []
+        self._hc_sckt = None
 
     def start(self):
         self._setup_signal_handlers()
@@ -29,7 +31,8 @@ class JoinerNode:
 
             self._threads = [
                 threading.Thread(target=self._run_movies_consumer, name="MoviesConsumerThread", daemon=True),
-                threading.Thread(target=self._run_other_consumer, name="OtherConsumerThread", daemon=True)
+                threading.Thread(target=self._run_other_consumer, name="OtherConsumerThread", daemon=True),
+                threading.Thread(target=self._run_healthcheck_listener, name="HealthCheckThread", daemon=True)
             ]
             for t in self._threads:
                 t.start()
@@ -51,6 +54,10 @@ class JoinerNode:
             # Wait for consumer threads to finish
             for t in self._threads:
                 t.join(timeout=5.0)
+
+            if self._hc_sckt:
+                self._hc_sckt.close()
+                self._hc_sckt = None
 
             logging.info(f"Joiner Replica {self.replica_id} shutdown complete.")
 
@@ -105,6 +112,28 @@ class JoinerNode:
             if not self._stop_event.is_set():
                 time.sleep(5)
         logging.info("Other consumer thread finished.")
+
+    def _run_healthcheck_listener(self):
+        self._hc_sckt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._hc_sckt.bind(('', self.config['hc_port']))
+        self._hc_sckt.listen(self.config['listen_backlog'])
+        logging.info("Healthcheck listener started")
+
+        while not self._stop_event.is_set():
+            try:
+                conn, addr = self._hc_sckt.accept()
+                logging.info(f"Received healthcheck from {addr}")
+                conn.close()
+            except socket.error as e:
+                if self._stop_event.is_set():
+                    logging.info("Socket closed for shutdown.")
+                    break
+                logging.error(f"Socket error in healthcheck listener: {e}")
+            except Exception as e:
+                if not self._stop_event.is_set():
+                    logging.error(f"An unexpected error occurred in healthcheck listener: {e}", exc_info=True)
+        
+        logging.info("Healthcheck listener stopped.")
 
     def _process_movie_message(self, ch, method, properties, body):
         logging.info(f"[Node] Received a movie message. Size: {len(body)} bytes.")
