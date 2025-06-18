@@ -17,6 +17,8 @@ def initialize_config():
         config_params["logging_level"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"])
         config_params["joiner_name"] = os.getenv('JOINER_NAME', config["DEFAULT"]["JOINER_NAME"])
         config_params["other_data_type"] = os.getenv('OTHER_DATA_TYPE', config["DEFAULT"]["OTHER_DATA_TYPE"]).upper()
+        config_params['hc_port'] = int(os.getenv('HC_PORT', config['DEFAULT']['HC_PORT']))
+        config_params['listen_backlog'] = int(os.getenv('LISTEN_BACKLOG', config['DEFAULT']['LISTEN_BACKLOG']))
 
         # Replica Info
         config_params["replica_id"] = int(os.getenv('JOINER_REPLICA_ID'))
@@ -54,4 +56,4 @@ def initialize_config():
     config_params["queue_other_name"] = f"{config_params['queue_other_base']}{replica_id}"
     
     logging.info(f"Joiner Config Initialized. Replica ID: {config_params['replica_id']}")
-    return config_params, comms_config 
+    return config_params 
