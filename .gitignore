@@ -5,3 +5,5 @@ results_ratings.json
 results_ratings_small.json
 reducer/backup/*.json
 reducer/backup/__pycache__/
+__pycache__/
+*.pyc
