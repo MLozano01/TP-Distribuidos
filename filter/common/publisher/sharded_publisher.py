@@ -45,9 +45,17 @@ class ShardedPublisher(Publisher):
 
     def publish_finished_signal(self, msg):
         msg_to_send = msg.SerializeToString()
-        self.queue_snd_movies_to_ratings_joiner.publish(msg_to_send, msg.client_id)
-        self.queue_snd_movies_to_credits_joiner.publish(msg_to_send, msg.client_id)
-        logging.info(f"Published movie finished signal for client {msg.client_id} to both joiners.")
+        pub_routing_key = str(msg.client_id)
+
+        # Publish finished signal to RATINGS joiner
+        self.queue_snd_movies_to_ratings_joiner.publish(msg_to_send, pub_routing_key)
+
+        # Publish finished signal to CREDITS joiner
+        self.queue_snd_movies_to_credits_joiner.publish(msg_to_send, pub_routing_key)
+
+        logging.info(
+            f"Published movie finished signal for client {msg.client_id} to both joiners with routing_key={pub_routing_key}."
+        )
 
     def close(self):
         if self.queue_snd_movies_to_ratings_joiner:
