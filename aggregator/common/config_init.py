@@ -43,7 +43,7 @@ def initialize_config():
 
         communication_config["id"] = os.getenv('AGGR_REPLICA_ID')
         communication_config["comm_port"] = os.getenv('COMM_PORT', config["COMM"]["COMM_PORT"])
-        communication_config["name"] = os.getenv('COMM_PORT', config["COMM"]["COMM_NAME"])
+        communication_config["name"] = os.getenv('COMM_NAME', config["COMM"]["COMM_NAME"])
         communication_config["replicas_count"] = int(os.getenv("AGGR_REPLICA_COUNT"))
         
     except KeyError as e:
