@@ -326,7 +326,6 @@ def create_joiner(service_base_name, replica_id, total_replicas, config_source_p
       - JOINER_REPLICA_ID={replica_id}
       - JOINER_REPLICA_COUNT={total_replicas}
       - JOINER_NAME={service_base_name}
-      - COMM_PORT=3030
       - HC_PORT=3030
       - LISTEN_BACKLOG=10
     """

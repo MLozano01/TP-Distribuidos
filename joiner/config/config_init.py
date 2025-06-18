@@ -10,7 +10,6 @@ def initialize_config():
     config.read(CONFIG_FILE)
 
     config_params = {}
-    comms_config = {}
 
     try:
         # General Config
@@ -23,12 +22,6 @@ def initialize_config():
         # Replica Info
         config_params["replica_id"] = int(os.getenv('JOINER_REPLICA_ID'))
         config_params["replicas_count"] = int(os.getenv('JOINER_REPLICA_COUNT'))
-
-        # Communicator config
-        comms_config["id"] = config_params["replica_id"]
-        comms_config["name"] = config_params["joiner_name"]
-        comms_config["comm_port"] = int(os.getenv('COMM_PORT', config["DEFAULT"]["COMM_PORT"]))
-        comms_config["replicas_count"] = config_params["replicas_count"]
 
         # RabbitMQ Config
         config_params["rabbit_host"] = os.getenv('RABBIT_HOST', config["RABBITMQ"]["RABBIT_HOST"])
