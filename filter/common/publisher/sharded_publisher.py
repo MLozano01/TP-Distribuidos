@@ -24,7 +24,7 @@ class ShardedPublisher(Publisher):
 
         exchange_ratings = self.queue_snd_movies_to_ratings_joiner.exchange
         exchange_credits = self.queue_snd_movies_to_credits_joiner.exchange
-        logging.info(f"Publishing {len(result_list)} filtered messages individually by movie_id to exchanges '{exchange_ratings}' and '{exchange_credits}'.")
+        # logging.info(f"Publishing {len(result_list)} filtered messages individually by movie_id to exchanges '{exchange_ratings}' and '{exchange_credits}'.")
 
         movie_batch_bytes = self.protocol.create_movie_list(result_list, client_id, secuence_number)
         pub_routing_key = str(client_id)
