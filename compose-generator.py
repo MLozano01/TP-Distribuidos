@@ -307,6 +307,11 @@ def create_joiner(service_base_name, replica_id, total_replicas, config_source_p
     service_name = f"{service_base_name}-{replica_id}"
     container_name = service_name # Use the same unique name
 
+    # Ensure host backup directory exists so docker-compose bind mount works
+    os.makedirs("joiner/backup", exist_ok=True)
+
+    backup_file = f"joiner_state_{service_name}.pkl"
+
     joiner_yaml = f"""
   {service_name}:
     container_name: {container_name}
@@ -321,6 +326,7 @@ def create_joiner(service_base_name, replica_id, total_replicas, config_source_p
       - rabbitmq
     volumes:
       - {config_source_path}:{CONFIG_FILE_TARGET}
+      - ./joiner/backup:/backup
     environment:
       - PYTHONUNBUFFERED=1
       - JOINER_REPLICA_ID={replica_id}
@@ -328,6 +334,7 @@ def create_joiner(service_base_name, replica_id, total_replicas, config_source_p
       - JOINER_NAME={service_base_name}
       - HC_PORT=3030
       - LISTEN_BACKLOG=10
+      - BACKUP_FILE={backup_file}
     """
     return joiner_yaml
 

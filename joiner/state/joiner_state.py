@@ -1,13 +1,50 @@
 import threading
 import logging
+from typing import Any, Dict, Set, Optional
+
+from common.state_persistence import StatePersistence
 
 class JoinerState:
-    def __init__(self):
-        self.movies_buffer = {} 
-        self.unmatched_other_buffer = {} 
-        self.movies_eof_received = set()
+    """Thread-safe state container for the *Joiner* node.
+
+    If a ``StatePersistence`` instance is provided the state is automatically
+    saved *atomically* after each mutating operation and restored on start-up.
+    """
+
+    def __init__(self, persistence: Optional[StatePersistence] = None):
+        # Public attributes need to be pickle/JSON serialisable if they are to
+        # be persisted.
+        self.movies_buffer: Dict[str, Dict[int, Any]] = {}
+        self.unmatched_other_buffer: Dict[str, Dict[int, Any]] = {}
+        self.movies_eof_received: Set[str] = set()
+
         self._lock = threading.Lock()
-        logging.info("JoinerState initialized.")
+        self._persistence = persistence
+
+        # Attempt to restore previous state if a persistence manager is given.
+        if self._persistence is not None:
+            persisted = self._persistence.load(default_factory=dict)
+            if persisted:
+                self.movies_buffer = persisted.get("movies_buffer", {})
+                self.unmatched_other_buffer = persisted.get("unmatched_other_buffer", {})
+                # Stored as list for JSON compatibility when using pickle we
+                # can load a set directly – but handling consistently is fine.
+                self.movies_eof_received = set(persisted.get("movies_eof_received", []))
+
+        logging.info("JoinerState initialized (restored=%s).", bool(self._persistence))
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+    def _persist(self):
+        if self._persistence is None:
+            return
+        snapshot = {
+            "movies_buffer": self.movies_buffer,
+            "unmatched_other_buffer": self.unmatched_other_buffer,
+            "movies_eof_received": list(self.movies_eof_received),
+        }
+        self._persistence.save(snapshot)
 
     def add_movie_and_process_unmatched(self, client_id, movie):
         with self._lock:
@@ -21,6 +58,8 @@ class JoinerState:
                     unmatched_data = self.unmatched_other_buffer[client_id].pop(movie.id)
                     if not self.unmatched_other_buffer[client_id]:
                         del self.unmatched_other_buffer[client_id]
+            # Persist after mutation
+            self._persist()
         return unmatched_data
 
     def get_movie(self, client_id, movie_id):
@@ -38,6 +77,8 @@ class JoinerState:
                 self.unmatched_other_buffer[client_id][movie_id] = []
             
             self.unmatched_other_buffer[client_id][movie_id].append(data)
+            # Persist after mutation
+            self._persist()
 
     def set_movies_eof(self, client_id):
         with self._lock:
@@ -61,6 +102,9 @@ class JoinerState:
                 if not unmatched_ratings_for_client:
                     del self.unmatched_other_buffer[client_id]
 
+            # Persist after mutation
+            self._persist()
+
     def has_movies_eof(self, client_id):
         return client_id in self.movies_eof_received
 
@@ -74,3 +118,5 @@ class JoinerState:
             self.unmatched_other_buffer.pop(client_id, None)
             self.movies_eof_received.discard(client_id)
             logging.info(f"Cleared all state for client {client_id}") 
+            # Persist after mutation
+            self._persist() 
