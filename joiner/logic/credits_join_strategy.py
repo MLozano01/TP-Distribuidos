@@ -29,10 +29,8 @@ class CreditsJoinStrategy(JoinStrategy):
         for credit in credits_msg.credits:
             movie_data = state.get_movie(client_id, credit.id)
             if movie_data:
-                # Movie is already in our buffer, join and send immediately
                 self._join_and_send([credit], movie_data, client_id, producer)
             else:
-                # Movie not seen yet. Check if movie stream has ended.
                 if state.has_movies_eof(client_id):
                     logging.warning(f"Credit for movie {credit.id} for client {client_id} arrived after movies EOF, and movie not in buffer. Discarding.")
                 else:
@@ -56,7 +54,6 @@ class CreditsJoinStrategy(JoinStrategy):
             return
             
         try:
-            # This will probably send a list of ActorParticipation
             msg = self.protocol.encode_actor_participations_msg(participations, client_id)
             producer.publish(msg)
 
@@ -65,7 +62,6 @@ class CreditsJoinStrategy(JoinStrategy):
 
     def process_unmatched_data(self, unmatched_credits, movie_data, client_id, producer):
         logging.info(f"Processing {len(unmatched_credits)} unmatched credits for movie {movie_data.id}, client {client_id}")
-        # In credits, we can batch the previously unmatched credits for a movie
         self._join_and_send(unmatched_credits, movie_data, client_id, producer)
 
     def process_other_eof(self, client_id, state):

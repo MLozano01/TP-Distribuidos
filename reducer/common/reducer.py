@@ -38,7 +38,6 @@ class Reducer:
         try:
             protocol = Protocol()
 
-            # Try to decode as AggregationBatch first (used by several reducers)
             aggr_msg = protocol.decode_aggr_batch(data)
 
             is_aggr_msg = (len(aggr_msg.aggr_row) > 0) or aggr_msg.finished
@@ -46,7 +45,6 @@ class Reducer:
             if is_aggr_msg:
                 msg = aggr_msg
             else:
-                # Fallback to MoviesCSV (max-min older version, query1, etc.)
                 msg = protocol.decode_movies_msg(data)
 
             if msg.finished:
@@ -57,6 +55,9 @@ class Reducer:
                 key = f'{self.config["routing_snd_key"]}_{msg.client_id}'
                 
                 self.queue_snd.publish(res_proto, key)
+
+                self.partial_result.pop(str(msg.client_id))
+                partial_results_backup.make_new_backup(self.partial_result, self.config['backup_file'])
 
                 res_decoded = protocol.decode_result(res_proto)
                 logging.info(f"Final result: {res_decoded}")
