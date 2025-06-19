@@ -41,4 +41,20 @@ class JoinStrategy(ABC):
         Handles the logic when an "other" stream's EOF is received.
         For some strategies, this might involve cleaning up resources.
         """
+        pass
+
+    @abstractmethod
+    def handle_movie_eof(self, client_id, state):
+        """Called when the movies stream finishes for *client_id*.
+        The default implementation may purge now-orphan *other* data.
+        """
+        pass
+
+    @abstractmethod
+    def handle_client_finished(self, client_id, state, producer):
+        """Called exactly once per client when *both* streams have signalled EOF.
+
+        The method is responsible for emitting the consolidated EOF message
+        downstream (if required by the protocol).
+        """
         pass 

@@ -151,11 +151,14 @@ class JoinerNode:
 
             if movies_msg.finished:
                 logging.info(f"[Node] Movie EOF received for client {client_id}.")
-                self.state.set_movies_eof(client_id)
+                # Mark EOF for movies stream and allow strategy to purge orphans
+                self.state.set_stream_eof(client_id, "movies")
+                self.join_strategy.handle_movie_eof(client_id, self.state)
+                self._check_and_handle_client_finished(client_id)
                 return
 
             for movie in movies_msg.movies:
-                unmatched_data = self.state.add_movie_and_process_unmatched(client_id, movie)
+                unmatched_data = self.state.add_movie(client_id, movie)
                 if unmatched_data:
                     self.join_strategy.process_unmatched_data(unmatched_data, movie, client_id, self.output_producer)
             
@@ -171,7 +174,15 @@ class JoinerNode:
             return
 
         try:
-            self.join_strategy.process_other_message(body, self.state, self.output_producer)
+            client_finished_id = self.join_strategy.process_other_message(
+                body, self.state, self.output_producer
+            )
+
+            # When the other-stream sends EOF, the strategy will have set the
+            # corresponding flag and returned the client_id so we can evaluate
+            # completion.
+            if client_finished_id:
+                self._check_and_handle_client_finished(client_finished_id)
         except Exception as e:
             logging.error(f"[Node] Error processing other message: {e}", exc_info=True)
 
@@ -181,4 +192,21 @@ class JoinerNode:
 
     def _handle_shutdown(self, signum, frame):
         logging.warning(f"Received signal {signum}. Initiating shutdown...")
-        self.stop() 
+        self.stop()
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+    def _check_and_handle_client_finished(self, client_id: str):
+        """If both streams have finished for *client_id*, finalise processing."""
+        if not self.state.has_both_eof(client_id):
+            return
+
+        logging.info(f"[Node] Both streams finished for client {client_id}. Finalising...")
+        try:
+            self.join_strategy.handle_client_finished(
+                client_id, self.state, self.output_producer
+            )
+        finally:
+            # Always cleanup local buffers to avoid leaks.
+            self.state.remove_client_data(client_id) 
