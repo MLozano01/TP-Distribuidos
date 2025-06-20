@@ -81,9 +81,4 @@ class CreditsJoinStrategy(JoinStrategy):
         state.purge_orphan_other_after_movie_eof(client_id)
 
     def handle_client_finished(self, client_id, state, producer):
-        send_finished_signal(producer, client_id, self.protocol)
-
-    # ------------------------------------------------------------------
-    def process_other_eof(self, client_id, state):  # noqa: D401  pylint: disable=unused-argument
-        """Compatibility stub – logic handled in process_other_message."""
-        pass 
+        send_finished_signal(producer, client_id, self.protocol) 
