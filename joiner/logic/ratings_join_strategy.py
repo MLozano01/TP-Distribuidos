@@ -93,10 +93,3 @@ class RatingsJoinStrategy(JoinStrategy):
     def handle_client_finished(self, client_id, state, producer):
         """Both streams are done – propagate consolidated EOF downstream."""
         send_finished_signal(producer, client_id, self.protocol)
-
-    # ------------------------------------------------------------------
-    # Backwards-compat: unused but required by older interface
-    # ------------------------------------------------------------------
-    def process_other_eof(self, client_id, state):  # noqa: D401  pylint: disable=unused-argument
-        """Maintained for compatibility – logic now lives elsewhere."""
-        pass 
