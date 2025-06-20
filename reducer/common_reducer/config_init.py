@@ -35,7 +35,7 @@ def config_reducer():
         config_params["backup_file"] = os.getenv("BACKUP_FILE")
 
         config_params["query_id"] = int(os.getenv('QUERY_ID', reducer_config["DEFAULT"].get('QUERY_ID', 0)))
-        config_params["reducer_name"] = int(os.getenv('REDUCER_NAME'))
+        config_params["reducer_name"] = os.getenv('REDUCER_NAME')
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
     except ValueError as e:

@@ -85,7 +85,7 @@ class StatePersistence:
         actual_file = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_{client_id}"
         try:
             with open(tempfile, 'a') as f:
-                f.wite(f"{info_to_save}\n")
+                f.write(f"{info_to_save}\n")
                 f.flush()
             os.replace(tempfile, actual_file)
 
@@ -95,12 +95,15 @@ class StatePersistence:
     def load_saved_secuence_number_data(self):
         try:
             backup = {}
+
             for filepath in glob.glob(f'/backup/{self.BASE_FILE_NAME}_{self.node_info}_*'):
                 client = filepath.split("_")[3]
                 with open(filepath) as f:
                     backup.setdefault(client, [])
                     for line in f:
-                        backup[client].append(line.strip())            
+                        backup[client].append(line.strip())     
+
+            return backup       
             
         except Exception as e:
             logging.error(f"ERROR reading from file: {e}")
@@ -110,5 +113,14 @@ class StatePersistence:
         try:
             if Path(self._file_path).exists():
                 os.remove(self._file_path)
+        except Exception as exc:
+            logging.error(f"[StatePersistence] Error clearing state: {exc}") 
+
+    def clean_client(self, client_id) -> None:
+        """Remove the file from disk if it exists."""
+        path = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_{client_id}"
+        try:
+            if Path(path).exists():
+                os.remove(path)
         except Exception as exc:
             logging.error(f"[StatePersistence] Error clearing state: {exc}") 

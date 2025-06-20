@@ -1,5 +1,5 @@
 from protocol.rabbit_protocol import RabbitMQ
-from common.aux import parse_reduce_funct, parse_final_result
+from common_reducer.aux import parse_reduce_funct, parse_final_result
 import logging
 import json
 from protocol.protocol import Protocol
@@ -40,7 +40,7 @@ class Reducer:
         try:
             protocol = Protocol()
 
-            msg = self.__get_msg(data, protocol)
+            msg = self._get_msg(data, protocol)
 
             if self._is_repeated(str(msg.client_id), str(msg.secuence_number)):
                 logging.info(f"Discading a repeated package of secuence number {msg.secuence_number}")
@@ -72,6 +72,9 @@ class Reducer:
     def _clean_up(self, client_id):
         self.partial_result.pop(client_id)
         self._state_manager.save(self.partial_result)
+
+        self.batches_seen.remove(client_id)
+        self._state_manager.clean_client(client_id)
 
     def _handle_finished(self, client_id, protocol):
         result = parse_final_result(self.reduce_by, self.partial_result, client_id)
