@@ -1,6 +1,7 @@
 FROM python:3.9.7-slim
 
 COPY reducer /
+COPY common /common
 COPY protocol /protocol
 
 COPY requirements.txt /
