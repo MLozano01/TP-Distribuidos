@@ -116,14 +116,12 @@ class DataController:
             self.send_queue.publish(movies_pb.SerializeToString())
 
     def publish_ratings(self, ratings_csv):
-        ratings_by_movie = filter_ratings(ratings_csv)
-        for movie_id, batch in ratings_by_movie.items():
-            self.send_queue.publish(batch.SerializeToString(), routing_key=str(movie_id))
+        ratings_batch = filter_ratings(ratings_csv)
+        self.send_queue.publish(ratings_batch.SerializeToString(), routing_key=str(ratings_batch.client_id))
 
     def publish_credits(self, credits_csv):
-        credits_by_movie = filter_credits(credits_csv)
-        for movie_id, batch in credits_by_movie.items():
-            self.send_queue.publish(batch.SerializeToString(), routing_key=str(movie_id))
+        credits_batch = filter_credits(credits_csv)
+        self.send_queue.publish(credits_batch.SerializeToString(), routing_key=str(credits_batch.client_id))
 
     def stop(self):
         """Stop the DataController and close all connections"""

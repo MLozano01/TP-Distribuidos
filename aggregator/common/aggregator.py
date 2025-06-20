@@ -68,7 +68,13 @@ class Aggregator:
         try:
             result = parse_aggregate_func(decoded_msg, self.key, self.field, self.operations, self.file_name)
             logging.info(f"Aggregation result: {result}")
-            self.queue_snd.publish(self.protocol.create_aggr_batch(result, decoded_msg.client_id))
+            self.queue_snd.publish(
+                self.protocol.create_aggr_batch(
+                    result,
+                    decoded_msg.client_id,
+                    decoded_msg.secuence_number,
+                )
+            )
             self.update_actual_client_id_status(decoded_msg.client_id, DONE)
         except Exception as e:
             logging.error(f"Error processing message: {e}")
@@ -77,7 +83,7 @@ class Aggregator:
     def publish_finished_msg(self, decoded_msg):
         """Publishes an AggregationBatch with finished=True to downstream consumers."""
         # Build an empty AggregationBatch finished message
-        finished_batch = self.protocol.create_aggr_batch({}, decoded_msg.client_id)
+        finished_batch = self.protocol.create_aggr_batch({}, decoded_msg.client_id, decoded_msg.secuence_number)
         # Mark finished flag using protobuf (since create_aggr_batch doesn't set it)
         aggr_pb = self.protocol.decode_aggr_batch(finished_batch)
         aggr_pb.finished = True

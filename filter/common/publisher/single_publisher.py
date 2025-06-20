@@ -15,10 +15,10 @@ class SinglePublisher(Publisher):
         self.queue_snd_movies = RabbitMQ(self.exchange_snd, self.queue_snd_name, self.routing_snd_key, self.exc_snd_type)
         logging.info(f"Initialized single sender: exchange={self.queue_snd_movies.exchange}, type={self.queue_snd_movies.exc_type}, key={self.queue_snd_movies.key}")
 
-    def publish(self, result, client_id):
+    def publish(self, result, client_id, secuence_number):
         if self.queue_snd_movies:
-            logging.info(f"Publishing batch of {len(result)} filtered messages with routing key: '{self.queue_snd_movies.key}' to exchange '{self.queue_snd_movies.exchange}' ({self.queue_snd_movies.exc_type}).")
-            self.queue_snd_movies.publish(self.protocol.create_movie_list(result, client_id))
+            # logging.info(f"Publishing batch of {len(result)} filtered messages with routing key: '{self.queue_snd_movies.key}' to exchange '{self.queue_snd_movies.exchange}' ({self.queue_snd_movies.exc_type}).")
+            self.queue_snd_movies.publish(self.protocol.create_movie_list(result, client_id, secuence_number))
         else:
             logging.error("Single sender queue not initialized for non-sharded publish.")
 
