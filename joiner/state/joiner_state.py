@@ -17,12 +17,26 @@ class JoinerState:
     those methods should be treated as best-effort snapshots.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, state_manager: "StatePersistence | None" = None) -> None:
+        self._state_manager = state_manager
+
+        persisted = {}
+        if self._state_manager is not None:
+            try:
+                persisted = self._state_manager.load(default_factory=dict)
+                logging.info(
+                    f"[JoinerState] Restored snapshot – movies={len(persisted.get('movies_data', {}))} "
+                    f"clients={len(persisted.get('eof_trackers', {}))}"
+                )
+            except Exception as exc:  # Defensive – keep node running even if restore fails.
+                logging.error(f"[JoinerState] Failed to restore state: {exc}")
+
+        self._movies_data: Dict[str, Dict[int, Any]] = persisted.get("movies_data", {})
+        self._other_data: Dict[str, Dict[int, List[Any]]] = persisted.get("other_data", {})
+        self._eof_trackers: Dict[str, Dict[str, bool]] = persisted.get("eof_trackers", {})
+
         self._lock = threading.Lock()
-        self._movies_data: Dict[str, Dict[int, Any]] = {}
-        self._other_data: Dict[str, Dict[int, List[Any]]] = {}
-        self._eof_trackers: Dict[str, Dict[str, bool]] = {}
-        logging.debug("JoinerState initialised")
+        logging.debug("JoinerState initialised (persistent=%s)", bool(self._state_manager))
 
     # ---------------------------------------------------------------------
     # Movie helpers
@@ -39,6 +53,7 @@ class JoinerState:
             # House-keeping – remove empty nested dicts.
             if client_id in self._other_data and not self._other_data[client_id]:
                 del self._other_data[client_id]
+            self._persist()
             return list(unmatched)  # Shallow copy, callers may mutate.
 
     def get_movie(self, client_id: str, movie_id: int):
@@ -51,6 +66,7 @@ class JoinerState:
         """Buffers an *other* record that arrived before its movie."""
         with self._lock:
             self._other_data.setdefault(client_id, {}).setdefault(movie_id, []).append(other_pb)
+            self._persist()
 
     def get_buffered_other(self, client_id: str, movie_id: int) -> List[Any]:
         """Return (but DO NOT remove) buffered *other* data for a movie."""
@@ -66,6 +82,7 @@ class JoinerState:
         with self._lock:
             self._eof_trackers.setdefault(client_id, {"movies": False, "other": False})[stream] = True
             logging.debug(f"EOF for stream '{stream}' received ‑ client {client_id}")
+            self._persist()
 
     def has_eof(self, client_id: str, stream: str) -> bool:
         return self._eof_trackers.get(client_id, {}).get(stream, False)
@@ -92,6 +109,7 @@ class JoinerState:
             if not other_for_client:
                 del self._other_data[client_id]
             logging.debug(f"Purged {len(orphan_ids)} orphan other-records for client {client_id}")
+            self._persist()
 
     def remove_client_data(self, client_id: str) -> None:
         """Remove *all* cached data & trackers for *client_id* to free memory."""
@@ -99,4 +117,32 @@ class JoinerState:
             self._movies_data.pop(client_id, None)
             self._other_data.pop(client_id, None)
             self._eof_trackers.pop(client_id, None)
-            logging.info(f"State fully cleared for client {client_id}") 
+            logging.info(f"State fully cleared for client {client_id}")
+
+            if (
+                self._state_manager is not None
+                and not self._movies_data
+                and not self._other_data
+                and not self._eof_trackers
+            ):
+                self._state_manager.clear()
+            else:
+                self._persist()
+
+    # -------------------------------------------------------------
+    # Internal helper – persistence
+    # -------------------------------------------------------------
+    def _persist(self) -> None:
+        """Write the current snapshot to disk *if* persistence is enabled."""
+        if self._state_manager is None:
+            return
+        try:
+            snap = {
+                "movies_data": self._movies_data,
+                "other_data": self._other_data,
+                "eof_trackers": self._eof_trackers,
+            }
+            self._state_manager.save(snap)
+        except Exception as exc:
+            # Persistence failures must **not** bring the node down – we just log.
+            logging.error(f"[JoinerState] Error while persisting state: {exc}") 
