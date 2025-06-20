@@ -17,7 +17,7 @@ class JoinerNode:
         # Initialise persistence manager – pickle is perfect for complex
         # objects such as protobuf instances stored by the joiner.
         backup_file = self.config.get('backup_file', f"joiner_state_{self.replica_id}.pkl")
-        self._state_manager = StatePersistence(backup_file, serializer="pickle")
+        self._state_manager = StatePersistence(self.config["joiner_name"],backup_file, serializer="pickle")
 
         self.state = JoinerState(self._state_manager)
         self.protocol = Protocol()

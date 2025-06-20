@@ -10,16 +10,16 @@ logging.getLogger("RabbitMQ").setLevel(logging.DEBUG)
 
 class Reducer:
 
-    def __init__(self, config, backup, state_manager: StatePersistence):
+    def __init__(self, config, partial_result_backup, secuence_number_backup, state_manager: StatePersistence):
         self.config = config
         self.queue_rcv = None
         self.queue_snd = None
         self.is_alive = True
-        self.partial_result = backup
-        self.batches_seen = {}
         self.query_id = config["query_id"]
         self.reduce_by = config['reduce_by']
 
+        self.partial_result = partial_result_backup
+        self.batches_seen = secuence_number_backup
         self._state_manager = state_manager
 
     def _settle_queues(self):
@@ -42,33 +42,20 @@ class Reducer:
 
             msg = self.__get_msg(data, protocol)
 
-            if self._is_repeated(str(msg.client_id), msg.secuence_number):
+            if self._is_repeated(str(msg.client_id), str(msg.secuence_number)):
                 logging.info(f"Discading a repeated package of secuence number {msg.secuence_number}")
                 return
 
             if msg.finished:
-                logging.info(f"ALL Finished msg received on query_id {self.query_id}")
-                result = parse_final_result(self.reduce_by, self.partial_result, str(msg.client_id))
-                res_proto = protocol.create_result(result, msg.client_id)
-
-                key = f'{self.config["routing_snd_key"]}_{msg.client_id}'
-                
-                self.queue_snd.publish(res_proto, key)
-
-                self.partial_result.pop(str(msg.client_id))
-                self._state_manager.save(self.partial_result)
-
-                
-                res_decoded = protocol.decode_result(res_proto)
-                logging.info(f"Final result: {res_decoded}")
-
+                logging.info(f"Finished msg received on query_id {self.query_id}")
+                self._handle_finished(str(msg.client_id), protocol)
                 return
             
             self.partial_result = parse_reduce_funct(data, self.reduce_by, self.partial_result, str(msg.client_id))
-
-            self.batches_seen[str(msg.client_id)].append(msg.secuence_number)
+            self.batches_seen[str(msg.client_id)].append(str(msg.secuence_number))
 
             self._state_manager.save(self.partial_result)
+            self._state_manager.save_secuence_number_data(str(msg.secuence_number), str(msg.client_id))
 
 
         except json.JSONDecodeError as e:
@@ -81,11 +68,27 @@ class Reducer:
     def _is_repeated(self, client_id, secuence_number):
         self.batches_seen.setdefault(client_id, [])
         return secuence_number in self.batches_seen[client_id]
+    
+    def _clean_up(self, client_id):
+        self.partial_result.pop(client_id)
+        self._state_manager.save(self.partial_result)
+
+    def _handle_finished(self, client_id, protocol):
+        result = parse_final_result(self.reduce_by, self.partial_result, client_id)
         
+        res_proto = protocol.create_result(result, client_id)
+        key = f'{self.config["routing_snd_key"]}_{client_id}'
+        self.queue_snd.publish(res_proto, key)
+
+        self._clean_up(client_id)
+
+        res_decoded = protocol.decode_result(res_proto)
+        logging.info(f"Final result: {res_decoded}")
         
+        return
+
     def _get_msg(self, data, protocol):
         aggr_msg = protocol.decode_aggr_batch(data)
-
         is_aggr_msg = (len(aggr_msg.aggr_row) > 0) or aggr_msg.finished
 
         if is_aggr_msg:
