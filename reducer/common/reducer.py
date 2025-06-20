@@ -5,20 +5,22 @@ import logging
 import json
 from protocol.protocol import Protocol
 from backup import partial_results_backup
-
+from backup import secuence_numbers_backup
 
 logging.getLogger("pika").setLevel(logging.ERROR)   
 logging.getLogger("RabbitMQ").setLevel(logging.DEBUG)
 
 class Reducer:
-    def __init__(self, config, backup):
+    def __init__(self, config, partial_reult_backup, batches_seen_backup):
         self.config = config
         self.queue_rcv = None
         self.queue_snd = None
         self.is_alive = True
-        self.partial_result = backup
+        self.partial_result = partial_reult_backup
         self.query_id = config["query_id"]
         self.reduce_by = config['reduce_by']
+        self.batches_seen = batches_seen_backup
+
 
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.config["exchange_rcv"], self.config['queue_rcv_name'], self.config['routing_rcv_key'], self.config['exc_rcv_type'])
@@ -38,14 +40,11 @@ class Reducer:
         try:
             protocol = Protocol()
 
-            aggr_msg = protocol.decode_aggr_batch(data)
+            msg = self.__get_msg(data, protocol)
 
-            is_aggr_msg = (len(aggr_msg.aggr_row) > 0) or aggr_msg.finished
-
-            if is_aggr_msg:
-                msg = aggr_msg
-            else:
-                msg = protocol.decode_movies_msg(data)
+            if self._is_repeated(str(msg.client_id), msg.secuence_number):
+                logging.info(f"Discading a repeated package of secuence number {msg.secuence_number}")
+                return
 
             if msg.finished:
                 logging.info(f"ALL Finished msg received on query_id {self.query_id}")
@@ -66,6 +65,10 @@ class Reducer:
             
             self.partial_result = parse_reduce_funct(data, self.reduce_by, self.partial_result, str(msg.client_id))
             partial_results_backup.make_new_backup(self.partial_result, self.config['backup_file'])
+            self.batches_seen[str(msg.client_id)].append(msg.secuence_number)
+            secuence_numbers_backup.make_new_secuence_number_backup(self.partial_result, str(msg.client_id))
+
+            #TODO: Agregar un file con los clients que tienen backup actualmente de secuence_numbers -> ir actualizando igual q partial_result.
 
 
         except json.JSONDecodeError as e:
@@ -74,6 +77,24 @@ class Reducer:
         except Exception as e:
             logging.error(f"ERROR processing message in {self.config['queue_rcv_name']}: {e}")
             return
+
+    def _is_repeated(self, client_id, secuence_number):
+        self.batches_seen.setdefault(client_id, [])
+
+        return secuence_number in self.batches_seen[client_id]
+        
+        
+    def _get_msg(self, data, protocol):
+        aggr_msg = protocol.decode_aggr_batch(data)
+
+        is_aggr_msg = (len(aggr_msg.aggr_row) > 0) or aggr_msg.finished
+
+        if is_aggr_msg:
+            msg = aggr_msg
+        else:
+            msg = protocol.decode_movies_msg(data)
+
+        return msg
 
     def stop(self):
         """End the reduce and close the queue."""

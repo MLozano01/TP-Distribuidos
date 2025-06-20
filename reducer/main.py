@@ -22,7 +22,7 @@ def main():
         comms_process = Process(target=comms.start, args=())
         comms_process.start()
 
-        red = common.reducer.Reducer(config, backup_info)
+        red = common.reducer.Reducer(config, backup_info, {})
         red.start()
         comms_process.join()
     except KeyboardInterrupt:
