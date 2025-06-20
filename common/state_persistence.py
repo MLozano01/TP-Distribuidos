@@ -81,8 +81,8 @@ class StatePersistence:
             return default_factory()
 
     def save_secuence_number_data(self, info_to_save, client_id):
-        tempfile = f"/backup/temp_{self.BASE_FILE_NAME}_{self.node_info}_{client_id}"
-        actual_file = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_{client_id}"
+        tempfile = f"/backup/temp_{self.BASE_FILE_NAME}_{self.node_info}_{client_id}.txt"
+        actual_file = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_{client_id}.txt"
         try:
             with open(tempfile, 'a') as f:
                 f.write(f"{info_to_save}\n")
@@ -96,7 +96,7 @@ class StatePersistence:
         try:
             backup = {}
 
-            for filepath in glob.glob(f'/backup/{self.BASE_FILE_NAME}_{self.node_info}_*'):
+            for filepath in glob.glob(f'/backup/{self.BASE_FILE_NAME}_{self.node_info}_*.txt'):
                 client = filepath.split("_")[3]
                 with open(filepath) as f:
                     backup.setdefault(client, [])
