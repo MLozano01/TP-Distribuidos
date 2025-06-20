@@ -1,28 +1,32 @@
-import json
 import os
 import logging
 from pathlib import Path
-import subprocess
+import glob
 
+BASE_FILE_NAME = "secuence_numbers_client"
 
-
-def make_new_secuence_number_backup(info_to_save, node_file):
-    tempfile = f"/backup/temp_{node_file}"
-    full_node_file = f"/backup/{node_file}"
+def make_new_secuence_number_backup(info_to_save, client_id):
+    tempfile = f"/backup/temp_{BASE_FILE_NAME}_{client_id}"
+    full_node_file = f"/backup/{BASE_FILE_NAME}_{client_id}"
     try:
         with open(tempfile, 'a') as f:
-            f.wite(info_to_save)
+            f.wite(f"{info_to_save}\n")
             f.flush()
-
         os.replace(tempfile, full_node_file)
 
     except Exception as e:
-        logging.error(f"ERROR saving secuence numbe info to file: {e}")
+        logging.error(f"ERROR saving secuence numbe info to file {full_node_file}: {e}")
 
 
-def load_saved_data(backup_file):
-    if not Path(backup_file).exists():
-        return {}
-
-    result = subprocess.run(['tail', '-n', '1', backup_file], capture_output=True, text=True)
-    print(result.stdout)
+def load_saved_data():
+    try:
+        backup = {}
+        for filepath in glob.glob(f'/backup/{BASE_FILE_NAME}_*'):
+            client = filepath.split("_")[3]
+            with open(filepath) as f:
+                backup.setdefault(client, [])
+                for line in f:
+                    pass            
+        
+    except Exception as e:
+        logging.error(f"ERROR reading from file: {e}")

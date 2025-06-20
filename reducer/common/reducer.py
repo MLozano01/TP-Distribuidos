@@ -80,7 +80,6 @@ class Reducer:
 
     def _is_repeated(self, client_id, secuence_number):
         self.batches_seen.setdefault(client_id, [])
-
         return secuence_number in self.batches_seen[client_id]
         
         
