@@ -6,13 +6,20 @@ import socket
 from protocol.rabbit_protocol import RabbitMQ
 from protocol.protocol import Protocol
 from state.joiner_state import JoinerState
+from common.state_persistence import StatePersistence
 
 class JoinerNode:
     def __init__(self, config, join_strategy):
         self.config = config
         self.replica_id = self.config['replica_id']
         self.join_strategy = join_strategy
-        self.state = JoinerState()
+
+        # Initialise persistence manager – pickle is perfect for complex
+        # objects such as protobuf instances stored by the joiner.
+        backup_file = self.config.get('backup_file', f"joiner_state_{self.replica_id}.pkl")
+        self._state_manager = StatePersistence(backup_file, serializer="pickle")
+
+        self.state = JoinerState(self._state_manager)
         self.protocol = Protocol()
         self.other_data_type = self.config.get('other_data_type', 'RATINGS')
         
@@ -122,7 +129,7 @@ class JoinerNode:
         while not self._stop_event.is_set():
             try:
                 conn, addr = self._hc_sckt.accept()
-                logging.info(f"Received healthcheck from {addr}")
+                #logging.info(f"Received healthcheck from {addr}")
                 conn.close()
             except socket.error as e:
                 if self._stop_event.is_set():
