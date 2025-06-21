@@ -45,10 +45,13 @@ class StatePersistence:
 
                 with open(self._tmp_path, "wb") as fp:
                     pickle.dump(data, fp)
+                    #fp.flush()
+                    #os.fsync(fp.fileno())
             else:
                 with open(self._tmp_path, "w") as fp:
                     json.dump(data, fp)
                     fp.flush()
+                    #os.fsync(fp.fileno())
 
             os.replace(self._tmp_path, self._file_path)
         except Exception as exc:

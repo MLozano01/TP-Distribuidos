@@ -485,7 +485,6 @@ services:
       - JOINER_NAME=joiner-ratings
       - HC_PORT=3030
       - LISTEN_BACKLOG=10
-      - BACKUP_FILE=joiner_state_joiner-ratings-1.pkl
     
   
   joiner-credits-1:
@@ -509,7 +508,6 @@ services:
       - JOINER_NAME=joiner-credits
       - HC_PORT=3030
       - LISTEN_BACKLOG=10
-      - BACKUP_FILE=joiner_state_joiner-credits-1.pkl
     
   
   healthchecker-1:

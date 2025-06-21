@@ -8,4 +8,8 @@ COPY requirements.txt /
 
 RUN pip install -r requirements.txt
 
+# Ensure common & protocol packages are import-able and create backup dir
+ENV PYTHONPATH="/common:${PYTHONPATH}"
+RUN mkdir -p /backup
+
 ENTRYPOINT ["python3", "/main.py"]

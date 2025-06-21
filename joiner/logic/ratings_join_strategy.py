@@ -23,7 +23,7 @@ class RatingsJoinStrategy(JoinStrategy):
             logging.warning("[RatingsJoinStrategy] Could not decode ratings message.")
             return None
 
-        client_id = ratings_msg.client_id
+        client_id = str(ratings_msg.client_id)
         logging.debug(
             f"[RatingsJoinStrategy] client={client_id} finished={ratings_msg.finished} items={len(ratings_msg.ratings)}"
         )
@@ -40,9 +40,10 @@ class RatingsJoinStrategy(JoinStrategy):
         # Normal data path
         # ------------------------------------------------------------------
         for rating in ratings_msg.ratings:
-            movie = state.get_movie(client_id, rating.movieId)
-            if movie:
-                self._join_and_send([rating], movie, client_id, producer)
+            rating_value = float(rating.rating)
+            movie_title = state.get_movie(client_id, rating.movieId)
+            if movie_title:
+                self._join_and_send([rating_value], rating.movieId, movie_title, client_id, producer)
                 continue
 
             # Movie not (yet) available – should we buffer or discard?  If the
@@ -54,34 +55,34 @@ class RatingsJoinStrategy(JoinStrategy):
                 )
                 continue
 
-            state.buffer_other(client_id, rating.movieId, rating)
+            state.buffer_other(client_id, rating.movieId, rating_value)
         return None
 
     # ------------------------------------------------------------------
     # Helper hooks
     # ------------------------------------------------------------------
-    def _join_and_send(self, ratings, movie_data, client_id, producer):
+    def _join_and_send(self, ratings, movie_id, title, client_id, producer):
         if not ratings:
             return
-        rating = ratings[0]
+        rating_val = ratings[0]
         try:
             msg = self.protocol.encode_joined_rating_msg(
-                client_id=client_id,
-                movie_id=movie_data.id,
-                title=movie_data.title,
-                rating=rating.rating,
-                timestamp=rating.timestamp,
+                client_id=int(client_id),
+                movie_id=movie_id,
+                title=title,
+                rating=rating_val,
+                timestamp="",
             )
             producer.publish(msg)
         except Exception as exc:
             logging.error(
-                f"Failed to emit joined rating – client {client_id} movie {movie_data.id}: {exc}",
+                f"Failed to emit joined rating – client {client_id} movie {movie_id}: {exc}",
                 exc_info=True,
             )
 
-    def process_unmatched_data(self, unmatched_ratings, movie_data, client_id, producer):
-        for rating in unmatched_ratings:
-            self._join_and_send([rating], movie_data, client_id, producer)
+    def process_unmatched_data(self, unmatched_ratings, movie_id, title, client_id, producer):
+        for rating_val in unmatched_ratings:
+            self._join_and_send([rating_val], movie_id, title, client_id, producer)
 
     # ------------------------------------------------------------------
     # EOF hooks
