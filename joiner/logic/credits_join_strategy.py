@@ -19,7 +19,7 @@ class CreditsJoinStrategy(JoinStrategy):
             logging.warning("[CreditsJoinStrategy] Could not decode credits message.")
             return None
 
-        client_id = credits_msg.client_id
+        client_id = str(credits_msg.client_id)
         logging.debug(
             f"[CreditsJoinStrategy] client={client_id} finished={credits_msg.finished} items={len(credits_msg.credits)}"
         )
@@ -31,9 +31,12 @@ class CreditsJoinStrategy(JoinStrategy):
 
         # Data path -------------------------------------------------------
         for credit in credits_msg.credits:
-            movie = state.get_movie(client_id, credit.id)
-            if movie:
-                self._join_and_send([credit], movie, client_id, producer)
+            actor_names = [cm.name.strip() for cm in credit.cast if cm.name.strip() not in {"\\N", "NULL", "null", "N/A", "-"}]
+
+            movie_title = state.get_movie(client_id, credit.id)
+            if movie_title:
+                # We can directly join and send
+                self._join_and_send(actor_names, credit.id, movie_title, client_id, producer)
                 continue
 
             if state.has_eof(client_id, "movies"):
@@ -42,36 +45,33 @@ class CreditsJoinStrategy(JoinStrategy):
                 )
                 continue
 
-            state.buffer_other(client_id, credit.id, credit)
+            # Buffer each actor name individually for finer granularity.
+            state.buffer_other(client_id, credit.id, actor_names)
         return None
 
     # ------------------------------------------------------------------
-    def _join_and_send(self, credits, movie_data, client_id, producer):
-        if not credits:
+    def _join_and_send(self, actor_names, movie_id, title, client_id, producer):
+        if not actor_names:
             return
-        credit = credits[0]  # process sequentially
-        participations = []
-        for cast_member in credit.cast:
-            actor_name = cast_member.name.strip()
-            if not actor_name or actor_name in {"\\N", "NULL", "null", "N/A", "-"}:
-                continue
-            participations.append(
-                files_pb2.ActorParticipation(actor_name=actor_name, movie_id=movie_data.id)
-            )
+        participations = [
+            files_pb2.ActorParticipation(actor_name=name, movie_id=movie_id)
+            for name in actor_names
+            if name
+        ]
 
         if not participations:
             return
         try:
-            msg = self.protocol.encode_actor_participations_msg(participations, client_id)
+            msg = self.protocol.encode_actor_participations_msg(participations, int(client_id))
             producer.publish(msg)
         except Exception as exc:
             logging.error(
-                f"Failed to emit actor participations – client {client_id} movie {movie_data.id}: {exc}",
+                f"Failed to emit actor participations – client {client_id} movie {movie_id}: {exc}",
                 exc_info=True,
             )
 
-    def process_unmatched_data(self, unmatched_credits, movie_data, client_id, producer):
-        self._join_and_send(unmatched_credits, movie_data, client_id, producer)
+    def process_unmatched_data(self, unmatched_actor_names, movie_id, title, client_id, producer):
+        self._join_and_send(unmatched_actor_names, movie_id, title, client_id, producer)
 
     # ------------------------------------------------------------------
     # EOF hooks

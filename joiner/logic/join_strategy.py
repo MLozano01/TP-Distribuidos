@@ -22,14 +22,14 @@ class JoinStrategy(ABC):
         pass
     
     @abstractmethod
-    def _join_and_send(self, other_data_list, movie_data, client_id, producer):
+    def _join_and_send(self, other_data_list, movie_id, title, client_id, producer):
         """
         Joins the 'other' data with movie data and sends it downstream.
         """
         pass
 
     @abstractmethod
-    def process_unmatched_data(self, unmatched_data, movie_data, client_id, producer):
+    def process_unmatched_data(self, unmatched_data, movie_id, title, client_id, producer):
         """
         Process data that was buffered and is now matched with an arriving movie.
         """

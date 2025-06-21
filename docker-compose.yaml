@@ -472,6 +472,7 @@ services:
       - rabbitmq
     volumes:
       - ./joiner/config/joiner-ratings.ini:/config.ini
+      - ./joiner/backup:/backup
     environment:
       - PYTHONUNBUFFERED=1
       - JOINER_REPLICA_ID=1
@@ -494,6 +495,7 @@ services:
       - rabbitmq
     volumes:
       - ./joiner/config/joiner-credits.ini:/config.ini
+      - ./joiner/backup:/backup
     environment:
       - PYTHONUNBUFFERED=1
       - JOINER_REPLICA_ID=1

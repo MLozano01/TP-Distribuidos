@@ -20,8 +20,8 @@ def initialize_config():
         config_params['listen_backlog'] = int(os.getenv('LISTEN_BACKLOG', config['DEFAULT']['LISTEN_BACKLOG']))
 
         # Replica Info
-        config_params["replica_id"] = int(os.getenv('JOINER_REPLICA_ID'))
-        config_params["replicas_count"] = int(os.getenv('JOINER_REPLICA_COUNT'))
+        config_params["replica_id"] = int(os.getenv('JOINER_REPLICA_ID', config['DEFAULT'].get('JOINER_REPLICA_ID', 0)))
+        config_params["replicas_count"] = int(os.getenv('JOINER_REPLICA_COUNT', config['DEFAULT'].get('JOINER_REPLICA_COUNT', 1)))
 
         # RabbitMQ Config
         config_params["rabbit_host"] = os.getenv('RABBIT_HOST', config["RABBITMQ"]["RABBIT_HOST"])
@@ -37,6 +37,10 @@ def initialize_config():
         config_params["exchange_output"] = os.getenv('EXCHANGE_OUTPUT', config["RABBITMQ"]["EXCHANGE_OUTPUT"])
         config_params["queue_output_name"] = os.getenv('QUEUE_OUTPUT_NAME', config["RABBITMQ"]["QUEUE_OUTPUT_NAME"])
         config_params["routing_key_output"] = os.getenv('ROUTING_KEY_OUTPUT', config["RABBITMQ"]["ROUTING_KEY_OUTPUT"])
+
+        # Backup file – optional, falls back to sensible default if not set
+        default_backup_name = f"joiner_state_{config_params['replica_id']}.json"
+        config_params["backup_file"] = os.getenv('BACKUP_FILE', default_backup_name)
 
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting server")
