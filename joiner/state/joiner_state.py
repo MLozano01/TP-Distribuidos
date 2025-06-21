@@ -1,7 +1,7 @@
 import threading
 import logging
 import os
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 
 from common.state_persistence import StatePersistence
 
@@ -16,74 +16,139 @@ class JoinerState:
     3. _eof_trackers:     {client_id: {"movies": bool, "other": bool}}
 
     Every public mutating method MUST acquire the lock. Helper readers that
-    return a simple value are *not* locked to avoid unnecessary contention –
-    those methods should be treated as best-effort snapshots.
+    **do not mutate state** purposefully skip the lock to minimise contention,
+    therefore they return a *best-effort snapshot* of the underlying data.
+
+    IMPORTANT:
+        • The returned objects MUST be treated as **immutable** by the caller.
+        • Never mutate or store direct references for later mutation. Doing so
+          would introduce data-races because another thread could update the
+          internal dictionaries concurrently.
+
+    If a caller needs to iterate over / transform the data, they should copy
+    it first (e.g. ``list(... )`` or ``dict(... )``) while still holding no
+    locks in this class.
     """
 
     def __init__(self, state_manager: "StatePersistence | None" = None) -> None:
+        """Create a new *in-memory* state container and – if available –
+        restore any snapshots found on disk.
+        """
         self._state_manager = state_manager
 
-        # Mapping of client_id -> dedicated StatePersistence helper (lazy-initialised).
+        # Lazy registry of per-client ``StatePersistence`` helpers.
         self._client_state_managers: Dict[str, StatePersistence] = {}
 
-        persisted_movies: Dict[str, Dict[int, Any]] = {}
-        persisted_other: Dict[str, Dict[int, List[Any]]] = {}
-        persisted_eofs: Dict[str, Dict[str, bool]] = {}
-
-        if self._state_manager is not None:
-            base_dir = getattr(self._state_manager, "_dir", "/backup")
-            file_name = getattr(self._state_manager, "_file_name", "joiner_state.json")
-            base_name = file_name.rsplit(".", 1)[0]
-
-            # Scan for per-client snapshot files (pattern: <base_name>_<clientId>.json)
-            try:
-                for fname in os.listdir(base_dir):
-                    if not fname.startswith(f"{base_name}_") or not fname.endswith(".json"):
-                        continue
-                    client_id = fname[len(base_name) + 1 : -5]  # strip prefix+suffix
-                    mgr = StatePersistence(fname, directory=base_dir, serializer="json")
-                    self._client_state_managers[client_id] = mgr
-                    try:
-                        snap = mgr.load(default_factory=dict)
-                        persisted_movies.update(snap.get("movies_data", {}))
-                        persisted_other.update(snap.get("other_data", {}))
-                        persisted_eofs.update(snap.get("eof_trackers", {}))
-                    except Exception as exc:
-                        logging.error("[JoinerState] Failed to restore state for client %s: %s", client_id, exc)
-            except Exception as exc:
-                logging.error("[JoinerState] Error scanning backup directory: %s", exc)
-
-        # Aggregate into a structure compatible with the existing parsing logic.
-        persisted = {
-            "movies_data": persisted_movies,
-            "other_data": persisted_other,
-            "eof_trackers": persisted_eofs,
-        }
-        logging.info(
-            "[JoinerState] Restored snapshot – movies=%s clients=%s",
-            sum(len(m) for m in persisted_movies.values()),
-            len(persisted_movies),
+        persisted_raw = (
+            self._restore_from_disk() if self._state_manager is not None else {}
         )
 
-        raw_movies: Dict[str, Dict[int, Any]] = persisted.get("movies_data", {})
-        self._movies_data: Dict[str, Dict[int, str]] = {}
-        for raw_cid, movies in raw_movies.items():
-            client_id = str(raw_cid)
-            self._movies_data[client_id] = {}
-            for movie_id_str, title in movies.items():
-                self._movies_data[client_id][int(movie_id_str)] = str(title)
+        self._movies_data, self._other_data, self._eof_trackers = self._normalise_snapshots(
+            persisted_raw
+        )
 
-        raw_other: Dict[str, Dict[int, List[Any]]] = persisted.get("other_data", {})
-        self._other_data: Dict[str, Dict[int, List[Any]]] = {
-            str(cid): {int(mid): list(vals) for mid, vals in movie_map.items()}
-            for cid, movie_map in raw_other.items()
-        }
+        restored_movies = sum(len(m) for m in self._movies_data.values())
+        logging.info(
+            "[JoinerState] Restored snapshot – movies=%s clients=%s",
+            restored_movies,
+            len(self._movies_data),
+        )
 
-        raw_eofs: Dict[str, Dict[str, bool]] = persisted.get("eof_trackers", {})
-        self._eof_trackers: Dict[str, Dict[str, bool]] = {str(cid): tracker for cid, tracker in raw_eofs.items()}
-
+        # Synchronisation primitive MUST be created *after* loading to avoid
+        # using it inside helpers inadvertently.
         self._lock = threading.Lock()
         logging.debug("JoinerState initialised (persistent=%s)", bool(self._state_manager))
+
+    def _restore_from_disk(self) -> Dict[str, Dict]:
+        """Scan the backup directory and merge per-client snapshots.
+        """
+
+        movies: Dict[str, Dict[int, Any]] = {}
+        other: Dict[str, Dict[int, List[Any]]] = {}
+        eofs: Dict[str, Dict[str, bool]] = {}
+
+        base_dir = getattr(self._state_manager, "_dir", "/backup")
+        base_file = getattr(self._state_manager, "_file_name", "joiner_state.json")
+        base_name = base_file.rsplit(".", 1)[0]
+
+        try:
+            for fname in os.listdir(base_dir):
+                if not (fname.startswith(f"{base_name}_") and fname.endswith(".json")):
+                    continue
+                client_id = fname[len(base_name) + 1 : -5]  # strip prefix/suffix
+                mgr = StatePersistence(fname, directory=base_dir, serializer="json")
+                self._client_state_managers[client_id] = mgr
+
+                try:
+                    snap = mgr.load(default_factory=dict)
+                except Exception as exc:
+                    logging.error("[JoinerState] Failed loading snapshot for client %s: %s", client_id, exc)
+                    continue
+
+                movies.update(snap.get("movies_data", {}))
+                other.update(snap.get("other_data", {}))
+                eofs.update(snap.get("eof_trackers", {}))
+        except FileNotFoundError:
+            # Backup directory missing – no prior state, not an error.
+            pass
+        except Exception as exc:
+            logging.error("[JoinerState] Error scanning backup directory: %s", exc)
+
+        return {
+            "movies_data": movies,
+            "other_data": other,
+            "eof_trackers": eofs,
+        }
+
+    # ------------------------------------------------------------------
+    def _normalise_snapshots(
+        self, persisted: Dict[str, Dict]
+    ) -> Tuple[
+        Dict[str, Dict[int, str]],
+        Dict[str, Dict[int, List[Any]]],
+        Dict[str, Dict[str, bool]],
+    ]:
+        """Convert raw JSON dictionaries (str keys) into strongly-typed maps.
+        This helper ensures **all** keys are of the expected type so that the
+        rest of the codebase can rely on `int` for movie IDs and `str` for
+        client IDs.
+        """
+
+        # --- Movies -----------------------------------------------------
+        movies_typed: Dict[str, Dict[int, str]] = {}
+        raw_movies = persisted.get("movies_data", {})
+        for raw_cid, movies in raw_movies.items():
+            cid = str(raw_cid)
+            typed_map: Dict[int, str] = {}
+            for mid_str, title in movies.items():
+                try:
+                    typed_map[int(mid_str)] = str(title)
+                except (ValueError, TypeError):
+                    # Skip malformed id/title pairs but keep going.
+                    logging.debug("[JoinerState] Malformed movie entry cid=%s id=%s", cid, mid_str)
+            if typed_map:
+                movies_typed[cid] = typed_map
+
+        # --- Other ------------------------------------------------------
+        other_typed: Dict[str, Dict[int, List[Any]]] = {}
+        raw_other = persisted.get("other_data", {})
+        for raw_cid, movie_map in raw_other.items():
+            cid = str(raw_cid)
+            typed_movie_map: Dict[int, List[Any]] = {}
+            for mid_str, vals in movie_map.items():
+                try:
+                    typed_movie_map[int(mid_str)] = list(vals)
+                except (ValueError, TypeError):
+                    logging.debug("[JoinerState] Malformed other entry cid=%s id=%s", cid, mid_str)
+            if typed_movie_map:
+                other_typed[cid] = typed_movie_map
+
+        # --- EOF trackers ----------------------------------------------
+        eofs_typed: Dict[str, Dict[str, bool]] = {
+            str(cid): dict(tracker) for cid, tracker in persisted.get("eof_trackers", {}).items()
+        }
+
+        return movies_typed, other_typed, eofs_typed
 
     def add_movie(self, client_id: str, movie_pb) -> List[Any]:
         """Add a movie (protobuf) to the buffer, storing only minimal fields.
