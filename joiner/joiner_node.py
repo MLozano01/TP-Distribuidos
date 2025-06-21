@@ -8,16 +8,18 @@ from protocol.protocol import Protocol
 from state.joiner_state import JoinerState
 from common.state_persistence import StatePersistence
 
+class ShutdownRequeueException(Exception):
+    """Signal to RabbitMQ wrapper that the current delivery must be nacked."""
+
 class JoinerNode:
     def __init__(self, config, join_strategy):
         self.config = config
         self.replica_id = self.config['replica_id']
         self.join_strategy = join_strategy
 
-        # Initialise persistence manager – pickle is perfect for complex
-        # objects such as protobuf instances stored by the joiner.
-        backup_file = self.config.get('backup_file', f"joiner_state_{self.replica_id}.pkl")
-        self._state_manager = StatePersistence(backup_file, serializer="pickle")
+        # Initialise persistence manager – we now store lightweight dicts so JSON is enough.
+        backup_file = self.config.get('backup_file', f"joiner_state_{self.replica_id}.json")
+        self._state_manager = StatePersistence(backup_file, serializer="json")
 
         self.state = JoinerState(self._state_manager)
         self.protocol = Protocol()
@@ -144,16 +146,18 @@ class JoinerNode:
 
     def _process_movie_message(self, ch, method, properties, body):
         logging.info(f"[Node] Received a movie message. Size: {len(body)} bytes.")
+
+        # Fast exit during shutdown – requeue everything.
         if self._stop_event.is_set():
-            logging.info("[Node] Stop event set, ignoring movie message.")
-            return
+            raise ShutdownRequeueException()
+
         try:
             movies_msg = self.protocol.decode_movies_msg(body)
             if not movies_msg:
                 logging.warning("[Node] Received invalid movie message, could not decode.")
                 return
 
-            client_id = movies_msg.client_id
+            client_id = str(movies_msg.client_id)
             logging.info(f"[Node] Processing movie message for client {client_id}. Finished: {movies_msg.finished}, Items: {len(movies_msg.movies)}")
 
             if movies_msg.finished:
@@ -167,18 +171,23 @@ class JoinerNode:
             for movie in movies_msg.movies:
                 unmatched_data = self.state.add_movie(client_id, movie)
                 if unmatched_data:
-                    self.join_strategy.process_unmatched_data(unmatched_data, movie, client_id, self.output_producer)
+                    self.join_strategy.process_unmatched_data(
+                        unmatched_data, movie.id, movie.title, client_id, self.output_producer
+                    )
             
             logging.debug(f"[Node] Added {len(movies_msg.movies)} movies to buffer for client {client_id}")
 
+        except ShutdownRequeueException:
+            raise
         except Exception as e:
             logging.error(f"[Node] Error processing movie message: {e}", exc_info=True)
+            raise
 
     def _process_other_message(self, ch, method, properties, body):
         logging.info(f"[Node] Received an other message. Size: {len(body)} bytes.")
+
         if self._stop_event.is_set():
-            logging.info("[Node] Stop event set, ignoring other message.")
-            return
+            raise ShutdownRequeueException()
 
         try:
             client_finished_id = self.join_strategy.process_other_message(
@@ -189,9 +198,12 @@ class JoinerNode:
             # corresponding flag and returned the client_id so we can evaluate
             # completion.
             if client_finished_id:
-                self._check_and_handle_client_finished(client_finished_id)
+                self._check_and_handle_client_finished(str(client_finished_id))
+        except ShutdownRequeueException:
+            raise
         except Exception as e:
             logging.error(f"[Node] Error processing other message: {e}", exc_info=True)
+            raise
 
     def _setup_signal_handlers(self):
         signal.signal(signal.SIGTERM, self._handle_shutdown)

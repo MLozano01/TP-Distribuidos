@@ -310,7 +310,7 @@ def create_joiner(service_base_name, replica_id, total_replicas, config_source_p
     # Ensure host backup directory exists so docker-compose bind mount works
     os.makedirs("joiner/backup", exist_ok=True)
 
-    backup_file = f"joiner_state_{service_name}.pkl"
+    backup_file = f"joiner_state_{service_name}.json"
 
     joiner_yaml = f"""
   {service_name}:

@@ -7,7 +7,7 @@ def send_movie_batch(producer, movie_list, client_id, protocol):
     if not movie_list:
         return
     try:
-        encoded_batch = protocol.encode_movies_msg(movie_list, client_id)
+        encoded_batch = protocol.encode_movies_msg(movie_list, int(client_id))
         producer.publish(encoded_batch)
         logging.info(f"Sent batch of {len(movie_list)} movies for client {client_id}")
     except Exception as e:
@@ -18,7 +18,7 @@ def send_actor_participations_batch(producer, participations_list, client_id, pr
     if not participations_list:
         return
     try:
-        encoded_batch = protocol.encode_actor_participations_msg(participations_list, client_id)
+        encoded_batch = protocol.encode_actor_participations_msg(participations_list, int(client_id))
         producer.publish(encoded_batch)
         logging.info(f"Sent batch of {len(participations_list)} actor participations for client {client_id}")
     except Exception as e:
@@ -27,7 +27,7 @@ def send_actor_participations_batch(producer, participations_list, client_id, pr
 def send_finished_signal(producer, client_id, protocol):
     """Sends a finished signal for a specific client."""
     try:
-        finished_msg = protocol.encode_movies_msg([], client_id, finished=True)
+        finished_msg = protocol.encode_movies_msg([], int(client_id), finished=True)
         producer.publish(finished_msg)
         logging.info(f"Sent FINISHED signal for client {client_id}.")
     except Exception as e:

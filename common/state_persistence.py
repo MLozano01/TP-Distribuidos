@@ -78,10 +78,13 @@ class StatePersistence:
 
                 with open(self._tmp_path, "wb") as fp:
                     pickle.dump(data, fp)
+                    #fp.flush()
+                    #os.fsync(fp.fileno())
             else:
                 with open(self._tmp_path, "w") as fp:
                     json.dump(data, fp)
                     fp.flush()
+                    #os.fsync(fp.fileno())
 
             # Atomic replace – guarantees that either the *old* or the *new*
             # file is present even in case of a crash in between.
