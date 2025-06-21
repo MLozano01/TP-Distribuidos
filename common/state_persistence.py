@@ -19,7 +19,7 @@ class StatePersistence:
     _JSON = "json"
     _PICKLE = "pickle"
     _SUPPORTED_SERIALIZERS = {_JSON, _PICKLE}
-    BASE_FILE_NAME = "secuence_numbers_client"
+    BASE_FILE_NAME = "secuence_numbers_"
 
     def __init__(self, node_info, filename: str, *, directory: str = "/backup", serializer: str = _JSON) -> None:
         if serializer not in self._SUPPORTED_SERIALIZERS:
@@ -82,11 +82,20 @@ class StatePersistence:
 
     def save_secuence_number_data(self, info_to_save, client_id):
         tempfile = f"/backup/temp_{self.BASE_FILE_NAME}_{self.node_info}_{client_id}.txt"
-        actual_file = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_{client_id}.txt"
+        actual_file = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_client_{client_id}.txt"
+
         try:
-            with open(tempfile, 'a') as f:
+            if os.path.exists(actual_file):
+                with open(actual_file, 'r') as f:
+                    existing = f.read()
+            else:
+                existing = ""
+
+            with open(tempfile, 'w') as f:
+                f.write(existing)
                 f.write(f"{info_to_save}\n")
                 f.flush()
+
             os.replace(tempfile, actual_file)
 
         except Exception as e:
@@ -102,7 +111,6 @@ class StatePersistence:
                     backup.setdefault(client, [])
                     for line in f:
                         backup[client].append(line.strip())     
-
             return backup       
             
         except Exception as e:

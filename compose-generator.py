@@ -234,7 +234,7 @@ def create_reducer(reducer_name, file_name):
       - rabbitmq
     environment:
       - BACKUP_FILE={backup_file}
-      - REDUCER_NAME = {reducer_name}
+      - REDUCER_NAME={reducer_name}
     volumes:
       - ./reducer/reducers/{file_name}:/{CONFIG_FILE}
       - ./reducer/backup:/backup

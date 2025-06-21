@@ -125,7 +125,7 @@ class Protocol:
     # Create new message with updated length
     new_message = bytearray()
     new_message.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
-    new_message.extend((length + INT_LENGTH).to_bytes(INT_LENGTH, byteorder='big'))
+    new_message.extend((length + 2 * INT_LENGTH).to_bytes(INT_LENGTH, byteorder='big'))
     new_message.extend(new_data)
     
     return new_message

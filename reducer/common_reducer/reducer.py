@@ -73,13 +73,13 @@ class Reducer:
         self.partial_result.pop(client_id)
         self._state_manager.save(self.partial_result)
 
-        self.batches_seen.remove(client_id)
+        self.batches_seen.pop(client_id)
         self._state_manager.clean_client(client_id)
 
     def _handle_finished(self, client_id, protocol):
         result = parse_final_result(self.reduce_by, self.partial_result, client_id)
         
-        res_proto = protocol.create_result(result, client_id)
+        res_proto = protocol.create_result(result, int(client_id))
         key = f'{self.config["routing_snd_key"]}_{client_id}'
         self.queue_snd.publish(res_proto, key)
 
