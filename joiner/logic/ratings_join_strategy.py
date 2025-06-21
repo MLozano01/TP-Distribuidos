@@ -79,6 +79,7 @@ class RatingsJoinStrategy(JoinStrategy):
                 f"Failed to emit joined rating – client {client_id} movie {movie_id}: {exc}",
                 exc_info=True,
             )
+            raise
 
     def process_unmatched_data(self, unmatched_ratings, movie_id, title, client_id, producer):
         for rating_val in unmatched_ratings:

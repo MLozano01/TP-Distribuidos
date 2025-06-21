@@ -45,7 +45,6 @@ class CreditsJoinStrategy(JoinStrategy):
                 )
                 continue
 
-            # Buffer each actor name individually for finer granularity.
             state.buffer_other(client_id, credit.id, actor_names)
         return None
 
@@ -69,6 +68,7 @@ class CreditsJoinStrategy(JoinStrategy):
                 f"Failed to emit actor participations – client {client_id} movie {movie_id}: {exc}",
                 exc_info=True,
             )
+            raise
 
     def process_unmatched_data(self, unmatched_actor_names, movie_id, title, client_id, producer):
         self._join_and_send(unmatched_actor_names, movie_id, title, client_id, producer)
