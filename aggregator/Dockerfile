@@ -2,6 +2,7 @@ FROM python:3.9.7-slim
 
 COPY aggregator /
 COPY protocol /protocol
+COPY common /common
 
 COPY requirements.txt /
 

@@ -14,15 +14,14 @@ def config_filter():
     with config parameters
     """
     config_params = {}
-    communication_config = {}
     filter_config = ConfigParser(os.environ)
     filter_config.read(CONFIG_FILE)
 
     try:
         # LOGGING
         config_params["logging_level"] = os.getenv('LOGGING_LEVEL', filter_config["DEFAULT"]["LOGGING_LEVEL"])
-        communication_config["comm_port"] = os.getenv('COMM_PORT', filter_config["DEFAULT"]["COMM_PORT"])
-        communication_config["id"] = os.getenv("FILTER_REPLICA_ID")
+        config_params["port"] = int(os.getenv('COMM_PORT', filter_config["DEFAULT"]["COMM_PORT"]))
+        config_params["id"] = os.getenv("FILTER_REPLICA_ID")
         # RCV QUEUE
         config_params["queue_rcv_name"] = os.getenv('QUEUE_RCV_NAME', filter_config["RABBITMQ"]["QUEUE_RCV_NAME"])
         config_params["routing_rcv_key"] = os.getenv('ROUTING_KEY_RCV', filter_config["RABBITMQ"]["ROUTING_KEY_RCV"])
@@ -32,8 +31,8 @@ def config_filter():
         # FILTER DATA
         config_params[f"filter_by"] = os.getenv("FILTER", filter_config["FILTERING_INFO"]["FILTER"])
         config_params[f"filter_name"] = os.getenv("FILTER_NAME", filter_config["FILTERING_INFO"]["FILTER_NAME"])
-        communication_config[f"name"] = config_params[f"filter_name"]
-        communication_config[f"replicas_count"] = int(os.getenv("FILTER_REPLICA_COUNT"))
+        config_params[f"name"] = config_params[f"filter_name"]
+        config_params[f"replicas_count"] = int(os.getenv("FILTER_REPLICA_COUNT"))
 
         # JOINER AND SENDER QUEUE
         publish_by_id_str = os.getenv('PUBLISH_TO_JOINERS', filter_config["RABBITMQ"]["PUBLISH_TO_JOINERS"]).strip().lower()
@@ -61,4 +60,4 @@ def config_filter():
     except ValueError as e:
         raise ValueError(f"Key could not be parsed in {CONFIG_FILE} or Env Vars. Error: {e}. Aborting server")
 
-    return config_params, communication_config
+    return config_params

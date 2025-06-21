@@ -22,6 +22,9 @@ class Reducer:
         self.batches_seen = secuence_number_backup
         self._state_manager = state_manager
 
+        # Setup signal handler for SIGTERM
+        # signal.signal(signal.SIGTERM, self._handle_shutdown)
+
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.config["exchange_rcv"], self.config['queue_rcv_name'], self.config['routing_rcv_key'], self.config['exc_rcv_type'])
         self.queue_snd = RabbitMQ(self.config['exchange_snd'], self.config['queue_snd_name'], self.config['routing_snd_key'], self.config['exc_snd_type'])

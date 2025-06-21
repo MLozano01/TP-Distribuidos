@@ -2,6 +2,8 @@ FROM python:3.9.7-slim
 
 COPY transformer /
 COPY protocol /protocol
+COPY common /common
+
 
 COPY transformer/requirements.txt /
 

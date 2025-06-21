@@ -1,8 +1,10 @@
 import logging
 import common_reducer.config_init as config_init
 from protocol.utils.logger import config_logger
-from common_reducer import communicator, reducer
+from common_reducer import reducer
 from common.state_persistence import StatePersistence
+from common.communicator import Communicator
+
 
 from multiprocessing import Process
 
@@ -19,7 +21,7 @@ def main():
     logging.info(f"Secuence Number Backup Info: {secuence_number_backup_info}")
 
     try: 
-        comms = communicator.Communicator(config['port'])
+        comms = Communicator(config['port'])
         config.pop('port')
 
         comms_process = Process(target=comms.start, args=())
