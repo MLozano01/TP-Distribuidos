@@ -17,7 +17,6 @@ class JoinerNode:
         self.replica_id = self.config['replica_id']
         self.join_strategy = join_strategy
 
-        # Initialise persistence manager – we now store lightweight dicts so JSON is enough.
         backup_file = self.config.get('backup_file', f"joiner_state_{self.replica_id}.json")
         self._state_manager = StatePersistence(backup_file, serializer="json")
 
@@ -147,8 +146,7 @@ class JoinerNode:
     def _process_movie_message(self, ch, method, properties, body):
         logging.info(f"[Node] Received a movie message. Size: {len(body)} bytes.")
 
-        # Fast exit during shutdown – requeue everything.
-        if self._stop_event.is_set():
+        if self._should_requeue():
             raise ShutdownRequeueException()
 
         try:
@@ -158,35 +156,26 @@ class JoinerNode:
                 return
 
             client_id = str(movies_msg.client_id)
-            logging.info(f"[Node] Processing movie message for client {client_id}. Finished: {movies_msg.finished}, Items: {len(movies_msg.movies)}")
+            logging.info(
+                f"[Node] Processing movie message for client {client_id}. "
+                f"Finished: {movies_msg.finished}, Items: {len(movies_msg.movies)}"
+            )
 
             if movies_msg.finished:
-                logging.info(f"[Node] Movie EOF received for client {client_id}.")
-                # Mark EOF for movies stream and allow strategy to purge orphans
-                self.state.set_stream_eof(client_id, "movies")
-                self.join_strategy.handle_movie_eof(client_id, self.state)
-                self._check_and_handle_client_finished(client_id)
-                return
-
-            for movie in movies_msg.movies:
-                unmatched_data = self.state.add_movie(client_id, movie)
-                if unmatched_data:
-                    self.join_strategy.process_unmatched_data(
-                        unmatched_data, movie.id, movie.title, client_id, self.output_producer
-                    )
-            
-            logging.debug(f"[Node] Added {len(movies_msg.movies)} movies to buffer for client {client_id}")
+                self._handle_movie_eof(client_id)
+            else:
+                self._handle_movie_batch(client_id, movies_msg.movies)
 
         except ShutdownRequeueException:
             raise
         except Exception as e:
-            logging.error(f"[Node] Error processing movie message: {e}", exc_info=True)
+            logging.error("[Node] Error processing movie message: %s", e, exc_info=True)
             raise
 
     def _process_other_message(self, ch, method, properties, body):
         logging.info(f"[Node] Received an other message. Size: {len(body)} bytes.")
 
-        if self._stop_event.is_set():
+        if self._should_requeue():
             raise ShutdownRequeueException()
 
         try:
@@ -194,15 +183,12 @@ class JoinerNode:
                 body, self.state, self.output_producer
             )
 
-            # When the other-stream sends EOF, the strategy will have set the
-            # corresponding flag and returned the client_id so we can evaluate
-            # completion.
             if client_finished_id:
                 self._check_and_handle_client_finished(str(client_finished_id))
         except ShutdownRequeueException:
             raise
         except Exception as e:
-            logging.error(f"[Node] Error processing other message: {e}", exc_info=True)
+            logging.error("[Node] Error processing other message: %s", e, exc_info=True)
             raise
 
     def _setup_signal_handlers(self):
@@ -213,9 +199,6 @@ class JoinerNode:
         logging.warning(f"Received signal {signum}. Initiating shutdown...")
         self.stop()
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
     def _check_and_handle_client_finished(self, client_id: str):
         """If both streams have finished for *client_id*, finalise processing."""
         if not self.state.has_both_eof(client_id):
@@ -228,4 +211,25 @@ class JoinerNode:
             )
         finally:
             # Always cleanup local buffers to avoid leaks.
-            self.state.remove_client_data(client_id) 
+            self.state.remove_client_data(client_id)
+
+    def _should_requeue(self) -> bool:
+        """Return True when node is stopping and delivery must be requeued."""
+        return self._stop_event.is_set()
+
+    def _handle_movie_eof(self, client_id: str) -> None:
+        """Handle EOF for movies stream of *client_id*."""
+        logging.info("[Node] Movie EOF received for client %s.", client_id)
+        self.state.set_stream_eof(client_id, "movies")
+        self.join_strategy.handle_movie_eof(client_id, self.state)
+        self._check_and_handle_client_finished(client_id)
+
+    def _handle_movie_batch(self, client_id: str, movies) -> None:
+        """Process a batch of movie protos."""
+        for movie in movies:
+            unmatched = self.state.add_movie(client_id, movie)
+            if unmatched:
+                self.join_strategy.process_unmatched_data(
+                    unmatched, movie.id, movie.title, client_id, self.output_producer
+                )
+        logging.debug("[Node] Added %d movies to buffer for client %s", len(movies), client_id) 

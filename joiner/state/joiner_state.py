@@ -65,52 +65,19 @@ class JoinerState:
             len(persisted_movies),
         )
 
-        # Ensure that any restored movies are stored as lightweight dicts instead of
-        # protobuf objects.  This makes sure we can seamlessly handle snapshots that
-        # were taken with the previous implementation.
         raw_movies: Dict[str, Dict[int, Any]] = persisted.get("movies_data", {})
         self._movies_data: Dict[str, Dict[int, str]] = {}
         for raw_cid, movies in raw_movies.items():
             client_id = str(raw_cid)
             self._movies_data[client_id] = {}
-            for movie_id_str, movie_obj in movies.items():
-                movie_id = int(movie_id_str)
-                if isinstance(movie_obj, str):
-                    # New format already (title string)
-                    self._movies_data[client_id][movie_id] = movie_obj
-                elif isinstance(movie_obj, dict):
-                    # Previous lightweight dict – extract title only
-                    self._movies_data[client_id][movie_id] = movie_obj.get("title", "")
-                else:
-                    # Legacy protobuf – get title attr
-                    self._movies_data[client_id][movie_id] = getattr(movie_obj, "title", "")
+            for movie_id_str, title in movies.items():
+                self._movies_data[client_id][int(movie_id_str)] = str(title)
 
         raw_other: Dict[str, Dict[int, List[Any]]] = persisted.get("other_data", {})
-        self._other_data: Dict[str, Dict[int, List[Any]]] = {}
-        for raw_cid, movie_map in raw_other.items():
-            client_id = str(raw_cid)
-            self._other_data[client_id] = {}
-            for movie_id_str, items in movie_map.items():
-                movie_id = int(movie_id_str)
-                converted_items: List[Any] = []
-                for itm in items:
-                    # Ratings protobuf detection (has 'rating' attr but not a dict)
-                    if hasattr(itm, "rating"):
-                        converted_items.append(float(itm.rating))
-                    # Credits protobuf detection (has 'cast' attr)
-                    elif hasattr(itm, "cast"):
-                        actor_names = [
-                            cm.name.strip()
-                            for cm in getattr(itm, "cast", [])
-                            if cm.name.strip() not in {"\\N", "NULL", "null", "N/A", "-"}
-                        ]
-                        converted_items.extend(actor_names)
-                    elif isinstance(itm, dict) and "rating" in itm:
-                        converted_items.append(float(itm["rating"]))
-                    else:
-                        # Assume already lightweight or unknown – keep as-is.
-                        converted_items.append(itm)
-                self._other_data[client_id][movie_id] = converted_items
+        self._other_data: Dict[str, Dict[int, List[Any]]] = {
+            str(cid): {int(mid): list(vals) for mid, vals in movie_map.items()}
+            for cid, movie_map in raw_other.items()
+        }
 
         raw_eofs: Dict[str, Dict[str, bool]] = persisted.get("eof_trackers", {})
         self._eof_trackers: Dict[str, Dict[str, bool]] = {str(cid): tracker for cid, tracker in raw_eofs.items()}
@@ -118,9 +85,6 @@ class JoinerState:
         self._lock = threading.Lock()
         logging.debug("JoinerState initialised (persistent=%s)", bool(self._state_manager))
 
-    # ---------------------------------------------------------------------
-    # Movie helpers
-    # ---------------------------------------------------------------------
     def add_movie(self, client_id: str, movie_pb) -> List[Any]:
         """Add a movie (protobuf) to the buffer, storing only minimal fields.
 
@@ -138,7 +102,8 @@ class JoinerState:
             if client_id in self._other_data and not self._other_data[client_id]:
                 del self._other_data[client_id]
             self._persist(client_id)
-            return list(unmatched)  # Shallow copy, callers may mutate.
+            # Return an *immutable* view so callers cannot mutate internal state.
+            return tuple(unmatched)
 
     def get_movie(self, client_id: str, movie_id: int):
         """Return movie title (str) or None."""
@@ -163,9 +128,6 @@ class JoinerState:
         """Return (but DO NOT remove) buffered *other* data for a movie."""
         return self._other_data.get(client_id, {}).get(movie_id, [])
 
-    # ---------------------------------------------------------------------
-    # EOF tracking helpers
-    # ---------------------------------------------------------------------
     def set_stream_eof(self, client_id: str, stream: str) -> None:
         """Persist that *stream* ("movies" | "other") has sent EOF for client."""
         if stream not in ("movies", "other"):
@@ -182,9 +144,6 @@ class JoinerState:
         tracker = self._eof_trackers.get(client_id)
         return bool(tracker and tracker["movies"] and tracker["other"])
 
-    # ---------------------------------------------------------------------
-    # Clean-up helpers
-    # ---------------------------------------------------------------------
     def purge_orphan_other_after_movie_eof(self, client_id: str) -> None:
         """Discard buffered *other* data that can never be matched now that the
         movies stream has ended for *client_id*.
@@ -221,9 +180,6 @@ class JoinerState:
             else:
                 self._persist(client_id)
 
-    # -------------------------------------------------------------
-    # Internal helper – persistence
-    # -------------------------------------------------------------
     def _persist(self, client_id: str) -> None:
         """Persist the state snapshot for *client_id* only."""
         if self._state_manager is None:
@@ -246,9 +202,7 @@ class JoinerState:
         except Exception as exc:
             logging.error("[JoinerState] Error while persisting per-client state: %s", exc)
 
-    # -------------------------------------------------------------
-    # Helper – ensure we have a StatePersistence helper for *client_id*
-    # -------------------------------------------------------------
+
     def _get_client_manager(self, client_id: str) -> "StatePersistence":
         mgr = self._client_state_managers.get(client_id)
         if mgr is None:
