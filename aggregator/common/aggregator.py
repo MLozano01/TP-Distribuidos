@@ -45,6 +45,10 @@ class Aggregator:
         else:
             decoded_msg = self.protocol.decode_movies_msg(body)
 
+        if decoded_msg.finished:
+            self.publish_finished_msg(decoded_msg)
+            return
+
         self.aggregate(decoded_msg)
 
     def aggregate(self, decoded_msg):
@@ -61,6 +65,16 @@ class Aggregator:
         except Exception as e:
             logging.error(f"Error processing message: {e}")
             return
+        
+    def publish_finished_msg(self, decoded_msg):
+        """Publishes an AggregationBatch with finished=True to downstream consumers."""
+        aggr_pb = self.protocol.decode_aggr_batch(self.protocol.create_aggr_batch({}, decoded_msg.client_id, decoded_msg.secuence_number))
+        aggr_pb.finished = True
+        
+        finished_serialized = aggr_pb.SerializeToString()
+        
+        self.queue_snd.publish(finished_serialized)
+        logging.info(f"Published finished signal to {self.queue_snd.exchange}")
         
     def stop(self):
         """End the aggregator and close the queue."""

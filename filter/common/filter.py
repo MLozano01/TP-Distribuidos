@@ -55,13 +55,15 @@ class Filter:
         logging.debug(f"Received message, with routing key: {method.routing_key}")
         decoded_msg = self.protocol.decode_movies_msg(body)
 
+        if decoded_msg.finished:
+            self.publisher.publish_finished_signal(decoded_msg)
+
         self.filter(decoded_msg)
 
     def filter(self, decoded_msg):
         try:
             result = parse_filter_funct(decoded_msg, self.filter_by)
-            client_id = decoded_msg.client_id
-            self.publisher.publish(result, client_id, decoded_msg.secuence_number)
+            self.publisher.publish(result, decoded_msg.client_id, decoded_msg.secuence_number)
         except Exception as e:
             logging.error(f"Error processing message: {e}")
             # Do a raise for nack ? 

@@ -56,18 +56,18 @@ class DataController:
         if not message_type or not message:
             logging.warning("Received invalid message from server")
             return
+        
+        if message.finished:
+            self._handle_finished_message(message_type, message)
+            return
+
         self._handle_data_message(message_type, message)
 
 
     def _handle_finished_message(self, message_type, msg):
         """Handle finished messages with coordination"""
-        client_id = msg.client_id
-        logging.info(f"Received {message_type.name} finished signal from server for client {client_id}")
+        logging.info(f"Propagating finished {message_type} of client {msg.client_id} downstream")
         msg_to_send = msg.SerializeToString()
-        self.comm_instance.start_token_ring(msg.client_id)
-        
-        self.comm_instance.wait_eof_confirmation()
-        logging.info(f"Propagating finished {message_type} of client {client_id} downstream")
         self.send_queue.publish(msg_to_send)
         
 

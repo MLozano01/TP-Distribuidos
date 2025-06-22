@@ -53,6 +53,9 @@ class Transformer:
         logging.info(f"Received message, with routing key: {method.routing_key}")
         decoded_msg = self.protocol.decode_movies_msg(body)
 
+        if decoded_msg.finished:
+            self._publish_movie_finished_signal(decoded_msg)
+
         self._process_message(decoded_msg)
         
         
@@ -151,11 +154,6 @@ class Transformer:
 
 
     def _publish_movie_finished_signal(self, msg):
-        logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
-        self.comm_instance.start_token_ring(msg.client_id)
-        
-        self.comm_instance.wait_eof_confirmation()
-        logging.info("Received SEND finished signal from communication channel.")
         self.queue_snd.publish(msg.SerializeToString())
         logging.info(f"Published movie finished signal to {self.queue_snd.exchange}")
 
