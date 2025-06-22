@@ -16,9 +16,6 @@ class CreditsJoinStrategy(JoinStrategy):
         self._seqgen = SequenceGenerator(replica_id, replicas_count, namespace="actors")
         self._batcher: PerClientBatcher | None = None
 
-    # ------------------------------------------------------------------
-    # Incoming CREDITS stream
-    # ------------------------------------------------------------------
     def process_other_message(self, body, state, producer):
         credits_msg = self.protocol.decode_credits_msg(body)
         if not credits_msg:
@@ -95,22 +92,19 @@ class CreditsJoinStrategy(JoinStrategy):
                 flat.append(item)
         self._join_and_batch(flat, movie_id, title, client_id, producer)
 
-    # ------------------------------------------------------------------
-    # EOF hooks
-    # ------------------------------------------------------------------
+
     def handle_movie_eof(self, client_id, state):
         # Credits that correspond to movies that never arrived can be discarded.
         state.purge_orphan_other_after_movie_eof(client_id)
 
     def handle_client_finished(self, client_id, state, producer):
         if self._batcher:
-            self._batcher.flush_client(client_id)
+            self._batcher.flush_key(client_id)
             self._batcher.clear(client_id)
         last_seq = self._seqgen.current(client_id)
         send_finished_signal(producer, client_id, self.protocol, secuence_number=last_seq)
         self._seqgen.clear(client_id)
 
-    # ----------------------------------------------
     def _ensure_batcher(self, producer):
         if self._batcher is not None:
             return

@@ -100,7 +100,6 @@ class JoinerState:
             "eof_trackers": eofs,
         }
 
-    # ------------------------------------------------------------------
     def _normalise_snapshots(
         self, persisted: Dict[str, Dict]
     ) -> Tuple[
@@ -174,9 +173,6 @@ class JoinerState:
         """Return movie title (str) or None."""
         return self._movies_data.get(client_id, {}).get(movie_id)
 
-    # ---------------------------------------------------------------------
-    # Other-stream helpers
-    # ---------------------------------------------------------------------
     def buffer_other(self, client_id: str, movie_id: int, other_pb) -> None:
         """Buffers an *other* record that arrived before its movie."""
         with self._lock:

@@ -71,11 +71,6 @@ class PerClientBatcher:
             for k in list(self._buffers.keys()):
                 self._flush_locked(k)
 
-    # Backward compatibility ----------------------------------------
-    def flush_client(self, client_id: str) -> None:  # noqa: D401
-        """Alias for flush_key maintained for older call sites."""
-        self.flush_key(client_id)
-
     def _flush_locked(self, key: str) -> None:
         buf = self._buffers.get(key)
         if not buf:
@@ -89,7 +84,6 @@ class PerClientBatcher:
         self._get_state_helper(key).save([])
         self._last_flush[key] = time.monotonic()
 
-    # ------------------------------------------------------------------
     def _get_state_helper(self, key: str) -> StatePersistence:
         helper = self._state_helpers.get(key)
         if helper is None:
@@ -126,9 +120,6 @@ class PerClientBatcher:
             if helper is not None:
                 helper.clear()
 
-    # ------------------------------------------------------------------
-    # New helpers – explicit persistence at delivery boundaries
-    # ------------------------------------------------------------------
     def snapshot_key(self, key: str) -> None:
         """Persist the current buffer for *key* exactly once.
 

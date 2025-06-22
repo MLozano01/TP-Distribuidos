@@ -16,9 +16,6 @@ class RatingsJoinStrategy(JoinStrategy):
         self._seqgen = SequenceGenerator(replica_id, replicas_count, namespace="ratings")
         self._batcher: PerClientBatcher | None = None
 
-    # ------------------------------------------------------------------
-    # Incoming RATINGS stream
-    # ------------------------------------------------------------------
     def process_other_message(self, body, state, producer):
         """Process a RatingsMsg coming from RabbitMQ.
 
@@ -66,9 +63,6 @@ class RatingsJoinStrategy(JoinStrategy):
         self._snapshot_if_needed(client_id)
         return None
 
-    # ------------------------------------------------------------------
-    # Helper hooks
-    # ------------------------------------------------------------------
     def _join_and_batch(self, ratings, movie_id, title, client_id, producer):
         if not ratings:
             return
@@ -98,9 +92,6 @@ class RatingsJoinStrategy(JoinStrategy):
         for rating_val in unmatched_ratings:
             self._join_and_batch([rating_val], movie_id, title, client_id, producer)
 
-    # ------------------------------------------------------------------
-    # EOF hooks
-    # ------------------------------------------------------------------
     def handle_movie_eof(self, client_id, state):
         """After movies EOF we purge orphan ratings that will never match."""
         state.purge_orphan_other_after_movie_eof(client_id)
@@ -108,13 +99,12 @@ class RatingsJoinStrategy(JoinStrategy):
     def handle_client_finished(self, client_id, state, producer):
         """Both streams are done – flush pending batches and propagate EOF."""
         if self._batcher:
-            self._batcher.flush_client(client_id)
+            self._batcher.flush_key(client_id)
             self._batcher.clear(client_id)
         last_seq = self._seqgen.current(client_id)
         send_finished_signal(producer, client_id, self.protocol, secuence_number=last_seq)
         self._seqgen.clear(client_id)
 
-    # ----------------------------------------------
     def _ensure_batcher(self, producer):
         if self._batcher is not None:
             return
