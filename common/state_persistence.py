@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import json
 import logging
@@ -6,6 +7,7 @@ import importlib
 from pathlib import Path
 from typing import Any, Callable, Optional
 import glob
+import uuid
 
 
 if 'files_pb2' not in sys.modules:
@@ -21,7 +23,14 @@ class StatePersistence:
     _SUPPORTED_SERIALIZERS = {_JSON, _PICKLE}
     BASE_FILE_NAME = "secuence_numbers_"
 
-    def __init__(self, node_info, filename: str, *, directory: str = "/backup", serializer: str = _JSON) -> None:
+    def __init__(
+        self,
+        filename: str,
+        *,
+        node_info: Optional[str] = None,
+        directory: str = "/backup",
+        serializer: str = _JSON,
+    ) -> None:
         if serializer not in self._SUPPORTED_SERIALIZERS:
             raise ValueError(
                 f"Unsupported serializer '{serializer}'. "
@@ -31,7 +40,7 @@ class StatePersistence:
         self._dir = directory
         os.makedirs(self._dir, exist_ok=True)
 
-        self.node_info = node_info
+        self.node_info = node_info or "default"
         self._file_name = filename
         self._file_path = os.path.join(self._dir, self._file_name)
         self._tmp_path = os.path.join(self._dir, f"temp_{self._file_name}")
@@ -40,22 +49,25 @@ class StatePersistence:
     def save(self, data: Any) -> None:
         """Persist *data* to disk in an *atomic* fashion."""
         try:
+            os.makedirs(self._dir, exist_ok=True)
+
+            tmp_name = f"temp_{uuid.uuid4().hex}_{self._file_name}"
+            tmp_path = os.path.join(self._dir, tmp_name)
+
             if self._serializer == self._PICKLE:
                 import pickle
 
-                with open(self._tmp_path, "wb") as fp:
+                with open(tmp_path, "wb") as fp:
                     pickle.dump(data, fp)
-                    #fp.flush()
-                    #os.fsync(fp.fileno())
             else:
-                with open(self._tmp_path, "w") as fp:
+                with open(tmp_path, "w") as fp:
                     json.dump(data, fp)
                     fp.flush()
-                    #os.fsync(fp.fileno())
 
-            os.replace(self._tmp_path, self._file_path)
+            os.replace(tmp_path, self._file_path)
         except Exception as exc:
             logging.error(f"[StatePersistence] Error saving state: {exc}")
+            raise
 
     def load(self, default_factory: Optional[Callable[[], Any]] = None) -> Any:
         """Load previously persisted data.

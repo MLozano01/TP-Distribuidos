@@ -11,7 +11,8 @@ def send_movie_batch(producer, movie_list, client_id, protocol):
         producer.publish(encoded_batch)
         logging.info(f"Sent batch of {len(movie_list)} movies for client {client_id}")
     except Exception as e:
-        logging.error(f"Error sending movie batch for client {client_id}: {e}", exc_info=True)
+        logging.error(f"Failed to send movie batch: {e}")
+        raise
 
 def send_actor_participations_batch(producer, participations_list, client_id, protocol):
     """Sends a batch of actor participations."""
@@ -22,13 +23,28 @@ def send_actor_participations_batch(producer, participations_list, client_id, pr
         producer.publish(encoded_batch)
         logging.info(f"Sent batch of {len(participations_list)} actor participations for client {client_id}")
     except Exception as e:
-        logging.error(f"Error sending actor participations batch for client {client_id}: {e}", exc_info=True)
+        logging.error(f"Failed to send actor participations batch: {e}")
+        raise
 
-def send_finished_signal(producer, client_id, protocol):
-    """Sends a finished signal for a specific client."""
+def send_finished_signal(producer, client_id, protocol, secuence_number=None):
+    """Sends a finished signal for a specific client.
+
+    The joiner must propagate the *last* sequence number it used for that
+    client so that downstream components (aggregators, reducers) can apply the
+    duplicate-detection logic.
+    """
     try:
-        finished_msg = protocol.encode_movies_msg([], int(client_id), finished=True)
+        if secuence_number is None:
+            secuence_number = 0
+
+        from protocol import files_pb2
+        movies_pb = files_pb2.MoviesCSV()
+        movies_pb.client_id = int(client_id)
+        movies_pb.finished = True
+        movies_pb.secuence_number = int(secuence_number)
+        finished_msg = movies_pb.SerializeToString()
         producer.publish(finished_msg)
         logging.info(f"Sent FINISHED signal for client {client_id}.")
     except Exception as e:
-        logging.error(f"Error sending FINISHED signal for client {client_id}: {e}", exc_info=True) 
+        logging.error(f"Failed to send FINISHED signal: {e}")
+        raise 

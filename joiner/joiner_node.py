@@ -22,7 +22,6 @@ class JoinerNode:
         backup_file = self.config.get('backup_file', f"joiner_state_{self.replica_id}.pkl")
         self._state_manager = StatePersistence(self.config["joiner_name"], backup_file, serializer="pickle")
 
-
         self.state = JoinerState(self._state_manager)
         self.protocol = Protocol()
         self.other_data_type = self.config.get('other_data_type', 'RATINGS')
@@ -147,7 +146,7 @@ class JoinerNode:
         logging.info("Healthcheck listener stopped.")
 
     def _process_movie_message(self, ch, method, properties, body):
-        logging.info(f"[Node] Received a movie message. Size: {len(body)} bytes.")
+        #logging.info(f"[Node] Received a movie message. Size: {len(body)} bytes.")
 
         if self._should_requeue():
             raise ShutdownRequeueException()
@@ -159,10 +158,10 @@ class JoinerNode:
                 return
 
             client_id = str(movies_msg.client_id)
-            logging.info(
+            """logging.info(
                 f"[Node] Processing movie message for client {client_id}. "
                 f"Finished: {movies_msg.finished}, Items: {len(movies_msg.movies)}"
-            )
+            )"""
 
             if movies_msg.finished:
                 self._handle_movie_eof(client_id)
@@ -176,7 +175,7 @@ class JoinerNode:
             raise
 
     def _process_other_message(self, ch, method, properties, body):
-        logging.info(f"[Node] Received an other message. Size: {len(body)} bytes.")
+        #logging.info(f"[Node] Received an other message. Size: {len(body)} bytes.")
 
         if self._should_requeue():
             raise ShutdownRequeueException()
@@ -235,4 +234,6 @@ class JoinerNode:
                 self.join_strategy.process_unmatched_data(
                     unmatched, movie.id, movie.title, client_id, self.output_producer
                 )
+        self.state.persist_client(client_id)
+
         logging.debug("[Node] Added %d movies to buffer for client %s", len(movies), client_id) 
