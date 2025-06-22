@@ -11,7 +11,7 @@ def main():
     config_logger(config["logging_level"])
     config.pop("logging_level")
 
-    state_manager = StatePersistence(config['reducer_name'], config['backup_file'], serializer="json")
+    state_manager = StatePersistence(config['backup_file'], node_info=config['reducer_name'], serializer="json")
     partial_result_backup_info = state_manager.load(default_factory=dict)
     logging.info(f"Partial Result Backup Info: {partial_result_backup_info}")
 

@@ -1,13 +1,19 @@
+from __future__ import annotations
 import logging
+import os
 from logic.join_strategy import JoinStrategy
 from protocol.protocol import Protocol
 from messaging.messaging_utils import send_finished_signal
+from common.batcher import PerClientBatcher
+from common.sequence_generator import SequenceGenerator
 
 class RatingsJoinStrategy(JoinStrategy):
     """Join strategy that combines movie details with rating records."""
 
-    def __init__(self):
+    def __init__(self, replica_id: int, replicas_count: int):
         super().__init__()
+        self._seqgen = SequenceGenerator(replica_id, replicas_count)
+        self._batcher: PerClientBatcher | None = None
 
     # ------------------------------------------------------------------
     # Incoming RATINGS stream
@@ -66,17 +72,22 @@ class RatingsJoinStrategy(JoinStrategy):
             return
         rating_val = ratings[0]
         try:
-            msg = self.protocol.encode_joined_rating_msg(
-                client_id=int(client_id),
+            self._ensure_batcher(producer)
+
+            # Build JoinedRating PB
+            from protocol import files_pb2
+
+            rating_pb = files_pb2.JoinedRating(
                 movie_id=movie_id,
                 title=title,
                 rating=rating_val,
                 timestamp="",
             )
-            producer.publish(msg)
+
+            self._batcher.add(rating_pb, client_id)
         except Exception as exc:
             logging.error(
-                f"Failed to emit joined rating – client {client_id} movie {movie_id}: {exc}",
+                f"Failed to batch joined rating – client {client_id} movie {movie_id}: {exc}",
                 exc_info=True,
             )
             raise
@@ -93,5 +104,30 @@ class RatingsJoinStrategy(JoinStrategy):
         state.purge_orphan_other_after_movie_eof(client_id)
 
     def handle_client_finished(self, client_id, state, producer):
-        """Both streams are done – propagate consolidated EOF downstream."""
+        """Both streams are done – flush pending batches and propagate EOF."""
+        if self._batcher:
+            self._batcher.flush_client(client_id)
+            self._batcher.clear(client_id)
+        self._seqgen.clear(client_id)
         send_finished_signal(producer, client_id, self.protocol)
+
+    # ----------------------------------------------
+    def _ensure_batcher(self, producer):
+        if self._batcher is not None:
+            return
+
+        batch_size = int(os.getenv("JOINER_BATCH_SIZE", "100"))
+
+        def _encode_batch(ratings_list, cid):
+            from protocol import files_pb2
+            batch = files_pb2.JoinedRatingsBatch(client_id=cid)
+            batch.ratings.extend(ratings_list)
+            batch.secuence_number = self._seqgen.next(str(cid))
+            return batch.SerializeToString()
+
+        self._batcher = PerClientBatcher(
+            producer,
+            _encode_batch,
+            max_items=batch_size,
+            namespace="ratings",
+        )

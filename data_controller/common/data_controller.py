@@ -7,6 +7,7 @@ from protocol.utils.parsing_proto_utils import is_date
 from .aux import filter_movies, filter_ratings, filter_credits
 from queue import Empty
 from multiprocessing import Process, Value
+import os
 
 START = False
 DONE = True
@@ -48,7 +49,7 @@ class DataController:
             'ratings': ["movieId", "rating", "timestamp"],
             'credits': ["id", "cast"]
         }
-        
+
         # Setup signal handler for SIGTERM
         signal.signal(signal.SIGTERM, self._handle_shutdown)
 
@@ -118,6 +119,7 @@ class DataController:
 
     def publish_ratings(self, ratings_csv):
         ratings_batch = filter_ratings(ratings_csv)
+        # Route by client_id as before (one client→one joiner)
         self.send_queue.publish(ratings_batch.SerializeToString(), routing_key=str(ratings_batch.client_id))
 
     def publish_credits(self, credits_csv):
