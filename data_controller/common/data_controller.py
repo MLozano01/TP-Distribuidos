@@ -113,6 +113,7 @@ class DataController:
     def publish_movies(self, movies_csv):
         movies_pb = filter_movies(movies_csv)
         if movies_pb:
+            logging.info(f"SECUENCE NUMBER: {movies_pb.secuence_number}")
             self.send_queue.publish(movies_pb.SerializeToString())
 
     def publish_ratings(self, ratings_csv):

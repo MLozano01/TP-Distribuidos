@@ -386,6 +386,7 @@ services:
       - rabbitmq
     environment:
       - BACKUP_FILE=backup_reducer-top5.json
+      - REDUCER_NAME=reducer-top5
     volumes:
       - ./reducer/reducers/top5.ini:/config.ini
       - ./reducer/backup:/backup
@@ -403,6 +404,7 @@ services:
       - rabbitmq
     environment:
       - BACKUP_FILE=backup_reducer-top10.json
+      - REDUCER_NAME=reducer-top10
     volumes:
       - ./reducer/reducers/top10.ini:/config.ini
       - ./reducer/backup:/backup
@@ -420,6 +422,7 @@ services:
       - rabbitmq
     environment:
       - BACKUP_FILE=backup_reducer-max-min.json
+      - REDUCER_NAME=reducer-max-min
     volumes:
       - ./reducer/reducers/max-min.ini:/config.ini
       - ./reducer/backup:/backup
@@ -437,6 +440,7 @@ services:
       - rabbitmq
     environment:
       - BACKUP_FILE=backup_reducer-average.json
+      - REDUCER_NAME=reducer-average
     volumes:
       - ./reducer/reducers/average.ini:/config.ini
       - ./reducer/backup:/backup
@@ -454,6 +458,7 @@ services:
       - rabbitmq
     environment:
       - BACKUP_FILE=backup_reducer-query1.json
+      - REDUCER_NAME=reducer-query1
     volumes:
       - ./reducer/reducers/query1.ini:/config.ini
       - ./reducer/backup:/backup

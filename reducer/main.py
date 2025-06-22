@@ -1,8 +1,7 @@
 import logging
-import common.communicator
-import common.config_init as config_init
+import common_reducer.config_init as config_init
 from protocol.utils.logger import config_logger
-import common.reducer, common.communicator
+from common_reducer import communicator, reducer
 from common.state_persistence import StatePersistence
 
 from multiprocessing import Process
@@ -12,18 +11,21 @@ def main():
     config_logger(config["logging_level"])
     config.pop("logging_level")
 
-    state_manager = StatePersistence(config['backup_file'], serializer="json")
-    backup_info = state_manager.load(default_factory=dict)
-    logging.info(f"Backup Info: {backup_info}")
+    state_manager = StatePersistence(config['backup_file'], node_info=config['reducer_name'], serializer="json")
+    partial_result_backup_info = state_manager.load(default_factory=dict)
+    logging.info(f"Partial Result Backup Info: {partial_result_backup_info}")
+
+    secuence_number_backup_info = state_manager.load_saved_secuence_number_data()
+    logging.info(f"Secuence Number Backup Info: {secuence_number_backup_info}")
 
     try: 
-        comms = common.communicator.Communicator(config['port'])
+        comms = communicator.Communicator(config['port'])
         config.pop('port')
 
         comms_process = Process(target=comms.start, args=())
         comms_process.start()
 
-        red = common.reducer.Reducer(config, backup_info, state_manager)
+        red = reducer.Reducer(config, partial_result_backup_info, secuence_number_backup_info, state_manager)
         red.start()
         comms_process.join()
     except KeyboardInterrupt:

@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import json
 import logging
@@ -5,49 +6,28 @@ import sys
 import importlib
 from pathlib import Path
 from typing import Any, Callable, Optional
+import glob
+import uuid
 
-
-# ---------------------------------------------------------------------------
-# Ensure protobuf-generated modules can be pickled / un-pickled.
-# The protobuf code inside ``protocol/files_pb2.py`` declares its classes in
-# the *top-level* module ``files_pb2`` (see DESCRIPTOR definition).  When we
-# import it via ``protocol.files_pb2`` Python registers the module under the
-# key ``protocol.files_pb2`` – but *not* under ``files_pb2``.  ``pickle`` uses
-# ``cls.__module__`` (``files_pb2``) when serialising, therefore deserialising
-# later would fail unless the alias exists.  The snippet below makes sure the
-# alias is present exactly once.
-# ---------------------------------------------------------------------------
 
 if 'files_pb2' not in sys.modules:
     try:
         sys.modules['files_pb2'] = importlib.import_module('protocol.files_pb2')
     except ModuleNotFoundError:
-        # Not fatal – happens in components that never deal with proto objects.
         pass
 
 
 class StatePersistence:
-    """Generic helper to persist and restore a python object to the filesystem.
-
-    The implementation is intentionally simple so that it can be reused by any
-    component that needs a *very* lightweight durability mechanism.  The class
-    stores the data in the directory given (defaults to ``/backup`` – the same
-    directory already used by other nodes) using **atomic** replacement so that
-    corrupted partial writes are avoided.
-
-    By default the data is serialized as JSON, which is enough for basic types
-    (``dict``, ``list``, ``int``, ``str`` …).  When you need to persist more
-    complex python objects you can choose the *pickle* serializer.
-    """
-
     _JSON = "json"
     _PICKLE = "pickle"
     _SUPPORTED_SERIALIZERS = {_JSON, _PICKLE}
+    BASE_FILE_NAME = "secuence_numbers_"
 
     def __init__(
         self,
         filename: str,
         *,
+        node_info: Optional[str] = None,
         directory: str = "/backup",
         serializer: str = _JSON,
     ) -> None:
@@ -58,39 +38,36 @@ class StatePersistence:
             )
 
         self._dir = directory
-        # Ensure the target directory exists – it may be mounted as a Docker
-        # volume but not created yet.
         os.makedirs(self._dir, exist_ok=True)
 
+        self.node_info = node_info or "default"
         self._file_name = filename
         self._file_path = os.path.join(self._dir, self._file_name)
         self._tmp_path = os.path.join(self._dir, f"temp_{self._file_name}")
         self._serializer = serializer
 
-    # ---------------------------------------------------------------------
-    # Public API
-    # ---------------------------------------------------------------------
     def save(self, data: Any) -> None:
         """Persist *data* to disk in an *atomic* fashion."""
         try:
+            os.makedirs(self._dir, exist_ok=True)
+
+            tmp_name = f"temp_{uuid.uuid4().hex}_{self._file_name}"
+            tmp_path = os.path.join(self._dir, tmp_name)
+
             if self._serializer == self._PICKLE:
                 import pickle
 
-                with open(self._tmp_path, "wb") as fp:
+                with open(tmp_path, "wb") as fp:
                     pickle.dump(data, fp)
-                    #fp.flush()
-                    #os.fsync(fp.fileno())
             else:
-                with open(self._tmp_path, "w") as fp:
+                with open(tmp_path, "w") as fp:
                     json.dump(data, fp)
                     fp.flush()
-                    #os.fsync(fp.fileno())
 
-            # Atomic replace – guarantees that either the *old* or the *new*
-            # file is present even in case of a crash in between.
-            os.replace(self._tmp_path, self._file_path)
+            os.replace(tmp_path, self._file_path)
         except Exception as exc:
             logging.error(f"[StatePersistence] Error saving state: {exc}")
+            raise
 
     def load(self, default_factory: Optional[Callable[[], Any]] = None) -> Any:
         """Load previously persisted data.
@@ -100,7 +77,7 @@ class StatePersistence:
         ``None``).
         """
         if default_factory is None:
-            default_factory = dict  # type: ignore
+            default_factory = dict
 
         if not Path(self._file_path).exists():
             return default_factory()
@@ -118,10 +95,55 @@ class StatePersistence:
             logging.error(f"[StatePersistence] Error loading state: {exc}")
             return default_factory()
 
+    def save_secuence_number_data(self, info_to_save, client_id):
+        tempfile = f"/backup/temp_{self.BASE_FILE_NAME}_{self.node_info}_{client_id}.txt"
+        actual_file = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_client_{client_id}.txt"
+
+        try:
+            if os.path.exists(actual_file):
+                with open(actual_file, 'r') as f:
+                    existing = f.read()
+            else:
+                existing = ""
+
+            with open(tempfile, 'w') as f:
+                f.write(existing)
+                f.write(f"{info_to_save}\n")
+                f.flush()
+
+            os.replace(tempfile, actual_file)
+
+        except Exception as e:
+            logging.error(f"ERROR saving secuence numbe info to file {actual_file}: {e}")
+
+    def load_saved_secuence_number_data(self):
+        try:
+            backup = {}
+
+            for filepath in glob.glob(f'/backup/{self.BASE_FILE_NAME}_{self.node_info}_*.txt'):
+                client = filepath.split("_")[3]
+                with open(filepath) as f:
+                    backup.setdefault(client, [])
+                    for line in f:
+                        backup[client].append(line.strip())     
+            return backup       
+            
+        except Exception as e:
+            logging.error(f"ERROR reading from file: {e}")
+
     def clear(self) -> None:
         """Remove the persisted file from disk if it exists."""
         try:
             if Path(self._file_path).exists():
                 os.remove(self._file_path)
+        except Exception as exc:
+            logging.error(f"[StatePersistence] Error clearing state: {exc}") 
+
+    def clean_client(self, client_id) -> None:
+        """Remove the file from disk if it exists."""
+        path = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_{client_id}"
+        try:
+            if Path(path).exists():
+                os.remove(path)
         except Exception as exc:
             logging.error(f"[StatePersistence] Error clearing state: {exc}") 
