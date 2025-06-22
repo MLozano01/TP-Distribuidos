@@ -140,10 +140,6 @@ class Transformer:
 
     def _send_processed_batch(self, processed_movies, client_id, sequence_number):
         """Creates the outgoing MoviesCSV message and publishes it."""
-        if not processed_movies:
-            logging.debug("No movies suitable for sending after processing and filtering.")
-            return
-
         try:
             outgoing_movies_msg = self.protocol.create_movie_list(processed_movies, client_id, sequence_number)
             logging.debug(f"Sending {len(processed_movies)} processed movies")
@@ -179,10 +175,7 @@ class Transformer:
                 if processed_movie:
                     processed_movies_list.append(processed_movie)
 
-            if not processed_movies_list:
-                logging.info(f"No valid movies found in batch. Skipping send.")
-            else:
-                self._send_processed_batch(processed_movies_list, incoming_movies_msg.client_id, incoming_movies_msg.secuence_number)
+            self._send_processed_batch(processed_movies_list, incoming_movies_msg.client_id, incoming_movies_msg.secuence_number)
 
         except Exception as e:
             logging.error(f"Error processing message batch: {e}", exc_info=True)

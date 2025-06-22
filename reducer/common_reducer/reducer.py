@@ -57,7 +57,6 @@ class Reducer:
                 return
             
             self._manage_msg(data, str(msg.client_id), str(msg.secuence_number))
-            self._save_info(str(msg.client_id), str(msg.secuence_number))
 
         except json.JSONDecodeError as e:
             logging.error(f"Failed to decode JSON: {e}")
@@ -71,14 +70,16 @@ class Reducer:
         return secuence_number in self.batches_seen[client_id]
 
     def _save_info(self, client_id, secuence_number):
+        self.batches_seen[client_id].append(secuence_number)
+        
         self._state_manager.save(self.partial_status)
         self._state_manager.save_secuence_number_data(secuence_number, client_id)
 
     def _manage_msg(self, data, client_id, secuence_number):
         self.partial_status.setdefault(client_id, {"results": {}, "final_secuence": None})
-
         self.partial_status[client_id]['results'] = parse_reduce_funct(data, self.reduce_by, self.partial_status[client_id]['results'])
-        self.batches_seen[client_id].append(secuence_number)
+
+        self._save_info(client_id, secuence_number)
 
         if self.partial_status[client_id]['final_secuence']:
             logging.info("Got a delayed message")
@@ -93,7 +94,7 @@ class Reducer:
 
     def _handle_finished(self, client_id):
         
-        if len(self.batches_seen[client_id]) != self.partial_status[client_id]["final_secuence"]:
+        if len(self.batches_seen[client_id]) != self.partial_status[client_id]["final_secuence"] + 1:
             logging.info(f'Not all messages have arrived = Batches Seen: {len(self.batches_seen[client_id])} vs Finished Secuence Number: {self.partial_status[str(client_id)]["final_secuence"]}')
             return
 
