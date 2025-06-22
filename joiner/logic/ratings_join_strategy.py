@@ -12,7 +12,8 @@ class RatingsJoinStrategy(JoinStrategy):
 
     def __init__(self, replica_id: int, replicas_count: int):
         super().__init__()
-        self._seqgen = SequenceGenerator(replica_id, replicas_count)
+        self._replica_id = replica_id
+        self._seqgen = SequenceGenerator(replica_id, replicas_count, namespace="ratings")
         self._batcher: PerClientBatcher | None = None
 
     # ------------------------------------------------------------------
@@ -49,7 +50,7 @@ class RatingsJoinStrategy(JoinStrategy):
             rating_value = float(rating.rating)
             movie_title = state.get_movie(client_id, rating.movieId)
             if movie_title:
-                self._join_and_send([rating_value], rating.movieId, movie_title, client_id, producer)
+                self._join_and_batch([rating_value], rating.movieId, movie_title, client_id, producer)
                 continue
 
             # Movie not (yet) available – should we buffer or discard?  If the
@@ -62,12 +63,13 @@ class RatingsJoinStrategy(JoinStrategy):
                 continue
 
             state.buffer_other(client_id, rating.movieId, rating_value)
+        self._snapshot_if_needed(client_id)
         return None
 
     # ------------------------------------------------------------------
     # Helper hooks
     # ------------------------------------------------------------------
-    def _join_and_send(self, ratings, movie_id, title, client_id, producer):
+    def _join_and_batch(self, ratings, movie_id, title, client_id, producer):
         if not ratings:
             return
         rating_val = ratings[0]
@@ -94,7 +96,7 @@ class RatingsJoinStrategy(JoinStrategy):
 
     def process_unmatched_data(self, unmatched_ratings, movie_id, title, client_id, producer):
         for rating_val in unmatched_ratings:
-            self._join_and_send([rating_val], movie_id, title, client_id, producer)
+            self._join_and_batch([rating_val], movie_id, title, client_id, producer)
 
     # ------------------------------------------------------------------
     # EOF hooks
@@ -108,8 +110,9 @@ class RatingsJoinStrategy(JoinStrategy):
         if self._batcher:
             self._batcher.flush_client(client_id)
             self._batcher.clear(client_id)
+        last_seq = self._seqgen.current(client_id)
+        send_finished_signal(producer, client_id, self.protocol, secuence_number=last_seq)
         self._seqgen.clear(client_id)
-        send_finished_signal(producer, client_id, self.protocol)
 
     # ----------------------------------------------
     def _ensure_batcher(self, producer):
@@ -129,5 +132,13 @@ class RatingsJoinStrategy(JoinStrategy):
             producer,
             _encode_batch,
             max_items=batch_size,
-            namespace="ratings",
+            namespace=f"ratings_r{self._replica_id}",
         )
+
+    def _snapshot_if_needed(self, client_id):
+        if self._batcher is not None:
+            try:
+                self._batcher.snapshot_key(client_id)
+            except Exception as exc:
+                logging.error("Error snapshotting batch for client %s: %s", client_id, exc)
+                raise

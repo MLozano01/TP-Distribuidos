@@ -49,7 +49,7 @@ class DataController:
             'ratings': ["movieId", "rating", "timestamp"],
             'credits': ["id", "cast"]
         }
-
+        
         # Setup signal handler for SIGTERM
         signal.signal(signal.SIGTERM, self._handle_shutdown)
 

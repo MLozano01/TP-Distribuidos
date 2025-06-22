@@ -67,6 +67,7 @@ class StatePersistence:
             os.replace(tmp_path, self._file_path)
         except Exception as exc:
             logging.error(f"[StatePersistence] Error saving state: {exc}")
+            raise
 
     def load(self, default_factory: Optional[Callable[[], Any]] = None) -> Any:
         """Load previously persisted data.

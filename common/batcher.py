@@ -58,7 +58,6 @@ class PerClientBatcher:
         with self._lock:
             buf = self._buffers[key]
             buf.append(item)
-            self._get_state_helper(key).save(buf)
 
             if len(buf) >= self._max_items:
                 self._flush_locked(key)
@@ -117,4 +116,33 @@ class PerClientBatcher:
         """Remove buffered data and truncate on-disk snapshot for *key*."""
         with self._lock:
             self._buffers.pop(key, None)
-            self._get_state_helper(key).save([]) 
+            helper = self._state_helpers.pop(key, None)
+            if helper is None:
+                # Helper may not exist if clear() is called before any data arrived.
+                try:
+                    helper = self._get_state_helper(key)
+                except Exception:
+                    helper = None
+            if helper is not None:
+                helper.clear()
+
+    # ------------------------------------------------------------------
+    # New helpers – explicit persistence at delivery boundaries
+    # ------------------------------------------------------------------
+    def snapshot_key(self, key: str) -> None:
+        """Persist the current buffer for *key* exactly once.
+
+        Call this at the end of a RabbitMQ delivery when the batch has NOT
+        reached `max_items`.  It guarantees crash-replay safety with a single
+        fsync per delivery
+        """
+        with self._lock:
+            buf = self._buffers.get(key)
+            if buf is None:
+                return
+            self._get_state_helper(key).save(buf)
+
+    def snapshot_all(self) -> None:
+        with self._lock:
+            for key in self._buffers:
+                self._get_state_helper(key).save(self._buffers[key]) 

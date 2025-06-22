@@ -266,7 +266,7 @@ class JoinerState:
                     self._client_state_managers.pop(cid, None)
         except Exception as exc:
             logging.error("[JoinerState] Error while persisting per-client state: %s", exc)
-
+            raise
 
     def _get_client_manager(self, client_id: str) -> "StatePersistence":
         mgr = self._client_state_managers.get(client_id)
@@ -278,4 +278,13 @@ class JoinerState:
             filename = f"{base_name}_{client_id}.json"
             mgr = StatePersistence(filename, directory=base_dir, serializer="json")
             self._client_state_managers[client_id] = mgr
-        return mgr 
+        return mgr
+
+    def persist_client(self, client_id: str) -> None:
+        """Persist state for *client_id* immediately, holding the internal lock
+        to avoid concurrent writes that could mutate dictionaries while
+        they are being serialised ("dictionary changed size during
+        iteration").
+        """
+        with self._lock:
+            self._persist(client_id) 

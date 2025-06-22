@@ -36,7 +36,8 @@ class SequenceGenerator:
         replica_id: int,
         replicas_count: int,
         *,
-        filename: str = "joiner_seq.json",
+        namespace: str | None = None,
+        filename: str | None = None,
         backup_dir: str = "/backup",
     ) -> None:
 
@@ -45,6 +46,10 @@ class SequenceGenerator:
 
         self._rid = int(replica_id - 1)  # convert to 0-based for formula
         self._R = int(replicas_count)
+
+        if filename is None:
+            ns = namespace or "joiner"
+            filename = f"{ns}_seq_{replica_id}.json"
 
         self._state = StatePersistence(filename, directory=backup_dir, serializer="json")
         self._lock = Lock()

@@ -12,7 +12,8 @@ class CreditsJoinStrategy(JoinStrategy):
     def __init__(self, replica_id: int, replicas_count: int):
         super().__init__()
         from common.sequence_generator import SequenceGenerator
-        self._seqgen = SequenceGenerator(replica_id, replicas_count)
+        self._replica_id = replica_id
+        self._seqgen = SequenceGenerator(replica_id, replicas_count, namespace="actors")
         self._batcher: PerClientBatcher | None = None
 
     # ------------------------------------------------------------------
@@ -40,8 +41,7 @@ class CreditsJoinStrategy(JoinStrategy):
 
             movie_title = state.get_movie(client_id, credit.id)
             if movie_title:
-                # We can directly join and send
-                self._join_and_send(actor_names, credit.id, movie_title, client_id, producer)
+                self._join_and_batch(actor_names, credit.id, movie_title, client_id, producer)
                 continue
 
             if state.has_eof(client_id, "movies"):
@@ -51,10 +51,10 @@ class CreditsJoinStrategy(JoinStrategy):
                 continue
 
             state.buffer_other(client_id, credit.id, actor_names)
+        self._snapshot_if_needed(client_id)
         return None
 
-    # ------------------------------------------------------------------
-    def _join_and_send(self, actor_names, movie_id, title, client_id, producer):
+    def _join_and_batch(self, actor_names, movie_id, title, client_id, producer):
         if not actor_names:
             return
         # *actor_names* may be a list OR a tuple of lists (unmatched buffer).
@@ -93,7 +93,7 @@ class CreditsJoinStrategy(JoinStrategy):
                 flat.extend(item)
             else:
                 flat.append(item)
-        self._join_and_send(flat, movie_id, title, client_id, producer)
+        self._join_and_batch(flat, movie_id, title, client_id, producer)
 
     # ------------------------------------------------------------------
     # EOF hooks
@@ -106,8 +106,9 @@ class CreditsJoinStrategy(JoinStrategy):
         if self._batcher:
             self._batcher.flush_client(client_id)
             self._batcher.clear(client_id)
+        last_seq = self._seqgen.current(client_id)
+        send_finished_signal(producer, client_id, self.protocol, secuence_number=last_seq)
         self._seqgen.clear(client_id)
-        send_finished_signal(producer, client_id, self.protocol)
 
     # ----------------------------------------------
     def _ensure_batcher(self, producer):
@@ -116,7 +117,6 @@ class CreditsJoinStrategy(JoinStrategy):
 
         batch_size = int(os.getenv("JOINER_BATCH_SIZE", "100"))
 
-        # We can reuse protocol.encode_actor_participations_msg directly
         from protocol.protocol import Protocol
         proto = Protocol()
 
@@ -131,5 +131,13 @@ class CreditsJoinStrategy(JoinStrategy):
             producer,
             _encode_batch,
             max_items=batch_size,
-            namespace="actors",
-        ) 
+            namespace=f"actors_r{self._replica_id}",
+        )
+
+    def _snapshot_if_needed(self, client_id):
+        if self._batcher is not None:
+            try:
+                self._batcher.snapshot_key(client_id)
+            except Exception as exc:
+                logging.error("Error snapshotting batch for client %s: %s", client_id, exc)
+                raise
