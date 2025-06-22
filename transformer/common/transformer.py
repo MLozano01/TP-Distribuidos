@@ -30,12 +30,6 @@ class Transformer:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-        # Setup signal handler for SIGTERM
-        # signal.signal(signal.SIGTERM, self._handle_shutdown)
-
-    def update_actual_client_id_status(self, client_id, status): 
-        self.actual_client_id.value = client_id
-        self.actual_status.value = status
 
     def _setup_signal_handlers(self):
         signal.signal(signal.SIGTERM, self._handle_shutdown)
@@ -192,7 +186,6 @@ class Transformer:
             else:
                 self._send_processed_batch(processed_movies_list, incoming_movies_msg.client_id, incoming_movies_msg.secuence_number)
 
-            self.update_actual_client_id_status(incoming_movies_msg.client_id, DONE)
         except Exception as e:
             logging.error(f"Error processing message batch: {e}", exc_info=True)
 

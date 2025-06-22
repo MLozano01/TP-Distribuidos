@@ -3,8 +3,9 @@ from common.aux import parse_filter_funct
 import logging
 from protocol.protocol import Protocol
 from queue import Empty
-from multiprocessing import Process, Value
+from multiprocessing import Process, Value, Event
 from .publisher.publisher import Publisher
+import signal
 
 logging.getLogger("pika").setLevel(logging.ERROR)
 logging.getLogger("RabbitMQ").setLevel(logging.ERROR)
@@ -21,8 +22,10 @@ class Filter:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
+        self.stop_event = Event()
+
         # Setup signal handler for SIGTERM
-        # signal.signal(signal.SIGTERM, self._handle_shutdown)
+        signal.signal(signal.SIGTERM, self._handle_shutdown)
 
     def update_actual_client_id_status(self, client_id, status): 
         self.actual_client_id.value = client_id
@@ -61,6 +64,7 @@ class Filter:
             self.publisher.publish(result, client_id, decoded_msg.secuence_number)
         except Exception as e:
             logging.error(f"Error processing message: {e}")
+            # Do a raise for nack ? 
             return
 
     def _close_publishers(self):
@@ -68,4 +72,7 @@ class Filter:
         if self.publisher:
             self.publisher.close()
 
-    
+    def _handle_shutdown(self):
+        self.stop_event.set()
+        self._close_publishers()
+

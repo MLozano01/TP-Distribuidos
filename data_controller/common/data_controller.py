@@ -36,10 +36,6 @@ class DataController:
         
         # Setup signal handler for SIGTERM
         signal.signal(signal.SIGTERM, self._handle_shutdown)
-
-    def update_actual_client_id_status(self, client_id, status): 
-        self.actual_client_id.value = client_id
-        self.actual_status.value = status
         
 
     def _settle_queues(self):
@@ -83,7 +79,6 @@ class DataController:
             self.publish_ratings(msg)
         elif message_type == FileType.CREDITS:
             self.publish_credits(msg)
-        self.update_actual_client_id_status(msg.client_id, DONE)
 
     def publish_movies(self, movies_csv):
         movies_pb = filter_movies(movies_csv)

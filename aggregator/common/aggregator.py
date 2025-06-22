@@ -33,9 +33,6 @@ class Aggregator:
         """Start the aggregator to consume messages from the queue."""
         self._settle_queues()
 
-        self.finish_signal_checker = Process(target=self.check_finished, args=())
-        self.finish_signal_checker.start()
-
         self.queue_rcv.consume(self.callback)
 
     def callback(self, ch, method, properties, body):
@@ -65,7 +62,7 @@ class Aggregator:
             logging.error(f"Error processing message: {e}")
             return
         
-    def end_aggregator(self):
+    def stop(self):
         """End the aggregator and close the queue."""
         if self.queue_rcv:
             self.queue_rcv.close_channel()

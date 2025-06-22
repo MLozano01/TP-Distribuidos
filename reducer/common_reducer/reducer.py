@@ -28,7 +28,7 @@ class Reducer:
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.config["exchange_rcv"], self.config['queue_rcv_name'], self.config['routing_rcv_key'], self.config['exc_rcv_type'])
         self.queue_snd = RabbitMQ(self.config['exchange_snd'], self.config['queue_snd_name'], self.config['routing_snd_key'], self.config['exc_snd_type'])
-        
+
     def start(self):
         """Start the reduce to consume messages from the queue."""
         self._settle_queues()
@@ -71,7 +71,7 @@ class Reducer:
     def _is_repeated(self, client_id, secuence_number):
         self.batches_seen.setdefault(client_id, [])
         return secuence_number in self.batches_seen[client_id]
-    
+
     def _clean_up(self, client_id):
         self.partial_result.pop(client_id)
         self._state_manager.save(self.partial_result)
