@@ -54,3 +54,10 @@ docker-compose-logs:
 	docker compose -f docker-compose.yaml logs -f
 .PHONY: docker-compose-logs
 
+chaos-monkey:
+	./chaos-monkey.sh CHAOS
+.PHONY: chaos-monkey
+
+chaos-bomb:
+	./chaos-monkey.sh BOMB
+.PHONY: chaos-bomb
