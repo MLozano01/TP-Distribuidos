@@ -16,28 +16,13 @@ logging.getLogger('pika').setLevel(logging.WARNING)
 logging.getLogger('RabbitMQ').setLevel(logging.WARNING)
 
 class DataController:
-    def __init__(
-            self,
-            finish_notify_ntc,
-            finish_notify_ctn,
-            comm_instance,
-            **kwargs
-    ):
+    def __init__(self, **kwargs):
         self.is_alive = True
         self.protocol = Protocol()
         self.work_consumer = None
         self.send_queue = None
         self.replica_id = kwargs.get('replica_id', 'unknown')
 
-        # communication
-        self.finish_notify_ntc = finish_notify_ntc
-        self.finish_notify_ctn = finish_notify_ctn
-        self.actual_client_id = Value('i', 0)
-        self.actual_status = Value('b', True)
-
-        self.comm_instance = comm_instance
-        self.finish_signal_checker = None
-        
         # Set attributes from kwargs
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -51,10 +36,7 @@ class DataController:
         
         # Setup signal handler for SIGTERM
         signal.signal(signal.SIGTERM, self._handle_shutdown)
-
-    def update_actual_client_id_status(self, client_id, status): 
-        self.actual_client_id.value = client_id
-        self.actual_status.value = status
+        
 
     def _settle_queues(self):
         self.work_consumer = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type, auto_ack=False, prefetch_count=1)
@@ -62,41 +44,30 @@ class DataController:
         self.send_queue = RabbitMQ(self.exchange_snd, self.queue_snd_name, self.routing_snd_key, self.exc_snd_type)
         logging.info("Queues up, ready to use")
 
+
     def run(self):
         """Start the DataController with message consumption"""
         self._settle_queues()
-        
-        # Create separate processes for each type of check_finished
-        self.finish_signal_checker = Process(target=self.check_finished, args=())
-        
-        self.finish_signal_checker.start()
-
         self.work_consumer.consume(self.callback)
 
-        self.finish_signal_checker.join()
 
     def callback(self, ch, method, properties, body):
         message_type, message = self.protocol.decode_client_msg(body, self.columns_needed)
         if not message_type or not message:
             logging.warning("Received invalid message from server")
             return
-        self.update_actual_client_id_status(message.client_id, START)
+        
         if message.finished:
-            self.update_actual_client_id_status(message.client_id, DONE)
             self._handle_finished_message(message_type, message)
-        else:
-            self._handle_data_message(message_type, message)
+            return
+
+        self._handle_data_message(message_type, message)
 
 
     def _handle_finished_message(self, message_type, msg):
         """Handle finished messages with coordination"""
-        client_id = msg.client_id
-        logging.info(f"Received {message_type.name} finished signal from server for client {client_id}")
+        logging.info(f"Propagating finished {message_type} of client {msg.client_id} downstream")
         msg_to_send = msg.SerializeToString()
-        self.comm_instance.start_token_ring(msg.client_id)
-        
-        self.comm_instance.wait_eof_confirmation()
-        logging.info(f"Propagating finished {message_type} of client {client_id} downstream")
         self.send_queue.publish(msg_to_send)
         
 
@@ -108,12 +79,10 @@ class DataController:
             self.publish_ratings(msg)
         elif message_type == FileType.CREDITS:
             self.publish_credits(msg)
-        self.update_actual_client_id_status(msg.client_id, DONE)
 
     def publish_movies(self, movies_csv):
         movies_pb = filter_movies(movies_csv)
         if movies_pb:
-            logging.info(f"SECUENCE NUMBER: {movies_pb.secuence_number}")
             self.send_queue.publish(movies_pb.SerializeToString())
 
     def publish_ratings(self, ratings_csv):
@@ -155,39 +124,6 @@ class DataController:
             logging.info(f"Finished signal checker process terminated.")
         
         logging.info(f"DataController {self.replica_id} stopped successfully")
-
-    def check_finished(self):
-        """Check for finished signals for a specific type of message"""
-        while self.is_alive:
-            try:
-                msg = self.finish_notify_ctn.get()
-                if msg == "STOP_EVENT":
-                    logging.info(f"Filter check_finished process end")
-                    break
-
-                logging.info(f"Received finished signal from control channel: {msg}")
-
-                client_id, status = self.get_last()
-                client_finished = msg[0]
-                if client_finished == client_id:
-                    self.finish_notify_ntc.put([client_finished, status])
-                    logging.info(f"Received finished signal from control channel for client {client_finished}, with status {status}.")
-                else:
-                    self.finish_notify_ntc.put([client_finished, True])
-                    logging.info(f"Received finished signal from control channel for client {client_finished}, but working on {client_id}.")
-            except Empty:
-                logging.info("No finished signal received yet.")
-                pass
-            except Exception as e:
-                logging.error(f"Error in finished signal checker: {e}")
-                break
-
-    def get_last(self):
-        client_id = self.actual_client_id.value
-        status = self.actual_status.value
-
-        logging.info(f"Last client ID: {client_id}, status: {status}")
-        return client_id, status
 
     def _handle_shutdown(self, signum, frame):
         """Handle shutdown signals"""

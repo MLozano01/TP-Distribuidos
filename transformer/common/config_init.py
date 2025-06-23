@@ -16,7 +16,6 @@ def initialize_config():
     """
 
     config_params = {}
-    communication_config = {}
 
     config = ConfigParser(os.environ)
     # If config.ini does not exists original config object is not modified
@@ -36,16 +35,15 @@ def initialize_config():
         config_params["exc_snd_type"] = os.getenv('TYPE_SND', config["RABBITMQ"]["TYPE_SND"])
         
 
-
-        communication_config["comm_port"] = os.getenv('COMM_PORT', config["COMM"]["COMM_PORT"])
-        communication_config["id"] = os.getenv("TRANSFORMER_REPLICA_ID")
-        communication_config[f"replicas_count"] = int(os.getenv("TRANSFORMER_REPLICAS_COUNT"))
-        communication_config[f"name"] = "transformer"
+        config_params["port"] = int(os.getenv('COMM_PORT', config["COMM"]["COMM_PORT"]))
+        config_params["id"] = os.getenv("TRANSFORMER_REPLICA_ID")
+        config_params[f"replicas_count"] = int(os.getenv("TRANSFORMER_REPLICAS_COUNT"))
+        config_params[f"name"] = "transformer"
 
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
     except ValueError as e:
         raise ValueError("Key could not be parsed. Error: {}. Aborting server".format(e))
 
-    return config_params, communication_config
+    return config_params
 

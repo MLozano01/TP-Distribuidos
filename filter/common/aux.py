@@ -42,6 +42,9 @@ def filter_movies_by_date(data_to_filter, filter_args):
         if op in operators and operators[op](int(movie_year), int(filter_args[2])):
             result.append(data)
 
+    if not result:
+        pass
+
     return result
 
 

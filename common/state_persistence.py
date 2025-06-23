@@ -106,6 +106,9 @@ class StatePersistence:
             else:
                 existing = ""
 
+            if not existing.endswith('\n') and existing != "":
+                existing += '\n'
+
             with open(tempfile, 'w') as f:
                 f.write(existing)
                 f.write(f"{info_to_save}\n")

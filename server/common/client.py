@@ -114,7 +114,6 @@ class Client:
 
     def _forward_to_data_controller(self, message):
         try:
-            # Add client ID to the message
             file_type = self.protocol.get_file_type(message)
 
             message_with_metadata = self.protocol.add_metadata(message, self.client_id, self.secuence_number[file_type])

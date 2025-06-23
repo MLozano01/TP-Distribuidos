@@ -4,6 +4,8 @@ COPY data_controller /
 COPY common /common
 COPY protocol /protocol
 COPY requirements.txt /
+COPY common /common
+
 
 RUN pip install -r requirements.txt
 

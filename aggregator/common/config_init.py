@@ -21,7 +21,6 @@ def initialize_config():
     # If config.ini does not exists original config object is not modified
     config.read(CONFIG_FILE)
     config_params = {}
-    communication_config = {}
     logging.info(config)
     try:
         config_params["logging_level"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"])
@@ -41,14 +40,14 @@ def initialize_config():
         config_params["operations"] = os.getenv("OPERATIONS", config["AGGREGATOR"]["OPERATIONS"])
         config_params["expected_finished_msg_amount"] = int(os.getenv('EXPECTED_FINISHED_MSG_AMOUNT', config["AGGREGATOR"].get('EXPECTED_FINISHED_MSG_AMOUNT', 1)))
 
-        communication_config["id"] = os.getenv('AGGR_REPLICA_ID')
-        communication_config["comm_port"] = os.getenv('COMM_PORT', config["COMM"]["COMM_PORT"])
-        communication_config["name"] = os.getenv('COMM_NAME', config["COMM"]["COMM_NAME"])
-        communication_config["replicas_count"] = int(os.getenv("AGGR_REPLICA_COUNT"))
+        config_params["id"] = os.getenv('AGGR_REPLICA_ID')
+        config_params["port"] = int(os.getenv('COMM_PORT', config["COMM"]["COMM_PORT"]))
+        config_params["name"] = os.getenv('COMM_NAME', config["COMM"]["COMM_NAME"])
+        config_params["replicas_count"] = int(os.getenv("AGGR_REPLICA_COUNT"))
         
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e} .Aborting server")
     except ValueError as e:
         raise ValueError(f"Key could not be parsed. Error: {e}. Aborting server")
 
-    return config_params, communication_config
+    return config_params

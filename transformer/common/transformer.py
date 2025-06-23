@@ -17,36 +17,19 @@ START = False
 DONE = True
 
 class Transformer:
-    def __init__(self, finish_notify_ntc, finish_notify_ctn, communicator_instance, **kwargs):
+    def __init__(self, **kwargs):
         self.sentiment_analyzer = None
         self.queue_rcv = None
         self.queue_snd = None
         self.protocol = Protocol()
-        self._stop_event = threading.Event()
-        self._finished_signal_received = False
-        self._finished_message_body = None
-
-        self.finished_filter_arg_step_publisher = None # for notifying joiners
-        self.finish_notify_ntc = finish_notify_ntc
-        self.finish_notify_ctn = finish_notify_ctn
-
-        self.comm_instance = communicator_instance
 
         self.data_thread = None
 
-        self.actual_client_id = Value('i', 0)
-        self.actual_status = Value('b', True)
-        self.finish_signal_checker = None
-
         self.is_alive = True
-
 
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-    def update_actual_client_id_status(self, client_id, status): 
-        self.actual_client_id.value = client_id
-        self.actual_status.value = status
 
     def _setup_signal_handlers(self):
         signal.signal(signal.SIGTERM, self._handle_shutdown)
@@ -69,14 +52,10 @@ class Transformer:
         """Callback function to process messages."""
         logging.info(f"Received message, with routing key: {method.routing_key}")
         decoded_msg = self.protocol.decode_movies_msg(body)
-        self.update_actual_client_id_status(decoded_msg.client_id, START)
-            
+
         if decoded_msg.finished:
-            logging.info("Received MOVIES finished signal from server on data channel.")
-            self.update_actual_client_id_status(decoded_msg.client_id, DONE)
             self._publish_movie_finished_signal(decoded_msg)
-            return
-        
+
         self._process_message(decoded_msg)
         
         
@@ -85,22 +64,17 @@ class Transformer:
         self._setup_signal_handlers()
         try:
             self._initialize_sentiment_analyzer()
-
             self._settle_queues()
 
             if not all([self.queue_rcv, self.queue_snd]):
                 logging.error("Not all required RabbitMQ connections were initialized. Aborting start.")
                 return
-        
-            self.finish_signal_checker = Process(target=self.check_finished, args=())
-            self.finish_signal_checker.start()
 
             self.queue_rcv.consume(self.callback)
 
         except Exception as e:
             logging.error(f"Failed to start Transformer: {e}", exc_info=True)
         
-
 
     def _initialize_sentiment_analyzer(self):
         """Initializes the Hugging Face sentiment analysis pipeline."""
@@ -166,10 +140,6 @@ class Transformer:
 
     def _send_processed_batch(self, processed_movies, client_id, sequence_number):
         """Creates the outgoing MoviesCSV message and publishes it."""
-        if not processed_movies:
-            logging.debug("No movies suitable for sending after processing and filtering.")
-            return
-
         try:
             outgoing_movies_msg = self.protocol.create_movie_list(processed_movies, client_id, sequence_number)
             logging.debug(f"Sending {len(processed_movies)} processed movies")
@@ -180,14 +150,8 @@ class Transformer:
 
 
     def _publish_movie_finished_signal(self, msg):
-        logging.info(f"Published finished signal to communication channel, here the encoded message: {msg}")
-        self.comm_instance.start_token_ring(msg.client_id)
-        
-        self.comm_instance.wait_eof_confirmation()
-        logging.info("Received SEND finished signal from communication channel.")
         self.queue_snd.publish(msg.SerializeToString())
         logging.info(f"Published movie finished signal to {self.queue_snd.exchange}")
-
 
         
     def _process_movie(self, incoming_movie):
@@ -211,44 +175,10 @@ class Transformer:
                 if processed_movie:
                     processed_movies_list.append(processed_movie)
 
-            if not processed_movies_list:
-                logging.info(f"No valid movies found in batch. Skipping send.")
-            else:
-                self._send_processed_batch(processed_movies_list, incoming_movies_msg.client_id, incoming_movies_msg.secuence_number)
+            self._send_processed_batch(processed_movies_list, incoming_movies_msg.client_id, incoming_movies_msg.secuence_number)
 
-            self.update_actual_client_id_status(incoming_movies_msg.client_id, DONE)
         except Exception as e:
             logging.error(f"Error processing message batch: {e}", exc_info=True)
-
-    def check_finished(self):
-        while self.is_alive:
-            try:
-                msg = self.finish_notify_ctn.get()
-                logging.info(f"Received finished signal from control channel: {msg}")
-
-                client_id, status = self.get_last()
-                client_finished = msg[0]
-                if client_finished == client_id:
-                    self.finish_notify_ntc.put([client_finished, status])
-                    logging.info(f"Received finished signal from control channel for client {client_finished}, with status {status}.")
-                else:
-                    self.finish_notify_ntc.put([client_finished, True])
-                    logging.info(f"Received finished signal from control channel for client {client_finished}, but working on {client_id}.")
-
-            except Empty:
-                logging.info("No finished signal received yet.")
-                pass
-            except Exception as e:
-                logging.error(f"Error in finished signal checker: {e}")
-                break
-
-    def get_last(self):
-        client_id = self.actual_client_id.value
-        status = self.actual_status.value
-
-        logging.info(f"Last client ID: {client_id}, status: {status}")
-
-        return client_id, status
 
     def stop(self):
         """Stop the filter, signal threads, and close the queues/connections."""
@@ -272,10 +202,6 @@ class Transformer:
             if self.data_thread and self.data_thread.is_alive():
                 self.data_thread.terminate()
 
-            if self.finish_signal_checker:
-                self.finish_signal_checker.terminate()
-                self.finish_signal_checker.join()
-                logging.info("Finished signal checker process terminated.")
 
         self.is_alive = False
 

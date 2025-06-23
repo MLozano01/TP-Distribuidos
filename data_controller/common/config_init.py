@@ -16,7 +16,6 @@ def initialize_config():
     """
 
     config = ConfigParser(os.environ)
-    communication_config = {}
     # If config.ini does not exists original config object is not modified
     config.read(CONFIG_FILE)
     config_params = {}
@@ -44,10 +43,10 @@ def initialize_config():
         env_id = os.getenv('DATA_CONTROLLER_REPLICA_ID')
         config_params["replica_id"] = env_id if env_id else "unknown"
 
-        communication_config["comm_port"] = os.getenv('COMM_PORT', config["COMM"]["COMM_PORT"])
-        communication_config["id"] = os.getenv("DATA_CONTROLLER_REPLICA_ID")
-        communication_config["name"] = os.getenv('COMM_NAME', config["COMM"]["COMM_NAME"])
-        communication_config[f"replicas_count"] = int(os.getenv("DATA_CONTROLLER_REPLICA_COUNT"))
+        config_params["port"] = int(os.getenv('COMM_PORT', config["COMM"]["COMM_PORT"]))
+        config_params["id"] = os.getenv("DATA_CONTROLLER_REPLICA_ID")
+        config_params["name"] = os.getenv('COMM_NAME', config["COMM"]["COMM_NAME"])
+        config_params[f"replicas_count"] = int(os.getenv("DATA_CONTROLLER_REPLICA_COUNT"))
 
         
 
@@ -56,4 +55,4 @@ def initialize_config():
     except ValueError as e:
         raise ValueError("Key could not be parsed. Error: {}. Aborting server".format(e))
 
-    return config_params, communication_config
+    return config_params
