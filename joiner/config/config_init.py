@@ -38,8 +38,7 @@ def initialize_config():
         config_params["queue_output_name"] = os.getenv('QUEUE_OUTPUT_NAME', config["RABBITMQ"]["QUEUE_OUTPUT_NAME"])
         config_params["routing_key_output"] = os.getenv('ROUTING_KEY_OUTPUT', config["RABBITMQ"]["ROUTING_KEY_OUTPUT"])
 
-        # Backup file – optional, falls back to sensible default if not set
-        default_backup_name = f"joiner_state_{config_params['replica_id']}.json"
+        default_backup_name = f"{config_params['joiner_name']}_state_{config_params['replica_id']}.json"
         config_params["backup_file"] = os.getenv('BACKUP_FILE', default_backup_name)
 
     except KeyError as e:

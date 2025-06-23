@@ -20,7 +20,7 @@ def main():
         logging.info(f"Joiner Replica {replica_id} started")
         
         join_strategy_name = config.get("other_data_type", "RATINGS")
-        join_strategy = get_join_strategy(join_strategy_name)
+        join_strategy = get_join_strategy(join_strategy_name, config['replica_id'], config['replicas_count'])
 
         joiner_instance = JoinerNode(config, join_strategy)
         joiner_instance.start()

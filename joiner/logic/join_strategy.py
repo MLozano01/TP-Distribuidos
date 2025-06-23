@@ -22,9 +22,9 @@ class JoinStrategy(ABC):
         pass
     
     @abstractmethod
-    def _join_and_send(self, other_data_list, movie_id, title, client_id, producer):
-        """
-        Joins the 'other' data with movie data and sends it downstream.
+    def _join_and_batch(self, other_data_list, movie_id, title, client_id, producer):
+        """Transform *other_data_list* + movie info into a protobuf record and
+        add it to the internal batcher.
         """
         pass
 

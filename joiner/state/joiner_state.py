@@ -100,7 +100,6 @@ class JoinerState:
             "eof_trackers": eofs,
         }
 
-    # ------------------------------------------------------------------
     def _normalise_snapshots(
         self, persisted: Dict[str, Dict]
     ) -> Tuple[
@@ -174,9 +173,6 @@ class JoinerState:
         """Return movie title (str) or None."""
         return self._movies_data.get(client_id, {}).get(movie_id)
 
-    # ---------------------------------------------------------------------
-    # Other-stream helpers
-    # ---------------------------------------------------------------------
     def buffer_other(self, client_id: str, movie_id: int, other_pb) -> None:
         """Buffers an *other* record that arrived before its movie."""
         with self._lock:
@@ -266,7 +262,7 @@ class JoinerState:
                     self._client_state_managers.pop(cid, None)
         except Exception as exc:
             logging.error("[JoinerState] Error while persisting per-client state: %s", exc)
-
+            raise
 
     def _get_client_manager(self, client_id: str) -> "StatePersistence":
         mgr = self._client_state_managers.get(client_id)
@@ -278,4 +274,13 @@ class JoinerState:
             filename = f"{base_name}_{client_id}.json"
             mgr = StatePersistence(filename, directory=base_dir, serializer="json")
             self._client_state_managers[client_id] = mgr
-        return mgr 
+        return mgr
+
+    def persist_client(self, client_id: str) -> None:
+        """Persist state for *client_id* immediately, holding the internal lock
+        to avoid concurrent writes that could mutate dictionaries while
+        they are being serialised ("dictionary changed size during
+        iteration").
+        """
+        with self._lock:
+            self._persist(client_id) 
