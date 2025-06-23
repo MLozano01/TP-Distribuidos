@@ -27,18 +27,12 @@ class CreditsJoinStrategy(JoinStrategy):
             f"[CreditsJoinStrategy] client={client_id} finished={credits_msg.finished} items={len(credits_msg.credits)}"
         )
 
-        # ------------------------------------------------------------------
-        # Duplicate detection and recording
-        # ------------------------------------------------------------------
         seq_num = str(credits_msg.secuence_number)
         if self._seq_monitor.is_duplicate(client_id, seq_num):
             logging.info(
                 f"[CreditsJoinStrategy] Dropping duplicate OTHER message seq={seq_num} client={client_id}"
             )
             return None
-
-        # Record seq num immediately after confirming it's new
-        self._seq_monitor.record(client_id, seq_num)
 
         # EOF path --------------------------------------------------------
         if credits_msg.finished:
@@ -62,6 +56,7 @@ class CreditsJoinStrategy(JoinStrategy):
 
             state.buffer_other(client_id, credit.id, actor_names)
 
+        self._seq_monitor.record(client_id, seq_num)
         self._snapshot_if_needed(client_id)
         return None
 

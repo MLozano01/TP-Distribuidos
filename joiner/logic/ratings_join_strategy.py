@@ -32,9 +32,7 @@ class RatingsJoinStrategy(JoinStrategy):
             f"[RatingsJoinStrategy] client={client_id} finished={ratings_msg.finished} items={len(ratings_msg.ratings)}"
         )
 
-        # ------------------------------------------------------------------
-        # Duplicate detection and recording
-        # ------------------------------------------------------------------
+
         seq_num = str(ratings_msg.secuence_number)
         if self._seq_monitor.is_duplicate(client_id, seq_num):
             logging.info(
@@ -42,20 +40,11 @@ class RatingsJoinStrategy(JoinStrategy):
             )
             return None
 
-        # Record sequence number as soon as we confirm it's new
-        self._seq_monitor.record(client_id, seq_num)
-
-        # ------------------------------------------------------------------
-        # Stream finished
-        # ------------------------------------------------------------------
         if ratings_msg.finished:
             state.set_stream_eof(client_id, "other")
             # No clean-up yet – wait until both EOFs arrive.
             return client_id
 
-        # ------------------------------------------------------------------
-        # Normal data path
-        # ------------------------------------------------------------------
         for rating in ratings_msg.ratings:
             rating_value = float(rating.rating)
             movie_title = state.get_movie(client_id, rating.movieId)
@@ -74,6 +63,7 @@ class RatingsJoinStrategy(JoinStrategy):
 
             state.buffer_other(client_id, rating.movieId, rating_value)
 
+        self._seq_monitor.record(client_id, seq_num)
         self._snapshot_if_needed(client_id)
         return None
 
