@@ -18,7 +18,12 @@ class JoinerNode:
         self.join_strategy = join_strategy
 
         backup_file = self.config.get('backup_file', f"joiner_state_{self.replica_id}.json")
-        self._state_manager = StatePersistence(backup_file, serializer="json")
+        node_tag = f"{self.config.get('joiner_name', 'joiner')}_{self.replica_id}"
+        self._state_manager = StatePersistence(
+            backup_file,
+            node_info=node_tag,
+            serializer="json",
+        )
 
         self.state = JoinerState(self._state_manager)
         self.protocol = Protocol()
@@ -237,4 +242,4 @@ class JoinerNode:
                 )
         self.state.persist_client(client_id)
 
-        logging.debug("[Node] Added %d movies to buffer for client %s", len(movies), client_id) 
+        logging.debug("[Node] Added %d movies to buffer for client %s", len(movies), client_id)

@@ -10,8 +10,8 @@ from common.sequence_generator import SequenceGenerator
 class RatingsJoinStrategy(JoinStrategy):
     """Join strategy that combines movie details with rating records."""
 
-    def __init__(self, replica_id: int, replicas_count: int):
-        super().__init__()
+    def __init__(self, replica_id: int, replicas_count: int, state_manager):
+        super().__init__(state_manager)
         self._replica_id = replica_id
         self._seqgen = SequenceGenerator(replica_id, replicas_count, namespace="ratings")
         self._batcher: PerClientBatcher | None = None
@@ -32,17 +32,19 @@ class RatingsJoinStrategy(JoinStrategy):
             f"[RatingsJoinStrategy] client={client_id} finished={ratings_msg.finished} items={len(ratings_msg.ratings)}"
         )
 
-        # ------------------------------------------------------------------
-        # Stream finished
-        # ------------------------------------------------------------------
+
+        seq_num = str(ratings_msg.secuence_number)
+        if self._seq_monitor.is_duplicate(client_id, seq_num):
+            logging.info(
+                f"[RatingsJoinStrategy] Discarding duplicate OTHER message seq={seq_num} client={client_id}"
+            )
+            return None
+
         if ratings_msg.finished:
             state.set_stream_eof(client_id, "other")
             # No clean-up yet – wait until both EOFs arrive.
             return client_id
 
-        # ------------------------------------------------------------------
-        # Normal data path
-        # ------------------------------------------------------------------
         for rating in ratings_msg.ratings:
             rating_value = float(rating.rating)
             movie_title = state.get_movie(client_id, rating.movieId)
@@ -60,6 +62,8 @@ class RatingsJoinStrategy(JoinStrategy):
                 continue
 
             state.buffer_other(client_id, rating.movieId, rating_value)
+
+        self._seq_monitor.record(client_id, seq_num)
         self._snapshot_if_needed(client_id)
         return None
 
@@ -104,6 +108,9 @@ class RatingsJoinStrategy(JoinStrategy):
         last_seq = self._seqgen.current(client_id)
         send_finished_signal(producer, client_id, self.protocol, secuence_number=last_seq)
         self._seqgen.clear(client_id)
+
+        # Cleaning sequence numbers for client
+        self._seq_monitor.clear_client(client_id)
 
     def _ensure_batcher(self, producer):
         if self._batcher is not None:
