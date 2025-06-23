@@ -124,7 +124,7 @@ class StatePersistence:
             backup = {}
 
             for filepath in glob.glob(f'/backup/{self.BASE_FILE_NAME}_{self.node_info}_*.txt'):
-                client = filepath.split("_")[3]
+                client = filepath.split("_")[5].split(".")[0]
                 with open(filepath) as f:
                     backup.setdefault(client, [])
                     for line in f:
@@ -133,6 +133,7 @@ class StatePersistence:
             
         except Exception as e:
             logging.error(f"ERROR reading from file: {e}")
+            return {}
 
     def clear(self) -> None:
         """Remove the persisted file from disk if it exists."""
@@ -147,6 +148,7 @@ class StatePersistence:
         path = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_{client_id}"
         try:
             if Path(path).exists():
+                logging.info(f"Removing {path} from disk")
                 os.remove(path)
         except Exception as exc:
             logging.error(f"[StatePersistence] Error clearing state: {exc}") 

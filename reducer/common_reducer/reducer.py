@@ -67,6 +67,8 @@ class Reducer:
 
     def _is_repeated(self, client_id, secuence_number):
         self.batches_seen.setdefault(client_id, [])
+        logging.info(f"Batches Seen Client {client_id} {self.batches_seen[client_id]}")
+        logging.info(f"Secuence Number to eval {secuence_number}")
         return secuence_number in self.batches_seen[client_id]
 
     def _save_info(self, client_id, secuence_number):
