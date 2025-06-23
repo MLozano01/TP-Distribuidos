@@ -34,6 +34,7 @@ def filter_movies(movies_csv):
 def filter_ratings(ratings_csv):
     ratings_batch = files_pb2.RatingsCSV()
     ratings_batch.client_id = ratings_csv.client_id
+    ratings_batch.secuence_number = ratings_csv.secuence_number
     total_ratings = len(ratings_csv.ratings)
     filtered_out = 0
     
@@ -55,6 +56,7 @@ def filter_ratings(ratings_csv):
 def filter_credits(credits_csv):
     credits_batch = files_pb2.CreditsCSV()
     credits_batch.client_id = credits_csv.client_id
+    credits_batch.secuence_number = credits_csv.secuence_number
     total_credits = len(credits_csv.credits)
     filtered_out = 0
     for credit in credits_csv.credits:

@@ -9,8 +9,8 @@ from common.batcher import PerClientBatcher
 class CreditsJoinStrategy(JoinStrategy):
     """Join strategy that produces ActorParticipations from movie credits."""
 
-    def __init__(self, replica_id: int, replicas_count: int):
-        super().__init__()
+    def __init__(self, replica_id: int, replicas_count: int, state_manager):
+        super().__init__(state_manager)
         from common.sequence_generator import SequenceGenerator
         self._replica_id = replica_id
         self._seqgen = SequenceGenerator(replica_id, replicas_count, namespace="actors")
@@ -26,6 +26,19 @@ class CreditsJoinStrategy(JoinStrategy):
         logging.debug(
             f"[CreditsJoinStrategy] client={client_id} finished={credits_msg.finished} items={len(credits_msg.credits)}"
         )
+
+        # ------------------------------------------------------------------
+        # Duplicate detection and recording
+        # ------------------------------------------------------------------
+        seq_num = str(credits_msg.secuence_number)
+        if self._seq_monitor.is_duplicate(client_id, seq_num):
+            logging.info(
+                f"[CreditsJoinStrategy] Dropping duplicate OTHER message seq={seq_num} client={client_id}"
+            )
+            return None
+
+        # Record seq num immediately after confirming it's new
+        self._seq_monitor.record(client_id, seq_num)
 
         # EOF path --------------------------------------------------------
         if credits_msg.finished:
@@ -48,6 +61,7 @@ class CreditsJoinStrategy(JoinStrategy):
                 continue
 
             state.buffer_other(client_id, credit.id, actor_names)
+
         self._snapshot_if_needed(client_id)
         return None
 
@@ -104,6 +118,9 @@ class CreditsJoinStrategy(JoinStrategy):
         last_seq = self._seqgen.current(client_id)
         send_finished_signal(producer, client_id, self.protocol, secuence_number=last_seq)
         self._seqgen.clear(client_id)
+
+        # Cleaning sequence numbers for client
+        self._seq_monitor.clear_client(client_id)
 
     def _ensure_batcher(self, producer):
         if self._batcher is not None:

@@ -1,13 +1,18 @@
 from abc import ABC, abstractmethod
 import logging
 from protocol.protocol import Protocol
+try:
+    from joiner.common.sequence_number_monitor import SequenceNumberMonitor  # When 'joiner' is a package.
+except ModuleNotFoundError:  # Fallback for flat module layouts.
+    from common.sequence_number_monitor import SequenceNumberMonitor
 
 class JoinStrategy(ABC):
     """
     Abstract base class for defining a join strategy in a streaming manner.
     """
-    def __init__(self):
+    def __init__(self, state_manager):
         self.protocol = Protocol()
+        self._seq_monitor = SequenceNumberMonitor(state_manager)
 
     @abstractmethod
     def process_other_message(self, body, state, producer):
