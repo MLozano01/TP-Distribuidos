@@ -1,10 +1,7 @@
 from abc import ABC, abstractmethod
 import logging
 from protocol.protocol import Protocol
-try:
-    from joiner.common.sequence_number_monitor import SequenceNumberMonitor  # When 'joiner' is a package.
-except ModuleNotFoundError:  # Fallback for flat module layouts.
-    from common.sequence_number_monitor import SequenceNumberMonitor
+from common.sequence_number_monitor import SequenceNumberMonitor
 
 class JoinStrategy(ABC):
     """
