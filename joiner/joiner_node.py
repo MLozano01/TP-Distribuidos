@@ -173,7 +173,7 @@ class JoinerNode:
             raise
 
     def _process_other_message(self, ch, method, properties, body):
-        #logging.info(f"[Node] Received an other message. Size: {len(body)} bytes.")
+        logging.info(f"[Node] Received an other message. Size: {len(body)} bytes.")
 
         if self._should_requeue():
             raise ShutdownRequeueException()
@@ -226,6 +226,9 @@ class JoinerNode:
 
     def _handle_movie_batch(self, client_id: str, movies) -> None:
         """Process a batch of movie protos."""
+        if not movies:
+            return
+
         for movie in movies:
             unmatched = self.state.add_movie(client_id, movie)
             if unmatched:
