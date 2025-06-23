@@ -50,6 +50,7 @@ class StatePersistence:
     def save(self, data: Any) -> None:
         """Persist *data* to disk in an *atomic* fashion."""
         try:
+            logging.debug(f"[StatePersistence] Saving state to {self._file_path}")
             os.makedirs(self._dir, exist_ok=True)
 
             tmp_name = f"temp_{uuid.uuid4().hex}_{self._file_name}"
@@ -129,8 +130,9 @@ class StatePersistence:
         try:
             if Path(self._file_path).exists():
                 os.remove(self._file_path)
+                logging.info(f"[StatePersistence] Successfully deleted state file: {self._file_path}")
         except Exception as exc:
-            logging.error(f"[StatePersistence] Error clearing state: {exc}") 
+            logging.error(f"[StatePersistence] Error clearing state file {self._file_path}: {exc}")
 
     def clean_client(self, client_id) -> None:
         """Remove the file from disk if it exists."""

@@ -203,7 +203,7 @@ class JoinerState:
 
     def has_both_eof(self, client_id: str) -> bool:
         tracker = self._eof_trackers.get(client_id)
-        return bool(tracker and tracker["movies"] and tracker["other"])
+        return bool(tracker and tracker.get("movies") and tracker.get("other"))
 
     def purge_orphan_other_after_movie_eof(self, client_id: str) -> None:
         """Discard buffered *other* data that can never be matched now that the
@@ -234,12 +234,6 @@ class JoinerState:
             mgr = self._client_state_managers.pop(client_id, None)
             if mgr is not None:
                 mgr.clear()
-
-            if not self._movies_data and not self._other_data and not self._eof_trackers:
-                # All in-memory data gone – remove any per-client snapshots (already cleared) and exit.
-                pass
-            else:
-                self._persist(client_id)
 
     def _persist(self, client_id: str) -> None:
         """Persist the state snapshot for *client_id* only."""
