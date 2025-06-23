@@ -81,7 +81,7 @@ class Reducer:
         self._save_info(client_id, secuence_number)
 
         if self.partial_status[client_id]['final_secuence']:
-            logging.info("Got a delayed message")
+            logging.info(f"Got a delayed message with secuence number {secuence_number} from client {client_id}")
             self._handle_finished(client_id)
 
     def _clean_up(self, client_id):

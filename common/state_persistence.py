@@ -21,7 +21,7 @@ class StatePersistence:
     _JSON = "json"
     _PICKLE = "pickle"
     _SUPPORTED_SERIALIZERS = {_JSON, _PICKLE}
-    BASE_FILE_NAME = "secuence_numbers_"
+    BASE_FILE_NAME = "secuence_numbers"
     ORUGA = "-"
 
     def __init__(
@@ -134,8 +134,9 @@ class StatePersistence:
 
     def clean_client(self, client_id) -> None:
         """Remove the file from disk if it exists."""
-        path = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_{client_id}.txt"
+        path = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_client_{client_id}.txt"
         try:
+            logging.info(f"Cleaning up fo client {client_id}")
             if Path(path).exists():
                 logging.info(f"Removing {path} from disk")
                 os.remove(path)
