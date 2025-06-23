@@ -22,6 +22,7 @@ class StatePersistence:
     _PICKLE = "pickle"
     _SUPPORTED_SERIALIZERS = {_JSON, _PICKLE}
     BASE_FILE_NAME = "secuence_numbers_"
+    ORUGA = "-"
 
     def __init__(
         self,
@@ -96,25 +97,11 @@ class StatePersistence:
             return default_factory()
 
     def save_secuence_number_data(self, info_to_save, client_id):
-        tempfile = f"/backup/temp_{self.BASE_FILE_NAME}_{self.node_info}_{client_id}.txt"
         actual_file = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_client_{client_id}.txt"
-
         try:
-            if os.path.exists(actual_file):
-                with open(actual_file, 'r') as f:
-                    existing = f.read()
-            else:
-                existing = ""
-
-            if not existing.endswith('\n') and existing != "":
-                existing += '\n'
-
-            with open(tempfile, 'w') as f:
-                f.write(existing)
-                f.write(f"{info_to_save}\n")
+            with open(actual_file, 'a') as f:
+                f.write(f"{info_to_save}{self.ORUGA}\n")
                 f.flush()
-
-            os.replace(tempfile, actual_file)
 
         except Exception as e:
             logging.error(f"ERROR saving secuence numbe info to file {actual_file}: {e}")
@@ -128,7 +115,9 @@ class StatePersistence:
                 with open(filepath) as f:
                     backup.setdefault(client, [])
                     for line in f:
-                        backup[client].append(line.strip())     
+                        if not self.ORUGA in line:
+                            break
+                        backup[client].append(line.strip()[:-1])     
             return backup       
             
         except Exception as e:
@@ -145,7 +134,7 @@ class StatePersistence:
 
     def clean_client(self, client_id) -> None:
         """Remove the file from disk if it exists."""
-        path = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_{client_id}"
+        path = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_{client_id}.txt"
         try:
             if Path(path).exists():
                 logging.info(f"Removing {path} from disk")

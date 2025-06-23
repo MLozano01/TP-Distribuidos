@@ -52,7 +52,6 @@ class Reducer:
             if msg.finished:
                 logging.info(f"Finished msg received on query_id {self.query_id}, with final secuence number {msg.secuence_number}")
                 self.partial_status[str(msg.client_id)]["final_secuence"] = msg.secuence_number
-                self._save_info(str(msg.client_id), str(msg.secuence_number))
                 self._handle_finished(str(msg.client_id))
                 return
             
@@ -67,8 +66,6 @@ class Reducer:
 
     def _is_repeated(self, client_id, secuence_number):
         self.batches_seen.setdefault(client_id, [])
-        logging.info(f"Batches Seen Client {client_id} {self.batches_seen[client_id]}")
-        logging.info(f"Secuence Number to eval {secuence_number}")
         return secuence_number in self.batches_seen[client_id]
 
     def _save_info(self, client_id, secuence_number):
@@ -88,6 +85,7 @@ class Reducer:
             self._handle_finished(client_id)
 
     def _clean_up(self, client_id):
+        logging.info(f"Cleaning up files for client {client_id}")
         self.partial_status.pop(client_id)
         self._state_manager.save(self.partial_status)
 
@@ -96,7 +94,7 @@ class Reducer:
 
     def _handle_finished(self, client_id):
         
-        if len(self.batches_seen[client_id]) != self.partial_status[client_id]["final_secuence"] + 1:
+        if len(self.batches_seen[client_id]) != self.partial_status[client_id]["final_secuence"]:
             logging.info(f'Not all messages have arrived = Batches Seen: {len(self.batches_seen[client_id])} vs Finished Secuence Number: {self.partial_status[str(client_id)]["final_secuence"]}')
             return
 
