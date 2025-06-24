@@ -18,7 +18,12 @@ class JoinerNode:
         self.join_strategy = join_strategy
 
         backup_file = self.config.get('backup_file', f"joiner_state_{self.replica_id}.json")
-        self._state_manager = StatePersistence(backup_file, serializer="json")
+        node_tag = f"{self.config.get('joiner_name', 'joiner')}_{self.replica_id}"
+        self._state_manager = StatePersistence(
+            backup_file,
+            node_info=node_tag,
+            serializer="json",
+        )
 
         self.state = JoinerState(self._state_manager)
         self.protocol = Protocol()
@@ -173,7 +178,7 @@ class JoinerNode:
             raise
 
     def _process_other_message(self, ch, method, properties, body):
-        #logging.info(f"[Node] Received an other message. Size: {len(body)} bytes.")
+        logging.info(f"[Node] Received an other message. Size: {len(body)} bytes.")
 
         if self._should_requeue():
             raise ShutdownRequeueException()
@@ -226,6 +231,9 @@ class JoinerNode:
 
     def _handle_movie_batch(self, client_id: str, movies) -> None:
         """Process a batch of movie protos."""
+        if not movies:
+            return
+
         for movie in movies:
             unmatched = self.state.add_movie(client_id, movie)
             if unmatched:
@@ -234,4 +242,4 @@ class JoinerNode:
                 )
         self.state.persist_client(client_id)
 
-        logging.debug("[Node] Added %d movies to buffer for client %s", len(movies), client_id) 
+        logging.debug("[Node] Added %d movies to buffer for client %s", len(movies), client_id)

@@ -57,6 +57,7 @@ class Filter:
 
         if decoded_msg.finished:
             self.publisher.publish_finished_signal(decoded_msg)
+            return
 
         self.filter(decoded_msg)
 

@@ -21,7 +21,8 @@ class StatePersistence:
     _JSON = "json"
     _PICKLE = "pickle"
     _SUPPORTED_SERIALIZERS = {_JSON, _PICKLE}
-    BASE_FILE_NAME = "secuence_numbers_"
+    BASE_FILE_NAME = "secuence_numbers"
+    ORUGA = "-"
 
     def __init__(
         self,
@@ -49,6 +50,7 @@ class StatePersistence:
     def save(self, data: Any) -> None:
         """Persist *data* to disk in an *atomic* fashion."""
         try:
+            logging.debug(f"[StatePersistence] Saving state to {self._file_path}")
             os.makedirs(self._dir, exist_ok=True)
 
             tmp_name = f"temp_{uuid.uuid4().hex}_{self._file_name}"
@@ -96,25 +98,11 @@ class StatePersistence:
             return default_factory()
 
     def save_secuence_number_data(self, info_to_save, client_id):
-        tempfile = f"/backup/temp_{self.BASE_FILE_NAME}_{self.node_info}_{client_id}.txt"
         actual_file = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_client_{client_id}.txt"
-
         try:
-            if os.path.exists(actual_file):
-                with open(actual_file, 'r') as f:
-                    existing = f.read()
-            else:
-                existing = ""
-
-            if not existing.endswith('\n') and existing != "":
-                existing += '\n'
-
-            with open(tempfile, 'w') as f:
-                f.write(existing)
-                f.write(f"{info_to_save}\n")
+            with open(actual_file, 'a') as f:
+                f.write(f"{info_to_save}{self.ORUGA}\n")
                 f.flush()
-
-            os.replace(tempfile, actual_file)
 
         except Exception as e:
             logging.error(f"ERROR saving secuence numbe info to file {actual_file}: {e}")
@@ -124,29 +112,35 @@ class StatePersistence:
             backup = {}
 
             for filepath in glob.glob(f'/backup/{self.BASE_FILE_NAME}_{self.node_info}_*.txt'):
-                client = filepath.split("_")[3]
+                client = filepath.split("_")[5].split(".")[0]
                 with open(filepath) as f:
                     backup.setdefault(client, [])
                     for line in f:
-                        backup[client].append(line.strip())     
+                        if not self.ORUGA in line:
+                            break
+                        backup[client].append(line.strip()[:-1])     
             return backup       
             
         except Exception as e:
             logging.error(f"ERROR reading from file: {e}")
+            return {}
 
     def clear(self) -> None:
         """Remove the persisted file from disk if it exists."""
         try:
             if Path(self._file_path).exists():
                 os.remove(self._file_path)
+                logging.info(f"[StatePersistence] Successfully deleted state file: {self._file_path}")
         except Exception as exc:
-            logging.error(f"[StatePersistence] Error clearing state: {exc}") 
+            logging.error(f"[StatePersistence] Error clearing state file {self._file_path}: {exc}")
 
     def clean_client(self, client_id) -> None:
         """Remove the file from disk if it exists."""
-        path = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_{client_id}"
+        path = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_client_{client_id}.txt"
         try:
+            logging.info(f"Cleaning up fo client {client_id}")
             if Path(path).exists():
+                logging.info(f"Removing {path} from disk")
                 os.remove(path)
         except Exception as exc:
             logging.error(f"[StatePersistence] Error clearing state: {exc}") 

@@ -4,6 +4,8 @@ import logging
 import json
 from protocol.protocol import Protocol
 from common.state_persistence import StatePersistence
+from multiprocessing import Event
+
 
 logging.getLogger("pika").setLevel(logging.ERROR)   
 logging.getLogger("RabbitMQ").setLevel(logging.DEBUG)
@@ -24,6 +26,8 @@ class Reducer:
 
         self.protocol = Protocol()
 
+        self.stop_event = Event()
+
         # Setup signal handler for SIGTERM
         # signal.signal(signal.SIGTERM, self._handle_shutdown)
 
@@ -34,7 +38,7 @@ class Reducer:
     def start(self):
         """Start the reduce to consume messages from the queue."""
         self._settle_queues()
-        self.queue_rcv.consume(self.callback)
+        self.queue_rcv.consume(self.callback, stop_event=self.stop_event)
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
@@ -52,18 +56,20 @@ class Reducer:
             if msg.finished:
                 logging.info(f"Finished msg received on query_id {self.query_id}, with final secuence number {msg.secuence_number}")
                 self.partial_status[str(msg.client_id)]["final_secuence"] = msg.secuence_number
-                self._save_info(str(msg.client_id), str(msg.secuence_number))
                 self._handle_finished(str(msg.client_id))
                 return
-            
+
             self._manage_msg(data, str(msg.client_id), str(msg.secuence_number))
 
         except json.JSONDecodeError as e:
             logging.error(f"Failed to decode JSON: {e}")
             return
+        except KeyError as e:
+            logging.error(f"Duplicated EOF")
+            return
         except Exception as e:
             logging.error(f"ERROR processing message in {self.config['queue_rcv_name']}: {e}")
-            return
+            raise e
 
     def _is_repeated(self, client_id, secuence_number):
         self.batches_seen.setdefault(client_id, [])
@@ -71,7 +77,7 @@ class Reducer:
 
     def _save_info(self, client_id, secuence_number):
         self.batches_seen[client_id].append(secuence_number)
-        
+
         self._state_manager.save(self.partial_status)
         self._state_manager.save_secuence_number_data(secuence_number, client_id)
 
@@ -82,10 +88,11 @@ class Reducer:
         self._save_info(client_id, secuence_number)
 
         if self.partial_status[client_id]['final_secuence']:
-            logging.info("Got a delayed message")
+            logging.info(f"Got a delayed message with secuence number {secuence_number} from client {client_id}")
             self._handle_finished(client_id)
 
     def _clean_up(self, client_id):
+        logging.info(f"Cleaning up files for client {client_id}")
         self.partial_status.pop(client_id)
         self._state_manager.save(self.partial_status)
 
@@ -94,8 +101,9 @@ class Reducer:
 
     def _handle_finished(self, client_id):
         
-        if len(self.batches_seen[client_id]) != self.partial_status[client_id]["final_secuence"] + 1:
+        if len(self.batches_seen[client_id]) != self.partial_status[client_id]["final_secuence"]:
             logging.info(f'Not all messages have arrived = Batches Seen: {len(self.batches_seen[client_id])} vs Finished Secuence Number: {self.partial_status[str(client_id)]["final_secuence"]}')
+            self._state_manager.save(self.partial_status)
             return
 
         result = parse_final_result(self.reduce_by, self.partial_status[client_id]['results'])
@@ -109,7 +117,6 @@ class Reducer:
         res_decoded = self.protocol.decode_result(res_proto)
         logging.info(f"Final result: {res_decoded}")
 
-        return
 
     def _get_msg(self, data):
         aggr_msg = self.protocol.decode_aggr_batch(data)
@@ -124,6 +131,7 @@ class Reducer:
 
     def stop(self):
         """End the reduce and close the queue."""
+        self.stop_event.set()
         if self.queue_rcv:
             self.queue_rcv.close_channel()
         if self.queue_snd:

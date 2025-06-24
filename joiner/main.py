@@ -9,6 +9,7 @@ from config.config_init import initialize_config
 from logic.strategy_factory import get_join_strategy
 from joiner_node import JoinerNode
 from protocol.utils.logger import config_logger
+from common.state_persistence import StatePersistence
 
 def main():
     joiner_instance = None
@@ -20,7 +21,19 @@ def main():
         logging.info(f"Joiner Replica {replica_id} started")
         
         join_strategy_name = config.get("other_data_type", "RATINGS")
-        join_strategy = get_join_strategy(join_strategy_name, config['replica_id'], config['replicas_count'])
+
+        # Create a StatePersistence helper solely for the SequenceNumberMonitor
+        node_tag = f"{config.get('joiner_name', 'joiner')}_{config.get('replica_id', 0)}"
+        state_manager = StatePersistence(
+            config["backup_file"], node_info=node_tag, serializer="json"
+        )
+
+        join_strategy = get_join_strategy(
+            join_strategy_name,
+            config['replica_id'],
+            config['replicas_count'],
+            state_manager,
+        )
 
         joiner_instance = JoinerNode(config, join_strategy)
         joiner_instance.start()
