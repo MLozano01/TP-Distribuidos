@@ -18,7 +18,8 @@ class Client:
 
         self.results_received = set()
         self.total_expected = 5
-        self.secuence_number= {"movies":0, "ratings":0, "credits":0}
+        self.secuence_number = {"movies": 0, "ratings": 0, "credits": 0}
+        self._entries_counter = {"ratings": 0, "credits": 0}
 
 
     def run(self):
@@ -116,8 +117,22 @@ class Client:
         try:
             file_type = self.protocol.get_file_type(message)
 
-            message_with_metadata = self.protocol.add_metadata(message, self.client_id, self.secuence_number[file_type])
-            self.secuence_number[file_type] += 1 
+            # Count rows in ratings/credits batches
+            if file_type in ("ratings", "credits") and not self.protocol.is_end_file(message):
+                added = self.protocol.count_csv_rows(message)
+                self._entries_counter[file_type] += added
+
+            # Build finished message with total count
+            if self.protocol.is_end_file(message) and file_type in ("ratings", "credits"):
+                total = self._entries_counter[file_type]
+                enum_ft = self.protocol.string_to_file_type(file_type)
+                message = self.protocol.create_inform_end_file(enum_ft, total_to_process=total)
+
+            # Finally, attach metadata (client_id + sequence number) and send.
+            message_with_metadata = self.protocol.add_metadata(
+                message, self.client_id, self.secuence_number[file_type]
+            )
+            self.secuence_number[file_type] += 1
             self.forward_queue.publish(message_with_metadata, file_type)
         except Exception as e:
             logging.error(f"Failed to forward message to data controller: {e}")

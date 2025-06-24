@@ -26,22 +26,24 @@ class ShardedPublisher(Publisher):
         exchange_credits = self.queue_snd_movies_to_credits_joiner.exchange
         # logging.info(f"Publishing {len(result_list)} filtered messages individually by movie_id to exchanges '{exchange_ratings}' and '{exchange_credits}'.")
 
-        movie_batch_bytes = self.protocol.create_movie_list(result_list, client_id, secuence_number)
-        pub_routing_key = str(client_id)
+        total = len(result_list)
+        for mv in result_list:
+            try:
+                batch_bytes = self.protocol.create_movie_list([mv], client_id, secuence_number)
+                routing_key = str(mv.id)
 
-        # Publish to RATINGS joiner exchange
-        try:
-            self.queue_snd_movies_to_ratings_joiner.publish(movie_batch_bytes, routing_key=pub_routing_key)
-        except Exception as e_pub_r:
-            logging.error(f"Failed to publish movie batch to RATINGS exchange '{exchange_ratings}': {e_pub_r}")
+                # RATINGS
+                self.queue_snd_movies_to_ratings_joiner.publish(batch_bytes, routing_key=routing_key)
 
-        # Publish to CREDITS joiner exchange
-        try:
-            self.queue_snd_movies_to_credits_joiner.publish(movie_batch_bytes, routing_key=pub_routing_key)
-        except Exception as e_pub_c:
-            logging.error(f"Failed to publish movie batch to CREDITS exchange '{exchange_credits}': {e_pub_c}")
-        
-        logging.info(f"Finished publishing messages to both exchanges.")
+                # CREDITS
+                self.queue_snd_movies_to_credits_joiner.publish(batch_bytes, routing_key=routing_key)
+            except Exception as exc:
+                logging.error(
+                    f"Error publishing movie id {getattr(mv, 'id', '?')} to exchanges '{exchange_ratings}'/'{exchange_credits}': {exc}"
+                )
+                raise
+
+        logging.info(f"Published {total} individual movie batches (seq={secuence_number}) to both joiner exchanges.")
 
     def publish_finished_signal(self, msg):
         msg_to_send = msg.SerializeToString()

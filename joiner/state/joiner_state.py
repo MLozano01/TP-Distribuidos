@@ -43,9 +43,12 @@ class JoinerState:
             self._restore_from_disk() if self._state_manager is not None else {}
         )
 
-        self._movies_data, self._other_data, self._eof_trackers = self._normalise_snapshots(
-            persisted_raw
-        )
+        (
+            self._movies_data,
+            self._other_data,
+            self._eof_trackers,
+            self._processed_counts,
+        ) = self._normalise_snapshots(persisted_raw)
 
         restored_movies = sum(len(m) for m in self._movies_data.values())
         logging.info(
@@ -66,6 +69,7 @@ class JoinerState:
         movies: Dict[str, Dict[int, Any]] = {}
         other: Dict[str, Dict[int, List[Any]]] = {}
         eofs: Dict[str, Dict[str, bool]] = {}
+        processed: Dict[str, int] = {}
 
         base_dir = getattr(self._state_manager, "_dir", "/backup")
         base_file = getattr(self._state_manager, "_file_name", "joiner_state.json")
@@ -88,6 +92,7 @@ class JoinerState:
                 movies.update(snap.get("movies_data", {}))
                 other.update(snap.get("other_data", {}))
                 eofs.update(snap.get("eof_trackers", {}))
+                processed.update({str(k): int(v) for k, v in snap.get("processed_counts", {}).items()})
         except FileNotFoundError:
             # Backup directory missing – no prior state, not an error.
             pass
@@ -98,6 +103,7 @@ class JoinerState:
             "movies_data": movies,
             "other_data": other,
             "eof_trackers": eofs,
+            "processed_counts": processed,
         }
 
     def _normalise_snapshots(
@@ -106,6 +112,7 @@ class JoinerState:
         Dict[str, Dict[int, str]],
         Dict[str, Dict[int, List[Any]]],
         Dict[str, Dict[str, bool]],
+        Dict[str, int],
     ]:
         """Convert raw JSON dictionaries (str keys) into strongly-typed maps.
         This helper ensures **all** keys are of the expected type so that the
@@ -147,7 +154,16 @@ class JoinerState:
             str(cid): dict(tracker) for cid, tracker in persisted.get("eof_trackers", {}).items()
         }
 
-        return movies_typed, other_typed, eofs_typed
+        # --- Processed counts -----------------------------------------
+        proc_typed: Dict[str, int] = {}
+        raw_proc = persisted.get("processed_counts", {})
+        for raw_cid, val in raw_proc.items():
+            try:
+                proc_typed[str(raw_cid)] = int(val)
+            except (ValueError, TypeError):
+                continue
+
+        return movies_typed, other_typed, eofs_typed, proc_typed
 
     def add_movie(self, client_id: str, movie_pb) -> List[Any]:
         """Add a movie (protobuf) to the buffer, storing only minimal fields.
@@ -228,6 +244,7 @@ class JoinerState:
             self._movies_data.pop(client_id, None)
             self._other_data.pop(client_id, None)
             self._eof_trackers.pop(client_id, None)
+            self._processed_counts.pop(client_id, None)
             logging.info(f"State fully cleared for client {client_id}")
 
             # Remove on-disk snapshot for the client (if any).
@@ -245,11 +262,13 @@ class JoinerState:
                 "movies_data": {client_id: self._movies_data.get(client_id, {})},
                 "other_data": {client_id: self._other_data.get(client_id, {})},
                 "eof_trackers": {client_id: self._eof_trackers.get(client_id, {})},
+                "processed_counts": {client_id: self._processed_counts.get(client_id, 0)},
             }
             self._get_client_manager(client_id).save(snap)
 
             # Cleanup: remove snapshot files for clients no longer present in memory.
             active_ids = set(self._movies_data) | set(self._other_data) | set(self._eof_trackers)
+            active_ids |= set(self._processed_counts)
             for cid in list(self._client_state_managers.keys()):
                 if cid not in active_ids:
                     self._client_state_managers[cid].clear()
@@ -277,4 +296,12 @@ class JoinerState:
         iteration").
         """
         with self._lock:
-            self._persist(client_id) 
+            self._persist(client_id)
+
+    def increment_processed(self, client_id: str, count: int = 1) -> None:
+        """Increment processed counter for client by *count*. This method doest not persist"""
+        with self._lock:
+            self._processed_counts[client_id] = self._processed_counts.get(client_id, 0) + int(count)
+
+    def get_processed_count(self, client_id: str) -> int:
+        return self._processed_counts.get(client_id, 0) 

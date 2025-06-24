@@ -22,6 +22,7 @@ message RatingsCSV {
   optional bool finished = 2;
   int32 client_id = 3;
   int32 secuence_number = 4;
+  optional int32 total_to_process = 5;
 }
 // [END ratings messages]
 
@@ -60,6 +61,7 @@ message CreditsCSV {
   optional bool finished = 2;
   int32 client_id = 3;
   int32 secuence_number = 4;
+  optional int32 total_to_process = 5;
 }
 // [END credits messages]
 

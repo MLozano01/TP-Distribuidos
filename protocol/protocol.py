@@ -78,10 +78,20 @@ class Protocol:
     code = self.__type_codes.get(type)
     return self.create_bytes(code, batch)
 
-  def create_inform_end_file(self, type):
+  def create_inform_end_file(self, type, total_to_process=None):
+    """Create an END_FILE message.
+
+    If *total_to_process* is provided (int), it will be appended after the
+    file-code so downstream components can verify the number of processed
+    records.  This is currently used for ratings and credits streams.
+    """
     code = self.__type_codes.get(type)
-    msg = code.to_bytes(CODE_LENGTH, byteorder='big')
-    return self.create_bytes(END_FILE_CODE, msg)
+    payload = bytearray()
+    payload.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
+    if total_to_process is not None:
+      payload.extend(int(total_to_process).to_bytes(INT_LENGTH, byteorder='big'))
+
+    return self.create_bytes(END_FILE_CODE, payload)
 
   def create_finished_message(self, type, client_id):
       """Creates and serializes a 'finished' message for the given type."""
@@ -110,6 +120,17 @@ class Protocol:
     type = int.from_bytes(data, byteorder='big') if code == END_FILE_CODE else code
     
     return self.__codes_to_string[type]
+
+  def is_end_file(self, message):
+    """Return True if *message* is an END_FILE control message."""
+    if not message:
+      return False
+    return int.from_bytes(message[:CODE_LENGTH], byteorder='big') == END_FILE_CODE
+
+  def string_to_file_type(self, s):
+    """Map 'ratings'/'credits'/'movies' → FileType enum (or raise KeyError)."""
+    code = {v: k for k, v in self.__codes_to_string.items()}[s]
+    return self.__codes_to_types[code]
 
   def add_metadata(self, message, client_id, secuence_number):
     """Adds client ID to the message to call before forwarding to the distributed system."""
@@ -144,12 +165,34 @@ class Protocol:
     msg = msg_buffer[amount_read:]
     
     if code == END_FILE_CODE:
-      file_code = int.from_bytes(msg[:CODE_LENGTH], byteorder='big')
+      # The END_FILE message now carries the file_code followed by an optional
+      # int32 with the total number of individual records that were sent for
+      # the corresponding stream (ratings / credits). Older messages will not
+      # include this extra field, therefore we must handle both cases.
+
+      cursor = 0
+      file_code = int.from_bytes(msg[cursor:cursor + CODE_LENGTH], byteorder='big')
+      cursor += CODE_LENGTH
+
+      # Default when the sender provided no total counter (backwards compat.)
+      total_to_process = None
+
+      # If there are at least 4 extra bytes, read them as total_to_process.
+      if len(msg) >= cursor + INT_LENGTH:
+        total_to_process = int.from_bytes(
+          msg[cursor:cursor + INT_LENGTH], byteorder='big'
+        )
+
       file_type = self.__codes_to_types[file_code]
       msg_finished = self.__file_classes[file_type]
       msg_finished.finished = True
       msg_finished.client_id = client_id
       msg_finished.secuence_number = secuence_number
+
+      # Only RatingsCSV and CreditsCSV currently support this extra field.
+      if total_to_process is not None and hasattr(msg_finished, "total_to_process"):
+        msg_finished.total_to_process = total_to_process
+
       return file_type, msg_finished
 
     file_type = self.__codes_to_types[code]
@@ -560,3 +603,24 @@ class Protocol:
       if finished:
           batch_pb.finished = True
       return batch_pb.SerializeToString()
+
+  def count_csv_rows(self, message):
+    """Return the number of CSV rows in a *ratings* or *credits* batch.
+
+    For non-ratings/credits messages, or END_FILE messages, returns 0.
+    """
+    if not message:
+      return 0
+
+    code = int.from_bytes(message[:CODE_LENGTH], byteorder='big')
+    if code not in (RATINGS_FILE_CODE, CREDITS_FILE_CODE):
+      return 0
+
+    try:
+      length = int.from_bytes(message[CODE_LENGTH:CODE_LENGTH + INT_LENGTH], byteorder='big')
+      data = message[CODE_LENGTH + INT_LENGTH : CODE_LENGTH + INT_LENGTH + length]
+      csv_batch = files_pb2.CSVBatch()
+      csv_batch.ParseFromString(data)
+      return len(csv_batch.rows)
+    except Exception:
+      return 0

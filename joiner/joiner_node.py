@@ -7,9 +7,7 @@ from protocol.rabbit_protocol import RabbitMQ
 from protocol.protocol import Protocol
 from state.joiner_state import JoinerState
 from common.state_persistence import StatePersistence
-
-class ShutdownRequeueException(Exception):
-    """Signal to RabbitMQ wrapper that the current delivery must be nacked."""
+from common.requeue import RequeueException
 
 class JoinerNode:
     def __init__(self, config, join_strategy):
@@ -152,7 +150,7 @@ class JoinerNode:
         #logging.info(f"[Node] Received a movie message. Size: {len(body)} bytes.")
 
         if self._should_requeue():
-            raise ShutdownRequeueException()
+            raise RequeueException()
 
         try:
             movies_msg = self.protocol.decode_movies_msg(body)
@@ -171,17 +169,16 @@ class JoinerNode:
             else:
                 self._handle_movie_batch(client_id, movies_msg.movies)
 
-        except ShutdownRequeueException:
+        except RequeueException:
             raise
         except Exception as e:
             logging.error("[Node] Error processing movie message: %s", e, exc_info=True)
             raise
 
     def _process_other_message(self, ch, method, properties, body):
-        logging.info(f"[Node] Received an other message. Size: {len(body)} bytes.")
 
         if self._should_requeue():
-            raise ShutdownRequeueException()
+            raise RequeueException()
 
         try:
             client_finished_id = self.join_strategy.process_other_message(
@@ -190,7 +187,7 @@ class JoinerNode:
 
             if client_finished_id:
                 self._check_and_handle_client_finished(str(client_finished_id))
-        except ShutdownRequeueException:
+        except RequeueException:
             raise
         except Exception as e:
             logging.error("[Node] Error processing other message: %s", e, exc_info=True)
