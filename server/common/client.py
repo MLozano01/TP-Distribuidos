@@ -1,15 +1,18 @@
 from multiprocessing import Process
 import socket
 import logging
-from protocol.protocol import Protocol
+from protocol.protocol import FileType, Protocol
 from protocol.rabbit_protocol import RabbitMQ
 from protocol.utils.socket_utils import recvall
 import signal
 
+AMOUNT_FILES = 3
+
 class Client:
-    def __init__(self, client_sock, client_id):
+    def __init__(self, client_sock, client_id, force_finish=False):
         self.socket = client_sock
         self.client_id = client_id
+        self.force_finish = force_finish
         self.protocol = Protocol()
         self.data_controller = None
         self.result_controller = None
@@ -18,6 +21,7 @@ class Client:
 
         self.results_received = set()
         self.total_expected = 5
+        self.eof_sent = 1
         self.secuence_number= {"movies":0, "ratings":0, "credits":0}
 
 
@@ -42,15 +46,8 @@ class Client:
 
 
     def stop(self, _sig, _frame):
-        try:
-            if self.forward_queue:
-                self.forward_queue.close_channel()
-            if self.result_queue:
-                self.result_queue.close_channel()
-
-        except Exception as e:
-            logging.error(f"Error stopping client IN QUEUES: {e}")
-
+        self.stop_consumer()
+    
         try:    
             if self.data_controller and self.data_controller.is_alive():
                 self.data_controller.terminate()
@@ -59,15 +56,6 @@ class Client:
 
         except Exception as e:
             logging.error(f"Error stopping client IN PROCESSES: {e}")
-
-        if self.socket:
-            try:
-                self.socket.shutdown(socket.SHUT_RDWR)
-                self.socket.close()
-                self.socket = None
-            except Exception as e:
-                logging.error(f"Error closing socket: {e}")
-
 
         logging.info(f"Client {self.client_id} stopped.")
 
@@ -103,24 +91,35 @@ class Client:
             buffer = bytearray()
             closed_socket = recvall(conn, buffer, read_amount)
             if closed_socket:
-                return
+                break
             read_amount = self.protocol.define_buffer_size(buffer)
             closed_socket = recvall(conn, buffer, read_amount)
             if closed_socket:
-                return
+                break
             
             self._forward_to_data_controller(buffer)
+            if self.eof_sent == AMOUNT_FILES:
+                return
+        if self.eof_sent < AMOUNT_FILES:
+            self.handle_client_left()
         self.stop_consumer()
 
     def _forward_to_data_controller(self, message):
         try:
-            file_type = self.protocol.get_file_type(message)
-
+            is_eof, file_type = self.protocol.get_file_type(message)
+            if is_eof:
+                self.eof_sent+=1
             message_with_metadata = self.protocol.add_metadata(message, self.client_id, self.secuence_number[file_type])
             self.secuence_number[file_type] += 1 
             self.forward_queue.publish(message_with_metadata, file_type)
         except Exception as e:
             logging.error(f"Failed to forward message to data controller: {e}")
+
+    def handle_client_left(self):
+        logging.info(f"Client disconnected. Sent {self.eof_sent} files, completing the rest")
+        for i in range(self.eof_sent, AMOUNT_FILES +1):
+            message = self.protocol.create_inform_end_file(FileType(i), self.force_finish)
+            self._forward_to_data_controller(message)
 
     def return_results(self, conn: socket.socket):
         try:
@@ -132,7 +131,8 @@ class Client:
     def result_controller_func(self, ch, method, properties, body):
         try:
             msg = self.protocol.create_client_result(body)
-            self.socket.sendall(msg)
+            if self.socket:
+                self.socket.sendall(msg)
 
             _type, result = self.protocol.decode_msg(msg)
             self.results_received.add(result.query_id)

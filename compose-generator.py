@@ -138,6 +138,7 @@ def create_server(client_amount):
       - rabbitmq
     volumes:
       - ./server/{CONFIG_FILE}:/{CONFIG_FILE}
+      - ./server/backup:/backup
     """
     return server
 
