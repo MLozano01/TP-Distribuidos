@@ -32,11 +32,11 @@ def initialize_config():
         # Output configuration
         config_params["exchange_snd"] = os.getenv('EXCHANGE_SND', config["RABBITMQ"]["EXCHANGE_SND"])
         config_params["exc_snd_type"] = os.getenv('TYPE_SND', config["RABBITMQ"]["TYPE_SND"])
+        config_params["queue_snd_name"] = os.getenv('QUEUE_SND_NAME', config["RABBITMQ"]["QUEUE_SND_NAME"])
         if config_params["exc_snd_type"] == "direct":
-            config_params["queue_snd_name"] = os.getenv('QUEUE_SND_NAME', config["RABBITMQ"]["QUEUE_SND_NAME"])
             config_params["routing_snd_key"] = os.getenv('ROUTING_KEY_SND', config["RABBITMQ"]["ROUTING_KEY_SND"])
         else:
-            config_params["queue_snd_name"] = ""
+        #     config_params["queue_snd_name"] = ""
             config_params["routing_snd_key"] = ""
         
         # Inter replica communication configuration

@@ -8,13 +8,15 @@ logging.getLogger('pika').setLevel(logging.WARNING)
 logging.getLogger('RabbitMQ').setLevel(logging.WARNING)
 
 class Server:
-    def __init__(self, port, listen_backlog):
+    def __init__(self, port, listen_backlog, config):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind(('', port))
         self.socket.listen(listen_backlog)
         self.running = True
         self.clients = []
         self.next_client_id = 1
+
+        self.config = config
 
     def run(self):
         self._setup_signal_handlers()
@@ -37,7 +39,7 @@ class Server:
 
     def _handle_client(self, client_socket, client_id):
         try:
-            client = Client(client_socket, client_id)
+            client = Client(client_socket, client_id, self.config)
             client.run()
         except Exception as e:
             logging.error(f"Error in client process {client_id}: {e}")

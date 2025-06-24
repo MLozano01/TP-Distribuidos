@@ -117,12 +117,6 @@ class DataController:
             except Exception as e:
                 logging.error(f"Error closing publisher channel: {e}")
         
-        # Terminate finish signal checkers
-        if self.finish_signal_checker:
-            self.finish_signal_checker.terminate()
-            self.finish_signal_checker.join()
-            logging.info(f"Finished signal checker process terminated.")
-        
         logging.info(f"DataController {self.replica_id} stopped successfully")
 
     def _handle_shutdown(self, signum, frame):
