@@ -30,11 +30,22 @@ class JoinerState:
     locks in this class.
     """
 
-    def __init__(self, state_manager: "StatePersistence | None" = None) -> None:
+    def __init__(
+        self,
+        backup_file: str,
+        node_tag: str,
+        base_dir: str,
+    ) -> None:
         """Create a new *in-memory* state container and – if available –
         restore any snapshots found on disk.
         """
-        self._state_manager = state_manager
+        self._base_dir = base_dir
+        self._node_tag = str(node_tag)
+        self._state_manager = StatePersistence(
+            backup_file,
+            node_info=node_tag,
+            serializer="json",
+        )
 
         # Lazy registry of per-client ``StatePersistence`` helpers.
         self._client_state_managers: Dict[str, StatePersistence] = {}
@@ -47,8 +58,24 @@ class JoinerState:
             self._movies_data,
             self._other_data,
             self._eof_trackers,
-            self._processed_counts,
+            _,
         ) = self._normalise_snapshots(persisted_raw)
+
+        self._processed_counts: dict[str, int] = {}
+        self._pc_managers: dict[str, StatePersistence] = {}
+
+    
+        for cid in set(self._movies_data) | set(self._other_data) | set(self._eof_trackers):
+            mgr = StatePersistence(
+                f"processed_{self._node_tag}_client_{cid}.txt",
+                directory=self._base_dir,
+                serializer=StatePersistence._JSON,
+            )
+            self._pc_managers[cid] = mgr
+            try:
+                self._processed_counts[cid] = int(mgr.load(lambda: 0))
+            except Exception:
+                self._processed_counts[cid] = 0
 
         restored_movies = sum(len(m) for m in self._movies_data.values())
         logging.info(
@@ -71,7 +98,7 @@ class JoinerState:
         eofs: Dict[str, Dict[str, bool]] = {}
         processed: Dict[str, int] = {}
 
-        base_dir = getattr(self._state_manager, "_dir", "/backup")
+        base_dir = self._base_dir
         base_file = getattr(self._state_manager, "_file_name", "joiner_state.json")
         base_name = base_file.rsplit(".", 1)[0]
 
@@ -251,6 +278,9 @@ class JoinerState:
             mgr = self._client_state_managers.pop(client_id, None)
             if mgr is not None:
                 mgr.clear()
+            pc_mgr = self._pc_managers.pop(client_id, None)
+            if pc_mgr is not None:
+                pc_mgr.clear()
 
     def _persist(self, client_id: str) -> None:
         """Persist the state snapshot for *client_id* only."""
@@ -262,13 +292,11 @@ class JoinerState:
                 "movies_data": {client_id: self._movies_data.get(client_id, {})},
                 "other_data": {client_id: self._other_data.get(client_id, {})},
                 "eof_trackers": {client_id: self._eof_trackers.get(client_id, {})},
-                "processed_counts": {client_id: self._processed_counts.get(client_id, 0)},
             }
             self._get_client_manager(client_id).save(snap)
 
             # Cleanup: remove snapshot files for clients no longer present in memory.
             active_ids = set(self._movies_data) | set(self._other_data) | set(self._eof_trackers)
-            active_ids |= set(self._processed_counts)
             for cid in list(self._client_state_managers.keys()):
                 if cid not in active_ids:
                     self._client_state_managers[cid].clear()
@@ -281,7 +309,7 @@ class JoinerState:
         mgr = self._client_state_managers.get(client_id)
         if mgr is None:
             # Build a dedicated persistence helper for the client.
-            base_dir = getattr(self._state_manager, "_dir", "/backup")
+            base_dir = self._base_dir
             base_file = getattr(self._state_manager, "_file_name", "joiner_state.json")
             base_name = base_file.rsplit(".", 1)[0]
             filename = f"{base_name}_{client_id}.json"
@@ -300,8 +328,19 @@ class JoinerState:
 
     def increment_processed(self, client_id: str, count: int = 1) -> None:
         """Increment processed counter for client by *count*. This method doest not persist"""
-        with self._lock:
-            self._processed_counts[client_id] = self._processed_counts.get(client_id, 0) + int(count)
+        new_val = self._processed_counts.get(client_id, 0) + int(count)
+        self._processed_counts[client_id] = new_val
+
+        mgr = self._pc_managers.get(client_id)
+        if mgr is None and self._state_manager is not None:
+            mgr = StatePersistence(
+                f"processed_{self._node_tag}_client_{client_id}.txt",
+                directory=self._base_dir,
+                serializer=StatePersistence._JSON,
+            )
+            self._pc_managers[client_id] = mgr
+        if mgr is not None:
+            mgr.save(new_val)
 
     def get_processed_count(self, client_id: str) -> int:
         return self._processed_counts.get(client_id, 0) 

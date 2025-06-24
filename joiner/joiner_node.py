@@ -6,7 +6,6 @@ import socket
 from protocol.rabbit_protocol import RabbitMQ
 from protocol.protocol import Protocol
 from state.joiner_state import JoinerState
-from common.state_persistence import StatePersistence
 from common.requeue import RequeueException
 
 class JoinerNode:
@@ -17,13 +16,14 @@ class JoinerNode:
 
         backup_file = self.config.get('backup_file', f"joiner_state_{self.replica_id}.json")
         node_tag = f"{self.config.get('joiner_name', 'joiner')}_{self.replica_id}"
-        self._state_manager = StatePersistence(
-            backup_file,
-            node_info=node_tag,
-            serializer="json",
-        )
 
-        self.state = JoinerState(self._state_manager)
+        backup_dir = "/backup"
+
+        self.state = JoinerState(
+            backup_file=backup_file,
+            node_tag=node_tag,
+            base_dir=backup_dir,
+        )
         self.protocol = Protocol()
         self.other_data_type = self.config.get('other_data_type', 'RATINGS')
         
