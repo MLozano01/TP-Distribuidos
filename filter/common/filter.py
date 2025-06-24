@@ -33,6 +33,7 @@ class Filter:
 
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type)
+        logging.info(f"Ready receiving queue with Exchange: {self.exchange_rcv}, Name: {self.queue_rcv_name}, Key: {self.routing_rcv_key}")
         self.publisher.setup_queues()
 
     def run(self):
@@ -52,6 +53,7 @@ class Filter:
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
+
         logging.debug(f"Received message, with routing key: {method.routing_key}")
         decoded_msg = self.protocol.decode_movies_msg(body)
 

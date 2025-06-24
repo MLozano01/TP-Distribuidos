@@ -50,6 +50,7 @@ class DataController:
 
         for name in self.names:
             queue = RabbitMQ(f"{self.exchange_snd}_{name}", f"{self.queue_snd_name}_{name}", f"{self.routing_snd_key}_{name}", self.exc_snd_type)
+            logging.info(f"Exchange: {self.exchange_snd}_{name}, Q name: {self.queue_snd_name}_{name}, Routing Key: {self.routing_snd_key}_{name}")
             self.send_queues.append(queue)
 
 
@@ -76,11 +77,12 @@ class DataController:
         """Handle finished messages with coordination"""
         logging.info(f"Propagating finished {message_type} of client {msg.client_id} downstream")
         msg_to_send = msg.SerializeToString()
-        self.send_queue.publish(msg_to_send)
+        for queue in self.send_queues:
+            queue.publish(msg_to_send)
         
 
     def _handle_data_message(self, message_type, msg):
-        logging.info(f"got message of type: {message_type}")
+        # logging.info(f"got message of type: {message_type}")
         if message_type == FileType.MOVIES:
             self.publish_movies(msg)
         elif message_type == FileType.RATINGS:
