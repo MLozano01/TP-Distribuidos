@@ -165,11 +165,6 @@ class Protocol:
     msg = msg_buffer[amount_read:]
     
     if code == END_FILE_CODE:
-      # The END_FILE message now carries the file_code followed by an optional
-      # int32 with the total number of individual records that were sent for
-      # the corresponding stream (ratings / credits). Older messages will not
-      # include this extra field, therefore we must handle both cases.
-
       cursor = 0
       file_code = int.from_bytes(msg[cursor:cursor + CODE_LENGTH], byteorder='big')
       cursor += CODE_LENGTH
