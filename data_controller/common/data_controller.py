@@ -72,7 +72,7 @@ class DataController:
         
 
     def _handle_data_message(self, message_type, msg):
-        logging.info(f"got message of type: {message_type}")
+        #logging.info(f"got message of type: {message_type}")
         if message_type == FileType.MOVIES:
             self.publish_movies(msg)
         elif message_type == FileType.RATINGS:
@@ -86,12 +86,12 @@ class DataController:
             self.send_queue.publish(movies_pb.SerializeToString())
 
     def publish_ratings(self, ratings_csv):
-        ratings_batch = filter_ratings(ratings_csv)
-        self.send_queue.publish(ratings_batch.SerializeToString(), routing_key=str(ratings_batch.client_id))
+        for movie_id, batch_pb in filter_ratings(ratings_csv):
+            self.send_queue.publish(batch_pb.SerializeToString(), routing_key=str(movie_id))
 
     def publish_credits(self, credits_csv):
-        credits_batch = filter_credits(credits_csv)
-        self.send_queue.publish(credits_batch.SerializeToString(), routing_key=str(credits_batch.client_id))
+        for movie_id, batch_pb in filter_credits(credits_csv):
+            self.send_queue.publish(batch_pb.SerializeToString(), routing_key=str(movie_id))
 
     def stop(self):
         """Stop the DataController and close all connections"""

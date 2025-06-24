@@ -32,49 +32,67 @@ def filter_movies(movies_csv):
     return movies_pb if len(movies_pb.movies) else None
 
 def filter_ratings(ratings_csv):
-    ratings_batch = files_pb2.RatingsCSV()
-    ratings_batch.client_id = ratings_csv.client_id
-    ratings_batch.secuence_number = ratings_csv.secuence_number
+    """Shard ratings by movie_id while keeping validation logic."""
+
+    by_movie = {}
+    cid = ratings_csv.client_id
+    seq = ratings_csv.secuence_number
+
     total_ratings = len(ratings_csv.ratings)
     filtered_out = 0
-    
+
     for rating in ratings_csv.ratings:
         if not rating.movieId or rating.movieId < 0 or rating.rating is None or rating.rating < 0:
             filtered_out += 1
             continue
 
-        rating_pb = files_pb2.RatingCSV()
-        rating_pb.userId = rating.userId
-        rating_pb.movieId = rating.movieId
-        rating_pb.rating = rating.rating
+        batch = by_movie.setdefault(rating.movieId, files_pb2.RatingsCSV())
+        batch.client_id = cid
+        batch.secuence_number = seq
 
-        ratings_batch.ratings.append(rating_pb)
+        r_pb = batch.ratings.add()
+        r_pb.userId = rating.userId
+        r_pb.movieId = rating.movieId
+        r_pb.rating = rating.rating
 
-    logging.debug(f"Filtered {filtered_out} out of {total_ratings} ratings. Remaining: {len(ratings_batch.ratings)}")
-    return ratings_batch
+    logging.info(
+        f"Filtered {filtered_out} out of {total_ratings} ratings. Remaining: {total_ratings - filtered_out}"
+    )
+
+    return list(by_movie.items())  # List[(movie_id, RatingsCSV)]
 
 def filter_credits(credits_csv):
-    credits_batch = files_pb2.CreditsCSV()
-    credits_batch.client_id = credits_csv.client_id
-    credits_batch.secuence_number = credits_csv.secuence_number
+    """Shard credits by movie_id with original filters maintained."""
+
+    by_movie = {}
+    cid = credits_csv.client_id
+    seq = credits_csv.secuence_number
+
     total_credits = len(credits_csv.credits)
     filtered_out = 0
+
     for credit in credits_csv.credits:
         if not credit.id or credit.id < 0:
             filtered_out += 1
             continue
 
-        names = map(lambda cast: cast.name, credit.cast)
-        names = list(filter(lambda name: name, names))
+        names = [c.name for c in credit.cast if c.name]
 
-        credit_pb = files_pb2.CreditCSV()
-        credit_pb.id = credit.id
+        # Always create a CreditCSV entry, even if the cast list is empty.
+        # Downstream joiners will count the row but ignore it when producing
+        # ActorParticipations if no names are present.
+        batch = by_movie.setdefault(credit.id, files_pb2.CreditsCSV())
+        batch.client_id = cid
+        batch.secuence_number = seq
 
-        for name in names:
-            cast_pb = credit_pb.cast.add()
-            cast_pb.name = name
+        c_pb = batch.credits.add()
+        c_pb.id = credit.id
+        for n in names:
+            cp = c_pb.cast.add()
+            cp.name = n
 
-        credits_batch.credits.append(credit_pb)
+    logging.info(
+        f"Filtered {filtered_out} out of {total_credits} credits. Remaining: {total_credits - filtered_out}"
+    )
 
-    logging.debug(f"Filtered {filtered_out} out of {total_credits} credits. Remaining: {len(credits_batch.credits)}")
-    return credits_batch 
+    return list(by_movie.items())  # List[(movie_id, CreditsCSV)] 

@@ -6,6 +6,7 @@ from protocol.protocol import Protocol
 from messaging.messaging_utils import send_finished_signal
 from common.batcher import PerClientBatcher
 from common.sequence_generator import SequenceGenerator
+from common.requeue import RequeueException
 
 class RatingsJoinStrategy(JoinStrategy):
     """Join strategy that combines movie details with rating records."""
@@ -28,22 +29,44 @@ class RatingsJoinStrategy(JoinStrategy):
             return None
 
         client_id = str(ratings_msg.client_id)
+        seq = ratings_msg.secuence_number
+        movie_id_val = ratings_msg.ratings[0].movieId if ratings_msg.ratings else "-"
+        logging.info(
+            f"[RatingsJoinStrategy] Received msg client={client_id} seq={seq} movie_id={movie_id_val} items={len(ratings_msg.ratings)}"
+        )
         logging.debug(
             f"[RatingsJoinStrategy] client={client_id} finished={ratings_msg.finished} items={len(ratings_msg.ratings)}"
         )
 
-
         seq_num = str(ratings_msg.secuence_number)
-        if self._seq_monitor.is_duplicate(client_id, seq_num):
+        dedup_key = f"{seq_num}-{movie_id_val}"
+
+        if self._seq_monitor.is_duplicate(client_id, dedup_key):
             logging.info(
-                f"[RatingsJoinStrategy] Discarding duplicate OTHER message seq={seq_num} client={client_id}"
+                f"[RatingsJoinStrategy] Discarding duplicate OTHER message key={dedup_key} client={client_id}"
             )
             return None
 
         if ratings_msg.finished:
+            expected_total = getattr(ratings_msg, "total_to_process", None)
+            processed_total = state.get_processed_count(client_id)
+
+            logging.info(
+                f"[RatingsJoinStrategy] FINISHED received – client={client_id} total_to_process={expected_total} processed={processed_total}"
+            )
+
+            if expected_total is not None and expected_total != processed_total:
+                logging.warning(
+                    f"[RatingsJoinStrategy] Mismatch total_to_process (expected={expected_total}, processed={processed_total}) – requeuing EOF."
+                )
+                raise RequeueException()
+
             state.set_stream_eof(client_id, "other")
             # No clean-up yet – wait until both EOFs arrive.
             return client_id
+
+        if ratings_msg.ratings:
+            state.increment_processed(client_id, len(ratings_msg.ratings))
 
         for rating in ratings_msg.ratings:
             rating_value = float(rating.rating)
@@ -63,7 +86,7 @@ class RatingsJoinStrategy(JoinStrategy):
 
             state.buffer_other(client_id, rating.movieId, rating_value)
 
-        self._seq_monitor.record(client_id, seq_num)
+        self._seq_monitor.record(client_id, dedup_key)
         self._snapshot_if_needed(client_id)
         return None
 
