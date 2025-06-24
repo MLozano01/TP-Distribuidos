@@ -54,6 +54,9 @@ class Reducer:
                 return
 
             if msg.finished:
+                if msg.force_finish:
+                    logging.info(f"Received force finished for client: {msg.client_id}")
+                    self._clean_up(str(msg.client_id))
                 logging.info(f"Finished msg received on query_id {self.query_id}, with final secuence number {msg.secuence_number}")
                 self.partial_status[str(msg.client_id)]["final_secuence"] = msg.secuence_number
                 self._handle_finished(str(msg.client_id))
@@ -93,10 +96,10 @@ class Reducer:
 
     def _clean_up(self, client_id):
         logging.info(f"Cleaning up files for client {client_id}")
-        self.partial_status.pop(client_id)
+        self.partial_status.pop(client_id, None)
         self._state_manager.save(self.partial_status)
 
-        self.batches_seen.pop(client_id)
+        self.batches_seen.pop(client_id, None)
         self._state_manager.clean_client(client_id)
 
     def _handle_finished(self, client_id):

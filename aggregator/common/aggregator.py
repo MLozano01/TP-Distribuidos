@@ -70,6 +70,8 @@ class Aggregator:
         """Publishes an AggregationBatch with finished=True to downstream consumers."""
         aggr_pb = self.protocol.decode_aggr_batch(self.protocol.create_aggr_batch({}, decoded_msg.client_id, decoded_msg.secuence_number))
         aggr_pb.finished = True
+        if decoded_msg.force_finish:
+            aggr_pb.force_finish = decoded_msg.force_finish
         
         finished_serialized = aggr_pb.SerializeToString()
         
