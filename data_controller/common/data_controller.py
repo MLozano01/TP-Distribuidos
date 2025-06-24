@@ -20,7 +20,7 @@ class DataController:
         self.is_alive = True
         self.protocol = Protocol()
         self.work_consumer = None
-        self.send_queue = None
+        self.send_queues = []
         self.replica_id = kwargs.get('replica_id', 'unknown')
 
         # Set attributes from kwargs
@@ -40,9 +40,17 @@ class DataController:
 
     def _settle_queues(self):
         self.work_consumer = RabbitMQ(self.exchange_rcv, self.queue_rcv_name, self.routing_rcv_key, self.exc_rcv_type, auto_ack=False, prefetch_count=1)
-
-        self.send_queue = RabbitMQ(self.exchange_snd, self.queue_snd_name, self.routing_snd_key, self.exc_snd_type)
+        self._settle_send_queues()
         logging.info("Queues up, ready to use")
+
+    def _settle_send_queues(self):
+        if len(self.names) == 0:
+            self.send_queues.append(RabbitMQ(self.exchange_snd, self.queue_snd_name, self.routing_snd_key, self.exc_snd_type))
+            return
+
+        for name in self.names:
+            queue = RabbitMQ(f"{self.exchange_snd}_{name}", f"{self.queue_snd_name}_{name}", f"{self.routing_snd_key}_{name}", self.exc_snd_type)
+            self.send_queues.append(queue)
 
 
     def run(self):
@@ -83,15 +91,18 @@ class DataController:
     def publish_movies(self, movies_csv):
         movies_pb = filter_movies(movies_csv)
         if movies_pb:
-            self.send_queue.publish(movies_pb.SerializeToString())
+            for queue in self.send_queues:
+                queue.publish(movies_pb.SerializeToString())
 
     def publish_ratings(self, ratings_csv):
         ratings_batch = filter_ratings(ratings_csv)
-        self.send_queue.publish(ratings_batch.SerializeToString(), routing_key=str(ratings_batch.client_id))
+        for queue in self.send_queues:
+            queue.publish(ratings_batch.SerializeToString(), routing_key=str(ratings_batch.client_id))
 
     def publish_credits(self, credits_csv):
         credits_batch = filter_credits(credits_csv)
-        self.send_queue.publish(credits_batch.SerializeToString(), routing_key=str(credits_batch.client_id))
+        for queue in self.send_queues:
+            queue.publish(credits_batch.SerializeToString(), routing_key=str(credits_batch.client_id))
 
     def stop(self):
         """Stop the DataController and close all connections"""
@@ -110,12 +121,13 @@ class DataController:
                 logging.error(f"Error closing work consumer channel: {e}")
         
         # Close movies publisher connection
-        if self.send_queue:
-            try:
-                self.send_queue.close_channel()
-                logging.info("Publisher channel closed")
-            except Exception as e:
-                logging.error(f"Error closing publisher channel: {e}")
+        for queue in self.send_queues:
+            if queue:
+                try:
+                    queue.close_channel()
+                    logging.info("Publisher channel closed")
+                except Exception as e:
+                    logging.error(f"Error closing publisher channel: {e}")
         
         logging.info(f"DataController {self.replica_id} stopped successfully")
 

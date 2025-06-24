@@ -35,9 +35,11 @@ def initialize_config():
         config_params["queue_snd_name"] = os.getenv('QUEUE_SND_NAME', config["RABBITMQ"]["QUEUE_SND_NAME"])
         if config_params["exc_snd_type"] == "direct":
             config_params["routing_snd_key"] = os.getenv('ROUTING_KEY_SND', config["RABBITMQ"]["ROUTING_KEY_SND"])
+            config_params["names"] = os.getenv('NAMES', config["RABBITMQ"]["NAMES"]).split(",")
         else:
         #     config_params["queue_snd_name"] = ""
             config_params["routing_snd_key"] = ""
+            config_params["names"] = []
         
         # Inter replica communication configuration
         env_id = os.getenv('DATA_CONTROLLER_REPLICA_ID')
