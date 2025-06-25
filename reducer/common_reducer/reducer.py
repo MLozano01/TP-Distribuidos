@@ -1,3 +1,4 @@
+import signal
 from protocol.rabbit_protocol import RabbitMQ
 from common_reducer.aux import parse_reduce_funct, parse_final_result
 import logging
@@ -16,7 +17,6 @@ class Reducer:
         self.config = config
         self.queue_rcv = None
         self.queue_snd = None
-        self.is_alive = True
         self.query_id = config["query_id"]
         self.reduce_by = config['reduce_by']
 
@@ -29,7 +29,13 @@ class Reducer:
         self.stop_event = Event()
 
         # Setup signal handler for SIGTERM
-        # signal.signal(signal.SIGTERM, self._handle_shutdown)
+        signal.signal(signal.SIGTERM, self._handle_shutdown)
+        signal.signal(signal.SIGINT, self._handle_shutdown)
+
+
+    def _handle_shutdown(self, _sig, _frame):
+        logging.info("Graceful exit")
+        self.stop()
 
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.config["exchange_rcv"], self.config['queue_rcv_name'], self.config['routing_rcv_key'], self.config['exc_rcv_type'])
@@ -134,10 +140,8 @@ class Reducer:
 
     def stop(self):
         """End the reduce and close the queue."""
+        logging.info("Stopping reducer")
+        if self.stop_event.is_set():
+            return
         self.stop_event.set()
-        if self.queue_rcv:
-            self.queue_rcv.close_channel()
-        if self.queue_snd:
-            self.queue_snd.close_channel()
-        self.is_alive = False
-        logging.info("reduce Stopped")
+        logging.info("Reducer Stopped")
