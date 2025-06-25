@@ -23,7 +23,9 @@ def main():
     except Exception as e:
         logging.error(f"Aggregator error: {e}")
     finally:
+        comms_process.terminate()
         aggregator.stop()
+        comms_process.join()
         logging.info("Aggregator stopped")
 
     

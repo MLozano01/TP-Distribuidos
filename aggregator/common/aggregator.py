@@ -1,9 +1,9 @@
+import signal
 from common.aux import parse_aggregate_func
 from protocol.rabbit_protocol import RabbitMQ
 import logging
 from protocol.protocol import Protocol
-from queue import Empty
-from multiprocessing import Process, Value
+from multiprocessing import Event
 
 START = False
 DONE = True
@@ -18,8 +18,17 @@ class Aggregator:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-        self.is_alive = True
         self.protocol = Protocol()
+
+        self.stop_event = Event()
+        
+        # Setup signal handler for SIGTERM
+        signal.signal(signal.SIGTERM, self._handle_shutdown)
+        signal.signal(signal.SIGINT, self._handle_shutdown)
+
+    def _handle_shutdown(self, _sig, _frame):
+        logging.info("Graceful exit")
+        self.stop()
 
     def update_actual_client_id_status(self, client_id, status): 
         self.actual_client_id.value = client_id
@@ -33,7 +42,7 @@ class Aggregator:
         """Start the aggregator to consume messages from the queue."""
         self._settle_queues()
 
-        self.queue_rcv.consume(self.callback)
+        self.queue_rcv.consume(self.callback, stop_event=self.stop_event)
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
@@ -80,9 +89,8 @@ class Aggregator:
         
     def stop(self):
         """End the aggregator and close the queue."""
-        if self.queue_rcv:
-            self.queue_rcv.close_channel()
-        if self.queue_snd:
-            self.queue_snd.close_channel()
-        self.is_alive = False
+        logging.info("Stopping aggregator")
+        if self.stop_event.is_set():
+            return
+        self.stop_event.set()
         logging.info("Aggregator Stopped")
