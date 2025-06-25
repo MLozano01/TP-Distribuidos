@@ -45,7 +45,7 @@ class DataController:
 
     def _settle_send_queues(self):
         if len(self.names) == 0:
-            self.send_queues.append(RabbitMQ(self.exchange_snd, self.queue_snd_name, self.routing_snd_key, self.exc_snd_type))
+            self.send_queues.append(RabbitMQ(self.exchange_snd, self.queue_snd_name, self.routing_snd_key, self.exc_snd_type, joiner=True))
             return
 
         for name in self.names:

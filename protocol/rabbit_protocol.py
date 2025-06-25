@@ -6,13 +6,15 @@ import threading
 rabbit_logger = logging.getLogger("RabbitMQ")
 
 class RabbitMQ:
-    def __init__(self, exchange, q_name, key, exc_type, auto_ack=False, prefetch_count=None):
+    def __init__(self, exchange, q_name, key, exc_type, auto_ack=False, prefetch_count=None, joiner=False):
         self.exchange = exchange
         self.q_name = q_name
         self.key = key
         self.exc_type = exc_type
         self.auto_ack = auto_ack
         self.prefetch_count = prefetch_count
+        self.joiner = joiner
+        logging.info(f"{self.joiner}")
         self.connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq', heartbeat=500))
         self.channel = self.create_channel()
         self.callback_func = None
@@ -28,7 +30,8 @@ class RabbitMQ:
 
             res = channel.queue_declare(queue=self.q_name, durable=True)
             q_name = res.method.queue
-            channel.queue_bind(exchange=self.exchange, queue=q_name, routing_key=self.key)
+            if not self.joiner:
+                channel.queue_bind(exchange=self.exchange, queue=q_name, routing_key=self.key)
 
             rabbit_logger.debug(f"Channel created with exchange {self.exchange} of type {self.exc_type}")
 
@@ -46,18 +49,21 @@ class RabbitMQ:
         """Used to publish messages to the queue.
         Allows overriding the default routing key.
         """
-        # Determine the routing key to use
-        key_to_use = routing_key if routing_key is not None else self.key
-
         try:
+            key_to_use = routing_key if routing_key is not None else self.key
+            
+            # if self.joiner:
+            #     self.channel.queue_bind(exchange=self.exchange, queue=self.q_name, routing_key=int(key_to_use))
+            
+            logging.info(f"Gonna Publish with key {key_to_use} of type {type(key_to_use)}")
             self.channel.basic_publish(exchange=self.exchange,
-                                routing_key=key_to_use, # Use the determined key
+                                routing_key=key_to_use,
                                 body=message,
                                 properties=pika.BasicProperties(
                                     delivery_mode=2,
                                 ))
 
-            rabbit_logger.info(f"Sent message with routing key: {key_to_use}") # Log the actual key used
+            rabbit_logger.info(f"Sent message with routing key: {key_to_use}")
         except Exception as e:
             logging.error(f"Failed to send message: {e}")
             raise e
@@ -69,8 +75,9 @@ class RabbitMQ:
         try:
             key_to_use = routing_key if routing_key is not None else self.key
 
-            # self.channel.queue_declare(queue=self.q_name, durable=True)
-            # self.channel.queue_bind(exchange=self.exchange, queue=self.q_name, routing_key=key_to_use)
+            if self.joiner:
+                self.channel.queue_bind(exchange=self.exchange, queue=self.q_name, routing_key=int(key_to_use))
+
             if self.prefetch_count is not None:
                 self.channel.basic_qos(prefetch_count=self.prefetch_count)
 
