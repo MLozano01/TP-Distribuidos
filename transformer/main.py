@@ -26,8 +26,12 @@ def main():
     except Exception as e:
         logging.error(f"Transformer error: {e}")
     finally:
+        if comms_process:
+            comms_process.terminate()
+            comms_process.join()
         if transformer:
             transformer.stop()
+        logging.info("Transformer stopped")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
