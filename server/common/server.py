@@ -9,13 +9,15 @@ logging.getLogger('pika').setLevel(logging.WARNING)
 logging.getLogger('RabbitMQ').setLevel(logging.WARNING)
 
 class Server:
-    def __init__(self, port, listen_backlog):
+    def __init__(self, port, listen_backlog, config):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind(('', port))
         self.socket.listen(listen_backlog)
         self.running = True
         self.clients = []
         self.next_client_id = 1
+
+        self.config = config
 
         self.state_manager = StatePersistence('backup_server.json', node_info='server', serializer="json")
         self.status = {}
@@ -33,6 +35,7 @@ class Server:
             client_process = Process(target=self._handle_client,args=(None, id, True))
             client_process.start()
             self.clients.append(client_process)
+
 
     def run(self):
         self._setup_signal_handlers()
@@ -58,7 +61,7 @@ class Server:
 
     def _handle_client(self, client_socket, client_id, force_finish=False):
         try:
-            client = Client(client_socket, client_id, force_finish)
+            client = Client(client_socket, client_id, self.config, force_finish)
             client.run()
         except Exception as e:
             logging.error(f"Error in client process {client_id}: {e}")

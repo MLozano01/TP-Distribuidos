@@ -8,22 +8,29 @@ import signal
 
 AMOUNT_FILES = 3
 
+MOVIES_KEY = 'movies'
+CREDITS_KEY = 'credits'
+RATINGS_KEY = 'ratings'
+
 class Client:
-    def __init__(self, client_sock, client_id, force_finish=False):
+    def __init__(self, client_sock, client_id, config, force_finish=False):
         self.socket = client_sock
         self.client_id = client_id
         self.force_finish = force_finish
         self.protocol = Protocol()
         self.data_controller = None
         self.result_controller = None
-        self.forward_queue = None
         self.result_queue = None
 
         self.stop_event = Event()
         self.results_received = set()
         self.total_expected = 5
         self.eof_sent = 0
-        self.secuence_number= {"movies":0, "ratings":0, "credits":0}
+        self.config = config
+
+        self.secuence_number= {MOVIES_KEY:0, RATINGS_KEY:0, CREDITS_KEY:0}
+
+        self.queues = {MOVIES_KEY:None, RATINGS_KEY:None, CREDITS_KEY:None}
 
 
     def run(self):
@@ -79,7 +86,7 @@ class Client:
 
     def handle_connection(self, conn: socket.socket):
         # Initialize the forward queue for data messages
-        self.forward_queue = RabbitMQ("server_to_data_controller", "forward", "", "direct")
+        self._settle_queues()
     
         closed_socket = False
         while not closed_socket:
@@ -107,15 +114,21 @@ class Client:
                 self.eof_sent+=1
             message_with_metadata = self.protocol.add_metadata(message, self.client_id, self.secuence_number[file_type])
             self.secuence_number[file_type] += 1 
-            self.forward_queue.publish(message_with_metadata, file_type)
+            self.queues[file_type].publish(message_with_metadata)
         except Exception as e:
             logging.error(f"Failed to forward message to data controller: {e}")
+
 
     def handle_client_left(self):
         logging.info(f"Client disconnected. Sent {self.eof_sent} files, completing the rest")
         for i in range(self.eof_sent, AMOUNT_FILES):
             message = self.protocol.create_inform_end_file(FileType(i +1), self.force_finish)
             self._forward_to_data_controller(message)
+
+    def _settle_queues(self):
+        self.queues[MOVIES_KEY] = RabbitMQ(self.config["q_rcv_exc_movies"], self.config['q_rcv_name_movies'], self.config['q_rcv_key_movies'], self.config['type_rcv'])
+        self.queues[CREDITS_KEY] = RabbitMQ(self.config["q_rcv_exc_credits"], self.config['q_rcv_name_credits'], self.config['q_rcv_key_credits'], self.config['type_rcv'])
+        self.queues[RATINGS_KEY] = RabbitMQ(self.config["q_rcv_exc_raitings"], self.config['q_rcv_name_ratings'], self.config['q_rcv_key_raitings'], self.config['type_rcv'])
 
     def return_results(self, conn: socket.socket):
         try:

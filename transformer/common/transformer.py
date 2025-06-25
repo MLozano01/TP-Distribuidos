@@ -43,8 +43,8 @@ class Transformer:
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
-        logging.info(f"Received message, with routing key: {method.routing_key}")
         decoded_msg = self.protocol.decode_movies_msg(body)
+        logging.info(f"Received message, with routing key: {method.routing_key}, from client {decoded_msg.client_id}")
 
         if decoded_msg.finished:
             self._publish_movie_finished_signal(decoded_msg)

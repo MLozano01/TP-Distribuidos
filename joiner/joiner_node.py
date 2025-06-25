@@ -78,7 +78,7 @@ class JoinerNode:
         try:
             self.output_producer = RabbitMQ(
                 exchange=self.config['exchange_output'],
-                q_name=None, 
+                q_name=self.config['queue_output_name'], 
                 key=self.config['routing_key_output'],
                 exc_type='direct'
             )

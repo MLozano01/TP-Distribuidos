@@ -3,7 +3,7 @@ from .publisher import Publisher
 from protocol.rabbit_protocol import RabbitMQ
 
 class ShardedPublisher(Publisher):
-    def __init__(self, protocol, exchange_snd_ratings, exc_snd_type_ratings, exchange_snd_credits, exc_snd_type_credits):
+    def __init__(self, protocol, exchange_snd_ratings, exc_snd_type_ratings, exchange_snd_credits, exc_snd_type_credits, q_name_ratings, q_name_credits):
         self.protocol = protocol
         self.exchange_snd_ratings = exchange_snd_ratings
         self.exc_snd_type_ratings = exc_snd_type_ratings
@@ -11,10 +11,12 @@ class ShardedPublisher(Publisher):
         self.exc_snd_type_credits = exc_snd_type_credits
         self.queue_snd_movies_to_ratings_joiner = None
         self.queue_snd_movies_to_credits_joiner = None
+        self.q_name_ratings = q_name_ratings
+        self.q_name_credits = q_name_credits
 
     def setup_queues(self):
-        self.queue_snd_movies_to_ratings_joiner = RabbitMQ(self.exchange_snd_ratings, None, "", self.exc_snd_type_ratings)
-        self.queue_snd_movies_to_credits_joiner = RabbitMQ(self.exchange_snd_credits, None, "", self.exc_snd_type_credits)
+        self.queue_snd_movies_to_ratings_joiner = RabbitMQ(self.exchange_snd_ratings, self.q_name_ratings, "", self.exc_snd_type_ratings, joiner=True)
+        self.queue_snd_movies_to_credits_joiner = RabbitMQ(self.exchange_snd_credits, self.q_name_credits, "", self.exc_snd_type_credits, joiner=True)
         logging.info(f"Initialized sharded sender to ratings joiner and credits joiner")
 
     def publish(self, result_list, client_id, secuence_number):

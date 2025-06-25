@@ -44,6 +44,8 @@ def config_filter():
             raise ValueError(f"Invalid boolean value for PUBLISH_TO_JOINERS: {publish_by_id_str}")
  
         if config_params["publish_to_joiners"]:
+            config_params["queue_snd_name_credits"] = os.getenv('QUEUE_SND_NAME_CREDITS', filter_config["RABBITMQ"]["QUEUE_SND_NAME_CREDITS"])
+            config_params["queue_snd_name_ratings"] = os.getenv('QUEUE_SND_NAME_RATINGS', filter_config["RABBITMQ"]["QUEUE_SND_NAME_RATINGS"])
             config_params["exchange_snd_ratings"] = os.getenv('EXCHANGE_SND_RATINGS', filter_config["RABBITMQ"]["EXCHANGE_SND_RATINGS"])
             config_params["exc_snd_type_ratings"] = os.getenv('TYPE_SND_RATINGS', filter_config["RABBITMQ"]["TYPE_SND_RATINGS"])
             config_params["exchange_snd_credits"] = os.getenv('EXCHANGE_SND_CREDITS', filter_config["RABBITMQ"]["EXCHANGE_SND_CREDITS"])

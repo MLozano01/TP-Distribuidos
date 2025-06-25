@@ -46,6 +46,8 @@ def get_publisher_instance(config):
             exc_snd_type_ratings=config["exc_snd_type_ratings"],
             exchange_snd_credits=config["exchange_snd_credits"],
             exc_snd_type_credits=config["exc_snd_type_credits"],
+            q_name_credits=config["queue_snd_name_credits"],
+            q_name_ratings=config["queue_snd_name_ratings"]
         )
     else:
         publisher_instance = SinglePublisher(

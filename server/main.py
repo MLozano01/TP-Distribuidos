@@ -9,7 +9,7 @@ def main():
     config = initialize_config()
     config_logger(config["logging_level"])
 
-    server = Server(config["port"], config["listen_backlog"])
+    server = Server(config["port"], config["listen_backlog"], config)
     logging.info("Server started")
     try:
         server.run()
