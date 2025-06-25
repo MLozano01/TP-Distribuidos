@@ -33,9 +33,9 @@ services:
         condition: service_started
     volumes:
       - ./client/config.ini:/config.ini
-      - ./data/credits.csv:/credits.csv
-      - ./data/ratings_small.csv:/ratings.csv
-      - ./data/movies_metadata.csv:/movies_metadata.csv
+      - ./data/credits_demo.csv:/credits.csv
+      - ./data/ratings_demo.csv:/ratings.csv
+      - ./data/movies_metadata_demo.csv:/movies_metadata.csv
       - ./data/results_client1.json:/results.json
     
   client2:
@@ -51,9 +51,9 @@ services:
         condition: service_started
     volumes:
       - ./client/config.ini:/config.ini
-      - ./data/credits.csv:/credits.csv
-      - ./data/ratings_small.csv:/ratings.csv
-      - ./data/movies_metadata.csv:/movies_metadata.csv
+      - ./data/credits_demo.csv:/credits.csv
+      - ./data/ratings_demo.csv:/ratings.csv
+      - ./data/movies_metadata_demo.csv:/movies_metadata.csv
       - ./data/results_client2.json:/results.json
     
   server:
@@ -72,6 +72,7 @@ services:
       - rabbitmq
     volumes:
       - ./server/config.ini:/config.ini
+      - ./server/backup:/backup
     
   
   filter-2000-movies-1:

@@ -29,8 +29,8 @@ class Client:
         self.config = config
 
         self.secuence_number= {MOVIES_KEY:0, RATINGS_KEY:0, CREDITS_KEY:0}
-
         self.queues = {MOVIES_KEY:None, RATINGS_KEY:None, CREDITS_KEY:None}
+        self._entries_counter = {RATINGS_KEY: 0, CREDITS_KEY: 0}
 
 
     def run(self):
@@ -112,7 +112,23 @@ class Client:
             is_eof, file_type = self.protocol.get_file_type(message)
             if is_eof:
                 self.eof_sent+=1
-            message_with_metadata = self.protocol.add_metadata(message, self.client_id, self.secuence_number[file_type])
+
+            # Count rows in ratings/credits batches
+            if file_type in ("ratings", "credits") and not self.protocol.is_end_file(message):
+                added = self.protocol.count_csv_rows(message)
+                self._entries_counter[file_type] += added
+
+            # Build finished message with total count
+            if self.protocol.is_end_file(message) and file_type in ("ratings", "credits"):
+                total = self._entries_counter[file_type]
+                enum_ft = self.protocol.string_to_file_type(file_type)
+                message = self.protocol.create_inform_end_file(enum_ft, total_to_process=total)
+
+            # Finally, attach metadata (client_id + sequence number) and send.
+            message_with_metadata = self.protocol.add_metadata(
+                message, self.client_id, self.secuence_number[file_type]
+            )
+
             self.secuence_number[file_type] += 1 
             self.queues[file_type].publish(message_with_metadata)
         except Exception as e:

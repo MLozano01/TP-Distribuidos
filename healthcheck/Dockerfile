@@ -2,6 +2,7 @@ FROM python:3.9.7-alpine
 
 COPY healthcheck /
 COPY protocol /protocol
+COPY common /common
 
 
 RUN apk update

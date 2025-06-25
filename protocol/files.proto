@@ -23,6 +23,7 @@ message RatingsCSV {
   int32 client_id = 3;
   int32 secuence_number = 4;
   optional bool force_finish = 5;
+  optional int32 total_to_process = 6;
 }
 // [END ratings messages]
 
@@ -62,6 +63,7 @@ message CreditsCSV {
   int32 client_id = 3;
   int32 secuence_number = 4;
   optional bool force_finish = 5;
+  optional int32 total_to_process = 6;
 }
 // [END credits messages]
 

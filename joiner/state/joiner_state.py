@@ -30,11 +30,22 @@ class JoinerState:
     locks in this class.
     """
 
-    def __init__(self, state_manager: "StatePersistence | None" = None) -> None:
+    def __init__(
+        self,
+        backup_file: str,
+        node_tag: str,
+        base_dir: str,
+    ) -> None:
         """Create a new *in-memory* state container and – if available –
         restore any snapshots found on disk.
         """
-        self._state_manager = state_manager
+        self._base_dir = base_dir
+        self._node_tag = str(node_tag)
+        self._state_manager = StatePersistence(
+            backup_file,
+            node_info=node_tag,
+            serializer="json",
+        )
 
         # Lazy registry of per-client ``StatePersistence`` helpers.
         self._client_state_managers: Dict[str, StatePersistence] = {}
@@ -43,9 +54,28 @@ class JoinerState:
             self._restore_from_disk() if self._state_manager is not None else {}
         )
 
-        self._movies_data, self._other_data, self._eof_trackers = self._normalise_snapshots(
-            persisted_raw
-        )
+        (
+            self._movies_data,
+            self._other_data,
+            self._eof_trackers,
+            _,
+        ) = self._normalise_snapshots(persisted_raw)
+
+        self._processed_counts: dict[str, int] = {}
+        self._pc_managers: dict[str, StatePersistence] = {}
+
+    
+        for cid in set(self._movies_data) | set(self._other_data) | set(self._eof_trackers):
+            mgr = StatePersistence(
+                f"processed_{self._node_tag}_client_{cid}.txt",
+                directory=self._base_dir,
+                serializer=StatePersistence._JSON,
+            )
+            self._pc_managers[cid] = mgr
+            try:
+                self._processed_counts[cid] = int(mgr.load(lambda: 0))
+            except Exception:
+                self._processed_counts[cid] = 0
 
         restored_movies = sum(len(m) for m in self._movies_data.values())
         logging.info(
@@ -66,8 +96,9 @@ class JoinerState:
         movies: Dict[str, Dict[int, Any]] = {}
         other: Dict[str, Dict[int, List[Any]]] = {}
         eofs: Dict[str, Dict[str, bool]] = {}
+        processed: Dict[str, int] = {}
 
-        base_dir = getattr(self._state_manager, "_dir", "/backup")
+        base_dir = self._base_dir
         base_file = getattr(self._state_manager, "_file_name", "joiner_state.json")
         base_name = base_file.rsplit(".", 1)[0]
 
@@ -88,6 +119,7 @@ class JoinerState:
                 movies.update(snap.get("movies_data", {}))
                 other.update(snap.get("other_data", {}))
                 eofs.update(snap.get("eof_trackers", {}))
+                processed.update({str(k): int(v) for k, v in snap.get("processed_counts", {}).items()})
         except FileNotFoundError:
             # Backup directory missing – no prior state, not an error.
             pass
@@ -98,6 +130,7 @@ class JoinerState:
             "movies_data": movies,
             "other_data": other,
             "eof_trackers": eofs,
+            "processed_counts": processed,
         }
 
     def _normalise_snapshots(
@@ -106,6 +139,7 @@ class JoinerState:
         Dict[str, Dict[int, str]],
         Dict[str, Dict[int, List[Any]]],
         Dict[str, Dict[str, bool]],
+        Dict[str, int],
     ]:
         """Convert raw JSON dictionaries (str keys) into strongly-typed maps.
         This helper ensures **all** keys are of the expected type so that the
@@ -147,7 +181,16 @@ class JoinerState:
             str(cid): dict(tracker) for cid, tracker in persisted.get("eof_trackers", {}).items()
         }
 
-        return movies_typed, other_typed, eofs_typed
+        # --- Processed counts -----------------------------------------
+        proc_typed: Dict[str, int] = {}
+        raw_proc = persisted.get("processed_counts", {})
+        for raw_cid, val in raw_proc.items():
+            try:
+                proc_typed[str(raw_cid)] = int(val)
+            except (ValueError, TypeError):
+                continue
+
+        return movies_typed, other_typed, eofs_typed, proc_typed
 
     def add_movie(self, client_id: str, movie_pb) -> List[Any]:
         """Add a movie (protobuf) to the buffer, storing only minimal fields.
@@ -228,12 +271,16 @@ class JoinerState:
             self._movies_data.pop(client_id, None)
             self._other_data.pop(client_id, None)
             self._eof_trackers.pop(client_id, None)
+            self._processed_counts.pop(client_id, None)
             logging.info(f"State fully cleared for client {client_id}")
 
             # Remove on-disk snapshot for the client (if any).
             mgr = self._client_state_managers.pop(client_id, None)
             if mgr is not None:
                 mgr.clear()
+            pc_mgr = self._pc_managers.pop(client_id, None)
+            if pc_mgr is not None:
+                pc_mgr.clear()
 
     def _persist(self, client_id: str) -> None:
         """Persist the state snapshot for *client_id* only."""
@@ -262,7 +309,7 @@ class JoinerState:
         mgr = self._client_state_managers.get(client_id)
         if mgr is None:
             # Build a dedicated persistence helper for the client.
-            base_dir = getattr(self._state_manager, "_dir", "/backup")
+            base_dir = self._base_dir
             base_file = getattr(self._state_manager, "_file_name", "joiner_state.json")
             base_name = base_file.rsplit(".", 1)[0]
             filename = f"{base_name}_{client_id}.json"
@@ -277,4 +324,23 @@ class JoinerState:
         iteration").
         """
         with self._lock:
-            self._persist(client_id) 
+            self._persist(client_id)
+
+    def increment_processed(self, client_id: str, count: int = 1) -> None:
+        """Increment processed counter for client by *count*. This method doest not persist"""
+        new_val = self._processed_counts.get(client_id, 0) + int(count)
+        self._processed_counts[client_id] = new_val
+
+        mgr = self._pc_managers.get(client_id)
+        if mgr is None and self._state_manager is not None:
+            mgr = StatePersistence(
+                f"processed_{self._node_tag}_client_{client_id}.txt",
+                directory=self._base_dir,
+                serializer=StatePersistence._JSON,
+            )
+            self._pc_managers[client_id] = mgr
+        if mgr is not None:
+            mgr.save(new_val)
+
+    def get_processed_count(self, client_id: str) -> int:
+        return self._processed_counts.get(client_id, 0) 

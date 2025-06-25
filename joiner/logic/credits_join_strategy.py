@@ -5,6 +5,7 @@ from logic.join_strategy import JoinStrategy
 from messaging.messaging_utils import send_finished_signal
 from protocol import files_pb2
 from common.batcher import PerClientBatcher
+from common.requeue import RequeueException
 
 class CreditsJoinStrategy(JoinStrategy):
     """Join strategy that produces ActorParticipations from movie credits."""
@@ -23,23 +24,41 @@ class CreditsJoinStrategy(JoinStrategy):
             return None
 
         client_id = str(credits_msg.client_id)
-        logging.debug(
-            f"[CreditsJoinStrategy] client={client_id} finished={credits_msg.finished} items={len(credits_msg.credits)}"
+        seq = credits_msg.secuence_number
+        movie_id_val = credits_msg.credits[0].id if credits_msg.credits else "-"
+        logging.info(
+            f"[CreditsJoinStrategy] Received msg client={client_id} seq={seq} movie_id={movie_id_val} items={len(credits_msg.credits)}"
         )
 
-        seq_num = str(credits_msg.secuence_number)
-        if self._seq_monitor.is_duplicate(client_id, seq_num):
+        dedup_key = f"{seq}-{movie_id_val}"
+        if self._seq_monitor.is_duplicate(client_id, dedup_key):
             logging.info(
-                f"[CreditsJoinStrategy] Dropping duplicate OTHER message seq={seq_num} client={client_id}"
+                f"[CreditsJoinStrategy] Dropping duplicate OTHER message seq={dedup_key} client={client_id}"
             )
             return None
 
         # EOF path --------------------------------------------------------
         if credits_msg.finished:
+            expected_total = getattr(credits_msg, "total_to_process", None)
+            processed_total = state.get_processed_count(client_id)
+
+            logging.info(
+                f"[CreditsJoinStrategy] FINISHED received – client={client_id} total_to_process={expected_total} processed={processed_total}"
+            )
+
+            if expected_total is not None and expected_total != processed_total:
+                logging.warning(
+                    f"[CreditsJoinStrategy] Mismatch total_to_process (expected={expected_total}, processed={processed_total}) – requeuing."
+                )
+                raise RequeueException()
+
             state.set_stream_eof(client_id, "other")
             return client_id
 
         # Data path -------------------------------------------------------
+        if credits_msg.credits:
+            state.increment_processed(client_id, len(credits_msg.credits))
+
         for credit in credits_msg.credits:
             actor_names = [cm.name.strip() for cm in credit.cast if cm.name.strip() not in {"\\N", "NULL", "null", "N/A", "-"}]
 
@@ -56,7 +75,7 @@ class CreditsJoinStrategy(JoinStrategy):
 
             state.buffer_other(client_id, credit.id, actor_names)
 
-        self._seq_monitor.record(client_id, seq_num)
+        self._seq_monitor.record(client_id, dedup_key)
         self._snapshot_if_needed(client_id)
         return None
 
