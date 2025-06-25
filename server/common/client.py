@@ -21,7 +21,7 @@ class Client:
 
         self.results_received = set()
         self.total_expected = 5
-        self.eof_sent = 1
+        self.eof_sent = 0
         self.secuence_number= {"movies":0, "ratings":0, "credits":0}
 
 
@@ -117,8 +117,8 @@ class Client:
 
     def handle_client_left(self):
         logging.info(f"Client disconnected. Sent {self.eof_sent} files, completing the rest")
-        for i in range(self.eof_sent, AMOUNT_FILES +1):
-            message = self.protocol.create_inform_end_file(FileType(i), self.force_finish)
+        for i in range(self.eof_sent, AMOUNT_FILES):
+            message = self.protocol.create_inform_end_file(FileType(i +1), self.force_finish)
             self._forward_to_data_controller(message)
 
     def return_results(self, conn: socket.socket):
