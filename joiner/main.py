@@ -8,7 +8,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from config.config_init import initialize_config
 from logic.strategy_factory import get_join_strategy
 from joiner_node import JoinerNode
-from protocol.utils.logger import config_logger
+from common.logger import config_logger
 from common.state_persistence import StatePersistence
 
 def main():

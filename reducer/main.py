@@ -1,6 +1,6 @@
 import logging
 import common_reducer.config_init as config_init
-from protocol.utils.logger import config_logger
+from common.logger import config_logger
 from common_reducer import reducer
 from common.state_persistence import StatePersistence
 from common.communicator import Communicator

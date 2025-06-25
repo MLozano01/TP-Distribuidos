@@ -1,6 +1,6 @@
 import logging
 import common.config_init as config_init
-from protocol.utils.logger import config_logger
+from common.logger import config_logger
 from multiprocessing import Process
 from protocol.protocol import Protocol
 from common.communicator import Communicator
