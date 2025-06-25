@@ -54,6 +54,15 @@ class SequenceGenerator:
         # Ensure all keys are str and values int
         self._counters: Dict[str, int] = {str(k): int(v) for k, v in raw.items()}
 
+        # Log the restored state for observability during boot.
+        if self._counters:
+            import logging
+            logging.info(
+                "[SequenceGenerator] Restored per-client counters (replica %s): %s",
+                replica_id,
+                self._counters,
+            )
+
     def next(self, client_id: str) -> int:
         """Return the current sequence number for *client_id* and increment."""
         with self._lock:
@@ -74,7 +83,11 @@ class SequenceGenerator:
             cid = str(client_id)
             if cid in self._counters:
                 del self._counters[cid]
+
+            if self._counters:
                 self._state.save(self._counters)
+            else:
+                self._state.clear()
 
     def local_current(self, client_id: str) -> int:
         """Return local counter value (mainly for tests)."""

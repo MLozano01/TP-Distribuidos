@@ -6,7 +6,6 @@ from protocol.protocol import Protocol
 from messaging.messaging_utils import send_finished_signal
 from common.batcher import PerClientBatcher
 from common.sequence_generator import SequenceGenerator
-from common.requeue import RequeueException
 
 class RatingsJoinStrategy(JoinStrategy):
     """Join strategy that combines movie details with rating records."""
@@ -31,40 +30,23 @@ class RatingsJoinStrategy(JoinStrategy):
         client_id = str(ratings_msg.client_id)
         seq = ratings_msg.secuence_number
         movie_id_val = ratings_msg.ratings[0].movieId if ratings_msg.ratings else "-"
-        logging.info(
-            f"[RatingsJoinStrategy] Received msg client={client_id} seq={seq} movie_id={movie_id_val} items={len(ratings_msg.ratings)}"
-        )
-        logging.debug(
-            f"[RatingsJoinStrategy] client={client_id} finished={ratings_msg.finished} items={len(ratings_msg.ratings)}"
-        )
 
         seq_num = str(ratings_msg.secuence_number)
         dedup_key = f"{seq_num}-{movie_id_val}"
 
         if self._seq_monitor.is_duplicate(client_id, dedup_key):
             logging.info(
-                f"[RatingsJoinStrategy] Discarding duplicate OTHER message key={dedup_key} client={client_id}"
+                f"[RatingsJoinStrategy] Discarding duplicate RATING message key={dedup_key} client={client_id}"
             )
             return None
 
+
         if ratings_msg.finished:
-            expected_total = getattr(ratings_msg, "total_to_process", None)
-            processed_total = state.get_processed_count(client_id)
+            return client_id, ratings_msg.total_to_process
 
-            logging.info(
-                f"[RatingsJoinStrategy] FINISHED received – client={client_id} total_to_process={expected_total} processed={processed_total}"
-            )
-
-            if expected_total is not None and expected_total != processed_total:
-                logging.warning(
-                    f"[RatingsJoinStrategy] Mismatch total_to_process (expected={expected_total}, processed={processed_total}) – requeuing EOF."
-                )
-                raise RequeueException()
-
-            state.set_stream_eof(client_id, "other")
-            # No clean-up yet – wait until both EOFs arrive.
-            return client_id
-
+        #logging.info(
+        #    f"[RatingsJoinStrategy] Received new RATING client={client_id} seq={seq} movie_id={movie_id_val} items={len(ratings_msg.ratings)}"
+        #)
         if ratings_msg.ratings:
             state.increment_processed(client_id, len(ratings_msg.ratings))
 
@@ -119,21 +101,22 @@ class RatingsJoinStrategy(JoinStrategy):
         for rating_val in unmatched_ratings:
             self._join_and_batch([rating_val], movie_id, title, client_id, producer)
 
-    def handle_movie_eof(self, client_id, state):
-        """After movies EOF we purge orphan ratings that will never match."""
-        state.purge_orphan_other_after_movie_eof(client_id)
 
-    def handle_client_finished(self, client_id, state, producer):
+    def handle_client_finished(self, client_id, state, producer, highest_sn_produced):
         """Both streams are done – flush pending batches and propagate EOF."""
         if self._batcher:
             self._batcher.flush_key(client_id)
             self._batcher.clear(client_id)
-        last_seq = self._seqgen.current(client_id)
-        send_finished_signal(producer, client_id, self.protocol, secuence_number=last_seq)
+        send_finished_signal(producer, client_id, self.protocol, secuence_number=highest_sn_produced) # TODO: Could maybe be done just one time, leaving here for now
+        state.remove_client_data(client_id)
         self._seqgen.clear(client_id)
 
         # Cleaning sequence numbers for client
-        self._seq_monitor.clear_client(client_id)
+        if hasattr(self, "_seq_monitor") and self._seq_monitor:
+            try:
+                self._seq_monitor.clear_client(client_id)
+            except Exception as exc:
+                logging.error("[RatingsJoinStrategy] Error clearing seq monitor for client %s: %s", client_id, exc)
 
     def _ensure_batcher(self, producer):
         if self._batcher is not None:

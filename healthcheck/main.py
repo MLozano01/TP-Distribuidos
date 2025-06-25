@@ -1,7 +1,7 @@
 import logging
-import common.config_init as config_init
+from healthcheck.common import config_init as config_init
 from protocol.utils.logger import config_logger
-import common.healthcheck
+from healthcheck.common import healthcheck as hc_module
 
 def main():
     config = config_init.config_healthcheck()
@@ -10,7 +10,7 @@ def main():
     config.pop("logging_level")
 
     try: 
-        healthcheck = common.healthcheck.HealthCheck(config)
+        healthcheck = hc_module.HealthCheck(config)
         healthcheck.run()
     except KeyboardInterrupt:
         logging.info("Healthcheck stopped by user")

@@ -1,6 +1,7 @@
 import logging
 from .publisher import Publisher
 from protocol.rabbit_protocol import RabbitMQ
+from protocol import files_pb2
 
 class ShardedPublisher(Publisher):
     def __init__(self, protocol, exchange_snd_ratings, exc_snd_type_ratings, exchange_snd_credits, exc_snd_type_credits):
@@ -13,37 +14,70 @@ class ShardedPublisher(Publisher):
         self.queue_snd_movies_to_credits_joiner = None
 
     def setup_queues(self):
-        self.queue_snd_movies_to_ratings_joiner = RabbitMQ(self.exchange_snd_ratings, None, "", self.exc_snd_type_ratings)
-        self.queue_snd_movies_to_credits_joiner = RabbitMQ(self.exchange_snd_credits, None, "", self.exc_snd_type_credits)
-        logging.info(f"Initialized sharded sender to ratings joiner and credits joiner")
+        self.queue_snd_movies_to_ratings_joiner = RabbitMQ(
+            self.exchange_snd_ratings, None, "", self.exc_snd_type_ratings
+        )
+        self.queue_snd_movies_to_credits_joiner = RabbitMQ(
+            self.exchange_snd_credits, None, "", self.exc_snd_type_credits
+        )
 
-    def publish(self, result_list, client_id, secuence_number):
-        if not self.queue_snd_movies_to_ratings_joiner or not self.queue_snd_movies_to_credits_joiner:
-            logging.error("Cannot publish by movie_id: One or both sender queues (ratings/credits joiner) are not initialized.")
-            return
+        # Fan-out list for easy iteration when publishing
+        self._targets = [
+            self.queue_snd_movies_to_ratings_joiner,
+            self.queue_snd_movies_to_credits_joiner,
+        ]
 
-        exchange_ratings = self.queue_snd_movies_to_ratings_joiner.exchange
-        exchange_credits = self.queue_snd_movies_to_credits_joiner.exchange
-        # logging.info(f"Publishing {len(result_list)} filtered messages individually by movie_id to exchanges '{exchange_ratings}' and '{exchange_credits}'.")
+    def _fanout(self, payload: bytes, routing_key: str) -> None:
+        for q in self._targets:
+            q.publish(payload, routing_key=routing_key)
 
-        total = len(result_list)
-        for mv in result_list:
-            try:
-                batch_bytes = self.protocol.create_movie_list([mv], client_id, secuence_number)
-                routing_key = str(mv.id)
+    def publish(self, result_list, client_id, secuence_number, discarded_count: int = 0):
+        """Publish *result_list* (list of MovieCSV) sharded by movie_id.
 
-                # RATINGS
-                self.queue_snd_movies_to_ratings_joiner.publish(batch_bytes, routing_key=routing_key)
+        If *result_list* is empty we still send **one** MoviesCSV message with
+        an empty list and the *discarded_count* so downstream joiners can keep
+        accurate counters.
+        """
 
-                # CREDITS
-                self.queue_snd_movies_to_credits_joiner.publish(batch_bytes, routing_key=routing_key)
-            except Exception as exc:
-                logging.error(
-                    f"Error publishing movie id {getattr(mv, 'id', '?')} to exchanges '{exchange_ratings}'/'{exchange_credits}': {exc}"
+        if result_list:
+            first = True
+            for mv in result_list:
+                msg = files_pb2.MoviesCSV(
+                    client_id=client_id,
+                    secuence_number=secuence_number,
+                    discarded_count=discarded_count if first else 0,
                 )
-                raise
+                msg.movies.append(mv)
 
-        logging.info(f"Published {total} individual movie batches (seq={secuence_number}) to both joiner exchanges.")
+                self._fanout(msg.SerializeToString(), routing_key=str(mv.id))
+                if first and discarded_count:
+                    logging.info(
+                        "[ShardedPublisher] Client %s seq=%s discarded_count=%s",
+                        client_id,
+                        secuence_number,
+                        discarded_count,
+                    )
+                first = False
+
+            logging.info(
+                "Published %s movie batches (seq=%s, discarded=%s) to joiners.",
+                len(result_list),
+                secuence_number,
+                discarded_count,
+            )
+        else:
+            # All movies were discarded for that batch – still send the discarded amount info
+            msg = files_pb2.MoviesCSV(
+                client_id=client_id,
+                secuence_number=secuence_number,
+                discarded_count=discarded_count,
+            )
+            self._fanout(msg.SerializeToString(), routing_key="discard")
+            logging.info(
+                "Published discard-only batch (seq=%s, discarded=%s) to joiners.",
+                secuence_number,
+                discarded_count,
+            )
 
     def publish_finished_signal(self, msg):
         msg_to_send = msg.SerializeToString()

@@ -6,4 +6,4 @@ def config_logger(logging_level):
         level=logging_level,
         datefmt='%Y-%m-%d %H:%M:%S',
     )
-    logging.info("Starting logger")
+    logging.debug("Starting logger")

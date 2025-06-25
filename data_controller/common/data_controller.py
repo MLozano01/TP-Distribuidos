@@ -82,8 +82,14 @@ class DataController:
 
     def publish_movies(self, movies_csv):
         movies_pb = filter_movies(movies_csv)
-        if movies_pb:
-            self.send_queue.publish(movies_pb.SerializeToString())
+        logging.info(
+            "[DataController] Client %s seq=%s movies_after_DC=%s discarded=%s",
+            movies_csv.client_id,
+            movies_csv.secuence_number,
+            len(movies_pb.movies),
+            movies_pb.discarded_count,
+        )
+        self.send_queue.publish(movies_pb.SerializeToString())
 
     def publish_ratings(self, ratings_csv):
         for movie_id, batch_pb in filter_ratings(ratings_csv):

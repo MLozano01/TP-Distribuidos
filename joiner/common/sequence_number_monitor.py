@@ -24,6 +24,12 @@ class SequenceNumberMonitor:
         }
         self._lock = threading.Lock()
 
+        if self._batches_seen:
+            logging.info(
+                "[SeqMonitor] Restored batches seen from disk: %s",
+                {cid: sorted(list(nums)) for cid, nums in self._batches_seen.items()},
+            )
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------

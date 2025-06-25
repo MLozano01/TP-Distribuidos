@@ -24,7 +24,9 @@ class RabbitMQ:
         try:
             channel = self.connection.channel()
             channel.basic_qos(prefetch_count=1)
-            channel.exchange_declare(exchange=self.exchange, exchange_type=self.exc_type, durable=True)
+            # For not declaring the default exchange "" – it is pre-defined by RabbitMQ.
+            if self.exchange:
+                channel.exchange_declare(exchange=self.exchange, exchange_type=self.exc_type, durable=True)
 
             rabbit_logger.debug(f"Channel created with exchange {self.exchange} of type {self.exc_type}")
 
@@ -53,7 +55,7 @@ class RabbitMQ:
                                     delivery_mode=2,
                                 ))
 
-            rabbit_logger.info(f"Sent message with routing key: {key_to_use}") # Log the actual key used
+            #rabbit_logger.info(f"Sent message with routing key: {key_to_use}") # Log the actual key used TODO: uncomment
         except Exception as e:
             logging.error(f"Failed to send message: {e}")
             raise e

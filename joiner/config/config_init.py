@@ -2,12 +2,42 @@ from configparser import ConfigParser
 import os
 import logging
 
-CONFIG_FILE = "config.ini"
+DEFAULT_CONFIG_FILENAME = "config.ini"  # searched inside the working dir
+
+# Determine effective config file path(s)
+# ---------------------------------------------------------------------------
+# Priority:
+#   1. ``CONFIG_FILE`` env var (explicit absolute/relative path)
+#   2. ``/config.ini``  (path used by Docker-compose volume mounts)
+#   3. ``config.ini``   (inside CWD / package directory)
+# ---------------------------------------------------------------------------
+
+
+def _discover_config_files() -> list[str]:
+    env_path = os.getenv("CONFIG_FILE")
+    candidates: list[str] = []
+    if env_path:
+        candidates.append(env_path)
+
+    # Common mount location used by docker-compose volumes
+    candidates.append("/config.ini")
+
+    # Relative fallback so local executions (outside Docker) still work
+    candidates.append(DEFAULT_CONFIG_FILENAME)
+
+    # Keep order, remove duplicates whilst preserving order
+    seen: set[str] = set()
+    unique: list[str] = []
+    for path in candidates:
+        if path and path not in seen:
+            unique.append(path)
+            seen.add(path)
+    return unique
 
 def initialize_config():
     """ Parse env variables or config file to find program config params."""
     config = ConfigParser(os.environ)
-    config.read(CONFIG_FILE)
+    config.read(_discover_config_files())
 
     config_params = {}
 

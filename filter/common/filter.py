@@ -63,8 +63,31 @@ class Filter:
 
     def filter(self, decoded_msg):
         try:
+            original_len = len(decoded_msg.movies)
             result = parse_filter_funct(decoded_msg, self.filter_by)
-            self.publisher.publish(result, decoded_msg.client_id, decoded_msg.secuence_number)
+            logging.info(
+                "[Filter] Client %s seq=%s original=%s after_filter=%s",
+                decoded_msg.client_id,
+                decoded_msg.secuence_number,
+                original_len,
+                len(result),
+            )
+            previous_discard = getattr(decoded_msg, "discarded_count", 0)
+            discarded = previous_discard + (original_len - len(result))
+
+            self.publisher.publish(
+                result,
+                decoded_msg.client_id,
+                decoded_msg.secuence_number,
+                discarded_count=discarded,
+            )
+            if discarded:
+                logging.info(
+                    "[Filter] Client %s seq=%s discarded=%s (cumulative)",
+                    decoded_msg.client_id,
+                    decoded_msg.secuence_number,
+                    discarded,
+                )
         except Exception as e:
             logging.error(f"Error processing message: {e}")
             # Do a raise for nack ? 

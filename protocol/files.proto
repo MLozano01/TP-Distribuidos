@@ -136,6 +136,8 @@ message MoviesCSV {
   optional bool finished = 2;
   int32 client_id = 3;
   int32 secuence_number = 4;
+  optional int32 total_to_process = 5;
+  optional int32 discarded_count = 6;
 }
 // [END movies messages]
 
@@ -209,3 +211,18 @@ message JoinedRatingsBatch {
 }
 
 // [END messages]
+
+message ProcessedCount {
+    uint32 replica_id      = 1;
+    uint64 total_processed = 2;
+}
+
+message StreamEOF {
+    string  client_id              = 1;
+    uint64  total_to_process       = 2;       // from original .finished message
+    repeated ProcessedCount processed = 3;    // per-replica counters
+    repeated uint32 replicas_confirmed = 4;   // replicas that have applied EOF locally
+    uint64  highest_sn_produced    = 5;       // max SN produced by a joiner seen so far
+    bool    for_movies             = 6;       // true → movies, false → ratings/credits
+    repeated uint32 inverse_stream_confirmed = 7;
+}

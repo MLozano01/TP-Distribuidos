@@ -169,7 +169,6 @@ class Protocol:
       file_code = int.from_bytes(msg[cursor:cursor + CODE_LENGTH], byteorder='big')
       cursor += CODE_LENGTH
 
-      # Default when the sender provided no total counter (backwards compat.)
       total_to_process = None
 
       # If there are at least 4 extra bytes, read them as total_to_process.
@@ -608,7 +607,7 @@ class Protocol:
       return 0
 
     code = int.from_bytes(message[:CODE_LENGTH], byteorder='big')
-    if code not in (RATINGS_FILE_CODE, CREDITS_FILE_CODE):
+    if code not in (RATINGS_FILE_CODE, CREDITS_FILE_CODE, MOVIES_FILE_CODE):
       return 0
 
     try:
@@ -619,3 +618,40 @@ class Protocol:
       return len(csv_batch.rows)
     except Exception:
       return 0
+
+  def is_stream_eof(self, buffer: bytes) -> bool:  # todo rename to is_joiner_eof
+    """Heuristic check: only treat *buffer* as StreamEOF when
+    • it fully parses, **and**
+    • client_id is a short numeric string (<= 6 digits), **and**
+    • there are no trailing bytes beyond the protobuf length.
+    This drastically reduces false positives where other message types
+    happen to deserialize into a StreamEOF with garbage fields.
+    """
+    try:
+      eof = files_pb2.StreamEOF()
+      eof.ParseFromString(buffer)
+
+      # Basic semantics check – client_id must be numeric and reasonably short
+      if not (eof.client_id.isdigit() and 0 < len(eof.client_id) <= 6):
+        return False
+
+      # Ensure the payload contains *only* the EOF message (no extra bytes)
+      if eof.ByteSize() != len(buffer):
+        return False
+
+      return True
+
+    except Exception as exc:
+      logging.debug("[Protocol] is_stream_eof Parse failure: %s", exc)
+      return False
+
+  def decode_stream_eof(self, buffer: bytes):
+    """Parse *buffer* into a *StreamEOF* protobuf or ``None`` if invalid."""
+    try:
+      eof = files_pb2.StreamEOF()
+      eof.ParseFromString(buffer)
+      if eof.client_id:
+        return eof
+      return None
+    except Exception:
+      return None

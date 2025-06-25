@@ -5,7 +5,6 @@ from logic.join_strategy import JoinStrategy
 from messaging.messaging_utils import send_finished_signal
 from protocol import files_pb2
 from common.batcher import PerClientBatcher
-from common.requeue import RequeueException
 
 class CreditsJoinStrategy(JoinStrategy):
     """Join strategy that produces ActorParticipations from movie credits."""
@@ -26,36 +25,22 @@ class CreditsJoinStrategy(JoinStrategy):
         client_id = str(credits_msg.client_id)
         seq = credits_msg.secuence_number
         movie_id_val = credits_msg.credits[0].id if credits_msg.credits else "-"
-        logging.info(
-            f"[CreditsJoinStrategy] Received msg client={client_id} seq={seq} movie_id={movie_id_val} items={len(credits_msg.credits)}"
-        )
 
         dedup_key = f"{seq}-{movie_id_val}"
         if self._seq_monitor.is_duplicate(client_id, dedup_key):
             logging.info(
-                f"[CreditsJoinStrategy] Dropping duplicate OTHER message seq={dedup_key} client={client_id}"
+                f"[CreditsJoinStrategy] Dropping duplicate CREDIT message seq={dedup_key} client={client_id}"
             )
             return None
 
         # EOF path --------------------------------------------------------
         if credits_msg.finished:
-            expected_total = getattr(credits_msg, "total_to_process", None)
-            processed_total = state.get_processed_count(client_id)
-
-            logging.info(
-                f"[CreditsJoinStrategy] FINISHED received – client={client_id} total_to_process={expected_total} processed={processed_total}"
-            )
-
-            if expected_total is not None and expected_total != processed_total:
-                logging.warning(
-                    f"[CreditsJoinStrategy] Mismatch total_to_process (expected={expected_total}, processed={processed_total}) – requeuing."
-                )
-                raise RequeueException()
-
-            state.set_stream_eof(client_id, "other")
-            return client_id
+            return client_id, credits_msg.total_to_process
 
         # Data path -------------------------------------------------------
+        #logging.info(
+        #    f"[CreditsJoinStrategy] Received new CREDIT client={client_id} seq={seq} movie_id={movie_id_val} items={len(credits_msg.credits)}"
+        #)
         if credits_msg.credits:
             state.increment_processed(client_id, len(credits_msg.credits))
 
@@ -120,21 +105,19 @@ class CreditsJoinStrategy(JoinStrategy):
                 flat.append(item)
         self._join_and_batch(flat, movie_id, title, client_id, producer)
 
-
-    def handle_movie_eof(self, client_id, state):
-        # Credits that correspond to movies that never arrived can be discarded.
-        state.purge_orphan_other_after_movie_eof(client_id)
-
-    def handle_client_finished(self, client_id, state, producer):
+    def handle_client_finished(self, client_id, state, producer, highest_sn_produced):
         if self._batcher:
             self._batcher.flush_key(client_id)
             self._batcher.clear(client_id)
-        last_seq = self._seqgen.current(client_id)
-        send_finished_signal(producer, client_id, self.protocol, secuence_number=last_seq)
+        #send_finished_signal(producer, client_id, self.protocol, secuence_number=highest_sn_produced)
+        state.remove_client_data(client_id)
         self._seqgen.clear(client_id)
 
-        # Cleaning sequence numbers for client
-        self._seq_monitor.clear_client(client_id)
+        if hasattr(self, "_seq_monitor") and self._seq_monitor:
+            try:
+                self._seq_monitor.clear_client(client_id)
+            except Exception as exc:
+                logging.error("[CreditsJoinStrategy] Error clearing seq monitor for client %s: %s", client_id, exc)
 
     def _ensure_batcher(self, producer):
         if self._batcher is not None:

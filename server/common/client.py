@@ -19,7 +19,7 @@ class Client:
         self.results_received = set()
         self.total_expected = 5
         self.secuence_number = {"movies": 0, "ratings": 0, "credits": 0}
-        self._entries_counter = {"ratings": 0, "credits": 0}
+        self._entries_counter = {"ratings": 0, "credits": 0, "movies": 0}
 
 
     def run(self):
@@ -117,16 +117,25 @@ class Client:
         try:
             file_type = self.protocol.get_file_type(message)
 
-            # Count rows in ratings/credits batches
-            if file_type in ("ratings", "credits") and not self.protocol.is_end_file(message):
+            # Count rows in ratings/credits/movies batches
+            if file_type in ("ratings", "credits", "movies") and not self.protocol.is_end_file(message):
+                if file_type == "movies":
+                    logging.info(
+                        "[Server] Client %s incoming MOVIE batch rows=%s",
+                        self.client_id,
+                        self.protocol.count_csv_rows(message),
+                    )
                 added = self.protocol.count_csv_rows(message)
                 self._entries_counter[file_type] += added
 
             # Build finished message with total count
-            if self.protocol.is_end_file(message) and file_type in ("ratings", "credits"):
+            if self.protocol.is_end_file(message) and file_type in ("ratings", "credits", "movies"):
                 total = self._entries_counter[file_type]
                 enum_ft = self.protocol.string_to_file_type(file_type)
                 message = self.protocol.create_inform_end_file(enum_ft, total_to_process=total)
+                logging.info(
+                    f"[Server] Client {self.client_id} finished {file_type} total_to_process={total}"
+                )
 
             # Finally, attach metadata (client_id + sequence number) and send.
             message_with_metadata = self.protocol.add_metadata(

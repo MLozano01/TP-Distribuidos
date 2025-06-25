@@ -6,7 +6,7 @@ class Publisher(ABC):
         pass
 
     @abstractmethod
-    def publish(self, filtered_batch, client_id, secuence_number):
+    def publish(self, filtered_batch, client_id, secuence_number, discarded_count: int = 0):
         pass
 
     @abstractmethod

@@ -5,9 +5,11 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
-from config.config_init import initialize_config
+from joiner.config.config_init import initialize_config
+# Pre-load protobuf modules to prevent circular-import issue inside protocol.protocol
+
 from logic.strategy_factory import get_join_strategy
-from joiner_node import JoinerNode
+from joiner.presentation.joiner_node import JoinerNode
 from protocol.utils.logger import config_logger
 from common.state_persistence import StatePersistence
 
@@ -18,7 +20,6 @@ def main():
         config_logger(config["logging_level"])
 
         replica_id = config.get("replica_id", "N/A")
-        logging.info(f"Joiner Replica {replica_id} started")
         
         join_strategy_name = config.get("other_data_type", "RATINGS")
 
@@ -50,4 +51,4 @@ def main():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)-8s %(message)s')
     logging.info("Starting Joiner module")
-    main() 
+    main()

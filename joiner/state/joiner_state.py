@@ -58,13 +58,16 @@ class JoinerState:
             self._movies_data,
             self._other_data,
             self._eof_trackers,
-            _,
+            others_proc,
+            movies_proc,
         ) = self._normalise_snapshots(persisted_raw)
 
-        self._processed_counts: dict[str, int] = {}
+        self._processed_counts: dict[str, int] = others_proc          # OTHER stream
         self._pc_managers: dict[str, StatePersistence] = {}
 
-    
+        self._movies_processed: dict[str, int] = movies_proc          # MOVIES stream
+        self._mp_managers: dict[str, StatePersistence] = {}
+
         for cid in set(self._movies_data) | set(self._other_data) | set(self._eof_trackers):
             mgr = StatePersistence(
                 f"processed_{self._node_tag}_client_{cid}.txt",
@@ -140,6 +143,7 @@ class JoinerState:
         Dict[str, Dict[int, List[Any]]],
         Dict[str, Dict[str, bool]],
         Dict[str, int],
+        Dict[str, int],
     ]:
         """Convert raw JSON dictionaries (str keys) into strongly-typed maps.
         This helper ensures **all** keys are of the expected type so that the
@@ -190,7 +194,16 @@ class JoinerState:
             except (ValueError, TypeError):
                 continue
 
-        return movies_typed, other_typed, eofs_typed, proc_typed
+        # --- Movies processed (new) -----------------------------------------
+        movies_proc_typed: Dict[str, int] = {}
+        raw_movies_proc = persisted.get("movies_processed", {})
+        for raw_cid, val in raw_movies_proc.items():
+            try:
+                movies_proc_typed[str(raw_cid)] = int(val)
+            except (ValueError, TypeError):
+                continue
+
+        return movies_typed, other_typed, eofs_typed, proc_typed, movies_proc_typed
 
     def add_movie(self, client_id: str, movie_pb) -> List[Any]:
         """Add a movie (protobuf) to the buffer, storing only minimal fields.
@@ -208,7 +221,7 @@ class JoinerState:
             # House-keeping – remove empty nested dicts.
             if client_id in self._other_data and not self._other_data[client_id]:
                 del self._other_data[client_id]
-            self._persist(client_id)
+            #self._persist(client_id)
             # Return an *immutable* view so callers cannot mutate internal state.
             return tuple(unmatched)
 
@@ -226,7 +239,7 @@ class JoinerState:
             else:
                 movie_buff[movie_id].append(other_pb)
 
-            self._persist(client_id)
+            #self._persist(client_id)
 
     def get_buffered_other(self, client_id: str, movie_id: int) -> List[Any]:
         """Return (but DO NOT remove) buffered *other* data for a movie."""
@@ -239,7 +252,7 @@ class JoinerState:
         with self._lock:
             self._eof_trackers.setdefault(client_id, {"movies": False, "other": False})[stream] = True
             logging.debug(f"EOF for stream '{stream}' received ‑ client {client_id}")
-            self._persist(client_id)
+            #self._persist(client_id)
 
     def has_eof(self, client_id: str, stream: str) -> bool:
         return self._eof_trackers.get(client_id, {}).get(stream, False)
@@ -263,7 +276,7 @@ class JoinerState:
             if not other_for_client:
                 del self._other_data[client_id]
             logging.debug(f"Purged {len(orphan_ids)} orphan other-records for client {client_id}")
-            self._persist(client_id)
+            #self._persist(client_id)
 
     def remove_client_data(self, client_id: str) -> None:
         """Remove *all* cached data & trackers for *client_id* to free memory."""
@@ -272,6 +285,7 @@ class JoinerState:
             self._other_data.pop(client_id, None)
             self._eof_trackers.pop(client_id, None)
             self._processed_counts.pop(client_id, None)
+            self._movies_processed.pop(client_id, None)
             logging.info(f"State fully cleared for client {client_id}")
 
             # Remove on-disk snapshot for the client (if any).
@@ -281,6 +295,10 @@ class JoinerState:
             pc_mgr = self._pc_managers.pop(client_id, None)
             if pc_mgr is not None:
                 pc_mgr.clear()
+
+            mp_mgr = self._mp_managers.pop(client_id, None)
+            if mp_mgr is not None:
+                mp_mgr.clear()
 
     def _persist(self, client_id: str) -> None:
         """Persist the state snapshot for *client_id* only."""
@@ -343,4 +361,31 @@ class JoinerState:
             mgr.save(new_val)
 
     def get_processed_count(self, client_id: str) -> int:
-        return self._processed_counts.get(client_id, 0) 
+        return self._processed_counts.get(client_id, 0)
+
+    # ------------------------------------------------------------------
+    # Movies processed helpers
+    # ------------------------------------------------------------------
+    def increment_movies_processed(self, client_id: str, count: int = 1) -> None:
+        new_val = self._movies_processed.get(client_id, 0) + int(count)
+        self._movies_processed[client_id] = new_val
+
+        logging.info(
+            "[JoinerState] Incremented movies_processed for client %s by %s → %s",
+            client_id,
+            count,
+            new_val,
+        )
+
+        mgr = self._mp_managers.get(client_id)
+        if mgr is None:
+            mgr = StatePersistence(
+                f"processed_movies_{self._node_tag}_client_{client_id}.txt",
+                directory=self._base_dir,
+                serializer=StatePersistence._JSON,
+            )
+            self._mp_managers[client_id] = mgr
+        mgr.save(new_val)
+
+    def get_movies_processed(self, client_id: str) -> int:
+        return self._movies_processed.get(client_id, 0) 
