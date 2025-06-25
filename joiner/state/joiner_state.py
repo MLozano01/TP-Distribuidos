@@ -286,7 +286,7 @@ class JoinerState:
             self._eof_trackers.pop(client_id, None)
             self._processed_counts.pop(client_id, None)
             self._movies_processed.pop(client_id, None)
-            logging.info(f"State fully cleared for client {client_id}")
+            logging.info(f"Clearing state for client {client_id}")
 
             # Remove on-disk snapshot for the client (if any).
             mgr = self._client_state_managers.pop(client_id, None)
@@ -370,12 +370,12 @@ class JoinerState:
         new_val = self._movies_processed.get(client_id, 0) + int(count)
         self._movies_processed[client_id] = new_val
 
-        logging.info(
-            "[JoinerState] Incremented movies_processed for client %s by %s → %s",
-            client_id,
-            count,
-            new_val,
-        )
+        #logging.info(
+        #    "[JoinerState] Incremented movies_processed for client %s by %s → %s",
+        #    client_id,
+        #    count,
+        #    new_val,
+        #)
 
         mgr = self._mp_managers.get(client_id)
         if mgr is None:

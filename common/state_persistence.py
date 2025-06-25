@@ -138,7 +138,6 @@ class StatePersistence:
         """Remove the file from disk if it exists."""
         path = f"/backup/{self.BASE_FILE_NAME}_{self.node_info}_client_{client_id}.txt"
         try:
-            logging.info(f"Cleaning up fo client {client_id}")
             if Path(path).exists():
                 logging.info(f"Removing {path} from disk")
                 os.remove(path)

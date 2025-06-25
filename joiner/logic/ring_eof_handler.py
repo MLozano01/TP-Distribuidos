@@ -131,9 +131,10 @@ class EofRingHandler:
 
         if current_stream_all_confirmed and inverse_stream_all_confirmed:
             logging.info(
-                "EOF ring fully closed for client %s both streams. The last stream was %s.",
+                "EOF ring fully closed for client %s both streams. The last stream was %s. and highest_sn_produced was %s",
                 client_id,
                 stream,
+                eof_msg.highest_sn_produced
             )
             send_finished_signal(output_producer, client_id, join_strategy.protocol, secuence_number=eof_msg.highest_sn_produced)
             # Ring termination – do NOT forward further.
@@ -159,7 +160,7 @@ class EofRingHandler:
 
         publisher.publish(eof_msg.SerializeToString(), routing_key=next_queue)
         logging.info(
-            "Replica %s forwarded EOF for client %s to queue %s (stream %s)",
+            "Replica %s forwarded EOF to client %s to queue %s (stream %s)",
             self.replica_id,
             eof_msg.client_id,
             next_queue,
