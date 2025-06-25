@@ -29,15 +29,15 @@ def main():
 
         red = reducer.Reducer(config, partial_result_backup_info, secuence_number_backup_info, state_manager)
         red.start()
-        comms_process.join()
+
     except KeyboardInterrupt:
         logging.info("Reducer stopped by user")
-        comms_process.terminate()
-        red.stop()
     except Exception as e:
         logging.error(f"Reducer error: {e}")
+    finally:
         comms_process.terminate()
         red.stop()
+        comms_process.join()
     
 
 if __name__ == "__main__":

@@ -1,20 +1,14 @@
 import logging
-from multiprocessing import Condition, Manager, Process, Queue, Value
+from multiprocessing import Event
 import signal
-import threading
 from transformers import pipeline
 from protocol.rabbit_protocol import RabbitMQ
 from protocol.utils.parsing_proto_utils import *
 from protocol.protocol import Protocol
-from queue import Empty
 
 
 logging.getLogger('pika').setLevel(logging.WARNING)
-
 logging.getLogger("pika").setLevel(logging.ERROR)
-
-START = False
-DONE = True
 
 class Transformer:
     def __init__(self, **kwargs):
@@ -23,12 +17,11 @@ class Transformer:
         self.queue_snd = None
         self.protocol = Protocol()
 
-        self.data_thread = None
-
-        self.is_alive = True
-
         for key, value in kwargs.items():
             setattr(self, key, value)
+        
+        self.stop_event = Event()
+        self._setup_signal_handlers()
 
 
     def _setup_signal_handlers(self):
@@ -61,7 +54,6 @@ class Transformer:
         
     def start(self):
         """Start the Transformer with separate threads for data and control messages."""
-        self._setup_signal_handlers()
         try:
             self._initialize_sentiment_analyzer()
             self._settle_queues()
@@ -70,7 +62,7 @@ class Transformer:
                 logging.error("Not all required RabbitMQ connections were initialized. Aborting start.")
                 return
 
-            self.queue_rcv.consume(self.callback)
+            self.queue_rcv.consume(self.callback, stop_event=self.stop_event)
 
         except Exception as e:
             logging.error(f"Failed to start Transformer: {e}", exc_info=True)
@@ -182,27 +174,9 @@ class Transformer:
 
     def stop(self):
         """Stop the filter, signal threads, and close the queues/connections."""
-
-        if not self._stop_event.is_set():
-            logging.info("Stopping Transformer...")
-            self._stop_event.set()
-
-            if self.queue_rcv:
-                try:
-                    self.queue_rcv.close_channel()
-                except Exception as e:
-                    logging.error(f"Error stopping consumer {self.queue_rcv}: {e}")
-
-            if self.queue_snd:
-                try:
-                    self.queue_snd.close_channel()
-                except Exception as e:
-                        logging.error(f"Error stopping producer {self.queue_snd}: {e}")
-
-            if self.data_thread and self.data_thread.is_alive():
-                self.data_thread.terminate()
-
-
-        self.is_alive = False
-
+        if self.stop_event.is_set(): 
+            return
+        
+        logging.info("Stopping transformer")
+        self.stop_event.set()
         logging.info("Transformer Stopped")

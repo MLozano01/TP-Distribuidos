@@ -28,11 +28,12 @@ def main():
 
     except KeyboardInterrupt:
         logging.info("Filter stopped by user")
-        filter.stop()
-        logging.info("Filter stopped")
     except Exception as e:
         logging.error(f"Filter error: {e}")
+    finally:
+        comms_process.terminate()
         filter.stop()
+        comms_process.join()
         logging.info("Filter stopped")
 
 

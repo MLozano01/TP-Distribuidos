@@ -1,3 +1,4 @@
+import signal
 from protocol.rabbit_protocol import RabbitMQ
 from common_reducer.aux import parse_reduce_funct, parse_final_result
 import logging
@@ -16,7 +17,6 @@ class Reducer:
         self.config = config
         self.queue_rcv = None
         self.queue_snd = None
-        self.is_alive = True
         self.query_id = config["query_id"]
         self.reduce_by = config['reduce_by']
 
@@ -29,7 +29,13 @@ class Reducer:
         self.stop_event = Event()
 
         # Setup signal handler for SIGTERM
-        # signal.signal(signal.SIGTERM, self._handle_shutdown)
+        signal.signal(signal.SIGTERM, self._handle_shutdown)
+        signal.signal(signal.SIGINT, self._handle_shutdown)
+
+
+    def _handle_shutdown(self, _sig, _frame):
+        logging.info("Graceful exit")
+        self.stop()
 
     def _settle_queues(self):
         self.queue_rcv = RabbitMQ(self.config["exchange_rcv"], self.config['queue_rcv_name'], self.config['routing_rcv_key'], self.config['exc_rcv_type'])
@@ -54,6 +60,9 @@ class Reducer:
                 return
 
             if msg.finished:
+                if msg.force_finish:
+                    logging.info(f"Received force finished for client: {msg.client_id}")
+                    self._clean_up(str(msg.client_id))
                 logging.info(f"Finished msg received on query_id {self.query_id}, with final secuence number {msg.secuence_number}")
                 self.partial_status[str(msg.client_id)]["final_secuence"] = msg.secuence_number
                 self._handle_finished(str(msg.client_id))
@@ -93,10 +102,10 @@ class Reducer:
 
     def _clean_up(self, client_id):
         logging.info(f"Cleaning up files for client {client_id}")
-        self.partial_status.pop(client_id)
+        self.partial_status.pop(client_id, None)
         self._state_manager.save(self.partial_status)
 
-        self.batches_seen.pop(client_id)
+        self.batches_seen.pop(client_id, None)
         self._state_manager.clean_client(client_id)
 
     def _handle_finished(self, client_id):
@@ -131,10 +140,8 @@ class Reducer:
 
     def stop(self):
         """End the reduce and close the queue."""
+        logging.info("Stopping reducer")
+        if self.stop_event.is_set():
+            return
         self.stop_event.set()
-        if self.queue_rcv:
-            self.queue_rcv.close_channel()
-        if self.queue_snd:
-            self.queue_snd.close_channel()
-        self.is_alive = False
-        logging.info("reduce Stopped")
+        logging.info("Reducer Stopped")

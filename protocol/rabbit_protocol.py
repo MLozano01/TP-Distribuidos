@@ -14,7 +14,6 @@ class RabbitMQ:
         self.auto_ack = auto_ack
         self.prefetch_count = prefetch_count
         self.joiner = joiner
-        logging.info(f"{self.joiner}")
         self.connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq', heartbeat=500))
         self.channel = self.create_channel()
         self.callback_func = None

@@ -78,16 +78,20 @@ class Protocol:
     code = self.__type_codes.get(type)
     return self.create_bytes(code, batch)
 
-  def create_inform_end_file(self, type):
+  def create_inform_end_file(self, type,force=False):
     code = self.__type_codes.get(type)
-    msg = code.to_bytes(CODE_LENGTH, byteorder='big')
+    msg = bytearray()
+    msg.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
+    if force:
+      msg.extend(force.to_bytes(BOOL_LENGTH, byteorder='big'))
     return self.create_bytes(END_FILE_CODE, msg)
 
-  def create_finished_message(self, type, client_id):
+  def create_finished_message(self, type, client_id, force=False):
       """Creates and serializes a 'finished' message for the given type."""
       msg = self.__file_classes[type]
       msg.finished = True
       msg.client_id = client_id
+      msg.force_finish = force
 
       serialized_msg = msg.SerializeToString()
       code = self.__type_codes.get(type)
@@ -106,10 +110,10 @@ class Protocol:
     """Reads the message and returns the file type of the data received."""
     code = int.from_bytes(message[:CODE_LENGTH], byteorder='big')
     data = message[CODE_LENGTH + INT_LENGTH:]
+  
+    type = int.from_bytes(data[:CODE_LENGTH], byteorder='big') if code == END_FILE_CODE else code
     
-    type = int.from_bytes(data, byteorder='big') if code == END_FILE_CODE else code
-    
-    return self.__codes_to_string[type]
+    return code == END_FILE_CODE, self.__codes_to_string[type]
 
   def add_metadata(self, message, client_id, secuence_number):
     """Adds client ID to the message to call before forwarding to the distributed system."""
@@ -148,6 +152,8 @@ class Protocol:
       file_type = self.__codes_to_types[file_code]
       msg_finished = self.__file_classes[file_type]
       msg_finished.finished = True
+      if len(msg[CODE_LENGTH:]) > 0:
+        msg_finished.force_finish = True
       msg_finished.client_id = client_id
       msg_finished.secuence_number = secuence_number
       return file_type, msg_finished
@@ -406,15 +412,17 @@ class Protocol:
     message.extend(data)
     return message
   
-  def create_movie_finished_msg(self, client_id):
+  def create_movie_finished_msg(self, client_id, force=False):
     movies_pb = files_pb2.MoviesCSV()
     movies_pb.finished = True
+    movies_pb.force_finish = force
     movies_pb.client_id = client_id
     return movies_pb.SerializeToString()
   
-  def create_actor_participations_finished_msg(self, client_id):
+  def create_actor_participations_finished_msg(self, client_id, force=False):
     actor_participations_pb = files_pb2.ActorParticipationsBatch()
     actor_participations_pb.finished = True
+    actor_participations_pb.force_finish = force
     actor_participations_pb.client_id = client_id
     return actor_participations_pb.SerializeToString()
 
@@ -457,16 +465,18 @@ class Protocol:
       batch.client_id = client_id
       return batch.SerializeToString()
 
-  def create_finished_actor_participations_msg(self):
+  def create_finished_actor_participations_msg(self, force=False):
       """Creates and serializes an ActorParticipationsBatch message with finished=True."""
       batch_pb = files_pb2.ActorParticipationsBatch()
       batch_pb.finished = True
+      batch_pb.force_finish = force
       return batch_pb.SerializeToString()
   
-  def create_finished_movies_msg(self):
+  def create_finished_movies_msg(self, force=False):
       """Creates and serializes an MoviesCsv message with finished=True."""
       movies_pb = files_pb2.MoviesCSV()
       movies_pb.finished = True
+      movies_pb.force_finish = force
       return movies_pb.SerializeToString()
 
   def decode_actor_participations_batch(self, buffer):
@@ -523,7 +533,7 @@ class Protocol:
     result.ParseFromString(buffer)
     return result
 
-  def encode_movies_msg(self, movies_list, client_id, finished=False):
+  def encode_movies_msg(self, movies_list, client_id, finished=False, force=False):
       """Encodes a list of MovieCSV objects into a serialized MoviesCSV message.
 
       Args:
@@ -540,9 +550,10 @@ class Protocol:
       movies_pb.client_id = client_id
       if finished:
           movies_pb.finished = True
+          movies_pb.force_finish = force
       return movies_pb.SerializeToString()
 
-  def encode_actor_participations_msg(self, participations_list, client_id, finished=False):
+  def encode_actor_participations_msg(self, participations_list, client_id, finished=False, force=False):
       """Encodes a list of ActorParticipation objects into a serialized ActorParticipationsBatch.
 
       Args:
@@ -559,4 +570,5 @@ class Protocol:
       batch_pb.client_id = client_id
       if finished:
           batch_pb.finished = True
+          batch_pb.force_finish = force
       return batch_pb.SerializeToString()
