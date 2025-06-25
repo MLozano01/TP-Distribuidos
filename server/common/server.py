@@ -63,7 +63,9 @@ class Server:
         except Exception as e:
             logging.error(f"Error in client process {client_id}: {e}")
         finally:
-            client_socket.close()
+            if client_socket:
+                client_socket.shutdown(socket.SHUT_RDWR)
+                client_socket.close()
 
     def _setup_signal_handlers(self):
         signal.signal(signal.SIGTERM, self._graceful_exit)

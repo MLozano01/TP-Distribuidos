@@ -1,4 +1,4 @@
-from multiprocessing import Process
+from multiprocessing import Process, Event
 import socket
 import logging
 from protocol.protocol import FileType, Protocol
@@ -19,6 +19,7 @@ class Client:
         self.forward_queue = None
         self.result_queue = None
 
+        self.stop_event = Event()
         self.results_received = set()
         self.total_expected = 5
         self.eof_sent = 0
@@ -61,14 +62,9 @@ class Client:
 
     def stop_consumer(self):
         logging.info("Stoping consumers")
-        try:
-            if self.forward_queue:
-                self.forward_queue.close_channel()
-            if self.result_queue:
-                self.result_queue.close_channel()
-
-        except Exception as e:
-            logging.error(f"Error stopping client IN QUEUES: {e}")
+        if self.stop_event.is_set(): 
+            return
+        self.stop_event.set()
         
         if self.socket:
             try:
@@ -124,7 +120,7 @@ class Client:
     def return_results(self, conn: socket.socket):
         try:
             self.result_queue = RabbitMQ('exchange_snd_results', f'result_{self.client_id}', f'results_{self.client_id}', 'direct')
-            self.result_queue.consume(self.result_controller_func)
+            self.result_queue.consume(self.result_controller_func, stop_event=self.stop_event)
         except Exception as e:
             logging.error(f"Failed to consume results: {e}")
 
