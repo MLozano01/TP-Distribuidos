@@ -5,6 +5,7 @@ from protocol import files_pb2
 from protocol.rabbit_protocol import RabbitMQ
 from joiner.state.joiner_state import JoinerState
 from joiner.logic.join_strategy import JoinStrategy
+from messaging.messaging_utils import send_finished_signal
 
 
 class EofRingHandler:
@@ -119,7 +120,7 @@ class EofRingHandler:
                 joiner_state.purge_orphan_other_after_movie_eof(client_id)
 
             if joiner_state.has_both_eof(client_id):
-                join_strategy.handle_client_finished(client_id, joiner_state, output_producer, eof_msg.highest_sn_produced)
+                join_strategy.handle_client_finished(client_id, joiner_state)
 
             # Register that *this* replica has fully processed the stream.
             if self.replica_id not in eof_msg.replicas_confirmed:
@@ -134,7 +135,11 @@ class EofRingHandler:
                 client_id,
                 stream,
             )
+            send_finished_signal(output_producer, client_id, join_strategy.protocol, secuence_number=eof_msg.highest_sn_produced)
             # Ring termination – do NOT forward further.
+            return
+        
+        if current_stream_all_confirmed:
             return
 
         # Forward to next replica so the ring continues.

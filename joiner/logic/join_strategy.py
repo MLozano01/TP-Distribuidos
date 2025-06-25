@@ -12,7 +12,7 @@ class JoinStrategy(ABC):
         self._seq_monitor = SequenceNumberMonitor(state_manager)
 
     @abstractmethod
-    def process_other_message(self, body, state, producer, eof_protocol_producer):
+    def process_other_message(self, body, state, producer):
         """
         Process a message of the 'other' data type.
 
@@ -38,7 +38,7 @@ class JoinStrategy(ABC):
         pass
 
     @abstractmethod
-    def handle_client_finished(self, client_id, state, producer, highest_sn_produced):
+    def handle_client_finished(self, client_id, state):
         """Called exactly once per client when *both* streams have signalled EOF.
 
         The method is responsible for emitting the consolidated EOF message

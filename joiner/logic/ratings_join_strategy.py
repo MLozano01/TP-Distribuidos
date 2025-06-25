@@ -3,7 +3,7 @@ import logging
 import os
 from logic.join_strategy import JoinStrategy
 from protocol.protocol import Protocol
-from messaging.messaging_utils import send_finished_signal
+
 from common.batcher import PerClientBatcher
 from common.sequence_generator import SequenceGenerator
 
@@ -102,12 +102,11 @@ class RatingsJoinStrategy(JoinStrategy):
             self._join_and_batch([rating_val], movie_id, title, client_id, producer)
 
 
-    def handle_client_finished(self, client_id, state, producer, highest_sn_produced):
+    def handle_client_finished(self, client_id, state):
         """Both streams are done – flush pending batches and propagate EOF."""
         if self._batcher:
             self._batcher.flush_key(client_id)
             self._batcher.clear(client_id)
-        send_finished_signal(producer, client_id, self.protocol, secuence_number=highest_sn_produced) # TODO: Could maybe be done just one time, leaving here for now
         state.remove_client_data(client_id)
         self._seqgen.clear(client_id)
 

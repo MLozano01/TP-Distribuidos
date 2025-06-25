@@ -2,7 +2,6 @@ from __future__ import annotations
 import logging
 import os
 from logic.join_strategy import JoinStrategy
-from messaging.messaging_utils import send_finished_signal
 from protocol import files_pb2
 from common.batcher import PerClientBatcher
 
@@ -105,11 +104,11 @@ class CreditsJoinStrategy(JoinStrategy):
                 flat.append(item)
         self._join_and_batch(flat, movie_id, title, client_id, producer)
 
-    def handle_client_finished(self, client_id, state, producer, highest_sn_produced):
+    def handle_client_finished(self, client_id, state):
         if self._batcher:
             self._batcher.flush_key(client_id)
             self._batcher.clear(client_id)
-        #send_finished_signal(producer, client_id, self.protocol, secuence_number=highest_sn_produced)
+
         state.remove_client_data(client_id)
         self._seqgen.clear(client_id)
 
