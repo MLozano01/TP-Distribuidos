@@ -55,7 +55,6 @@ class RabbitMQ:
             # if self.joiner:
             #     self.channel.queue_bind(exchange=self.exchange, queue=self.q_name, routing_key=int(key_to_use))
             
-            logging.info(f"Gonna Publish with key {key_to_use} of type {type(key_to_use)}")
             self.channel.basic_publish(exchange=self.exchange,
                                 routing_key=key_to_use,
                                 body=message,
