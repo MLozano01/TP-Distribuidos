@@ -26,6 +26,7 @@ class Filter:
 
         # Setup signal handler for SIGTERM
         signal.signal(signal.SIGTERM, self._handle_shutdown)
+        signal.signal(signal.SIGINT, self._handle_shutdown)
 
     def update_actual_client_id_status(self, client_id, status): 
         self.actual_client_id.value = client_id
@@ -75,7 +76,14 @@ class Filter:
         if self.publisher:
             self.publisher.close()
 
-    def _handle_shutdown(self):
-        self.stop_event.set()
-        self._close_publishers()
+    def _handle_shutdown(self, _sig, _frame):
+        logging.info("Graceful exit")
+        self.stop()
 
+    def stop(self):
+        """End the filter and close the queue."""
+        logging.info("Stopping filter")
+        if self.stop_event.is_set():
+            return
+        self.stop_event.set()
+        logging.info("Filter Stopped")
