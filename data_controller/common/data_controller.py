@@ -77,9 +77,13 @@ class DataController:
         """Handle finished messages with coordination"""
         logging.info(f"Propagating finished {message_type} of client {msg.client_id} downstream")
         msg_to_send = msg.SerializeToString()
-        for queue in self.send_queues:
-            queue.publish(msg_to_send)
-        
+        if message_type == FileType.MOVIES:
+            for queue in self.send_queues:
+                queue.publish(msg_to_send)
+        elif message_type == FileType.RATINGS or message_type == FileType.CREDITS:
+            for queue in self.send_queues:
+                queue.publish(msg_to_send, str(msg.client_id))
+
 
     def _handle_data_message(self, message_type, msg):
         # logging.info(f"got message of type: {message_type}")

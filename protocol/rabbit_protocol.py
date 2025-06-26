@@ -27,9 +27,9 @@ class RabbitMQ:
             channel.basic_qos(prefetch_count=1)
             channel.exchange_declare(exchange=self.exchange, exchange_type=self.exc_type, durable=True)
 
-            res = channel.queue_declare(queue=self.q_name, durable=True)
-            q_name = res.method.queue
             if not self.joiner:
+                res = channel.queue_declare(queue=self.q_name, durable=True)
+                q_name = res.method.queue
                 channel.queue_bind(exchange=self.exchange, queue=q_name, routing_key=self.key)
 
             rabbit_logger.debug(f"Channel created with exchange {self.exchange} of type {self.exc_type}")
@@ -74,7 +74,10 @@ class RabbitMQ:
             key_to_use = routing_key if routing_key is not None else self.key
 
             if self.joiner:
-                self.channel.queue_bind(exchange=self.exchange, queue=self.q_name, routing_key=int(key_to_use))
+                res = self.channel.queue_declare(queue=self.q_name, durable=True)
+                q_name = res.method.queue
+                self.channel.queue_bind(exchange=self.exchange, queue=q_name, routing_key=key_to_use)
+                # self.channel.queue_bind(exchange=self.exchange, queue=self.q_name, routing_key=int(key_to_use))
 
             if self.prefetch_count is not None:
                 self.channel.basic_qos(prefetch_count=self.prefetch_count)

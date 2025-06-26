@@ -33,9 +33,9 @@ services:
         condition: service_started
     volumes:
       - ./client/config.ini:/config.ini
-      - ./data/credits_demo.csv:/credits.csv
-      - ./data/ratings_demo.csv:/ratings.csv
-      - ./data/movies_metadata_demo.csv:/movies_metadata.csv
+      - ./data/credits.csv:/credits.csv
+      - ./data/ratings_small.csv:/ratings.csv
+      - ./data/movies_metadata.csv:/movies_metadata.csv
       - ./data/results_client1.json:/results.json
     
   client2:
@@ -51,17 +51,71 @@ services:
         condition: service_started
     volumes:
       - ./client/config.ini:/config.ini
-      - ./data/credits_demo.csv:/credits.csv
-      - ./data/ratings_demo.csv:/ratings.csv
-      - ./data/movies_metadata_demo.csv:/movies_metadata.csv
+      - ./data/credits.csv:/credits.csv
+      - ./data/ratings_small.csv:/ratings.csv
+      - ./data/movies_metadata.csv:/movies_metadata.csv
       - ./data/results_client2.json:/results.json
+    
+  client3:
+    container_name: client3
+    image: client:latest
+    profiles: [clients]
+    environment:
+      - CLI_ID=3
+    networks:
+      - tp_network
+    depends_on:
+      server:
+        condition: service_started
+    volumes:
+      - ./client/config.ini:/config.ini
+      - ./data/credits.csv:/credits.csv
+      - ./data/ratings_small.csv:/ratings.csv
+      - ./data/movies_metadata.csv:/movies_metadata.csv
+      - ./data/results_client3.json:/results.json
+    
+  client4:
+    container_name: client4
+    image: client:latest
+    profiles: [clients]
+    environment:
+      - CLI_ID=4
+    networks:
+      - tp_network
+    depends_on:
+      server:
+        condition: service_started
+    volumes:
+      - ./client/config.ini:/config.ini
+      - ./data/credits.csv:/credits.csv
+      - ./data/ratings_small.csv:/ratings.csv
+      - ./data/movies_metadata.csv:/movies_metadata.csv
+      - ./data/results_client4.json:/results.json
+    
+  client5:
+    container_name: client5
+    image: client:latest
+    profiles: [clients]
+    environment:
+      - CLI_ID=5
+    networks:
+      - tp_network
+    depends_on:
+      server:
+        condition: service_started
+    volumes:
+      - ./client/config.ini:/config.ini
+      - ./data/credits.csv:/credits.csv
+      - ./data/ratings_small.csv:/ratings.csv
+      - ./data/movies_metadata.csv:/movies_metadata.csv
+      - ./data/results_client5.json:/results.json
     
   server:
     container_name: server
     image: server:latest
     entrypoint: python3 /main.py
     environment:
-      - NUM_CLIENTS=2
+      - NUM_CLIENTS=5
     networks:
       - tp_network
     depends_on:
@@ -482,7 +536,29 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - JOINER_REPLICA_ID=1
-      - JOINER_REPLICA_COUNT=1
+      - JOINER_REPLICA_COUNT=2
+      - JOINER_NAME=joiner-ratings
+      - HC_PORT=3030
+      - LISTEN_BACKLOG=10
+    
+  joiner-ratings-2:
+    container_name: joiner-ratings-2
+    image: joiner:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./joiner/config/joiner-ratings.ini:/config.ini
+      - ./joiner/backup:/backup
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JOINER_REPLICA_ID=2
+      - JOINER_REPLICA_COUNT=2
       - JOINER_NAME=joiner-ratings
       - HC_PORT=3030
       - LISTEN_BACKLOG=10
@@ -505,7 +581,29 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - JOINER_REPLICA_ID=1
-      - JOINER_REPLICA_COUNT=1
+      - JOINER_REPLICA_COUNT=2
+      - JOINER_NAME=joiner-credits
+      - HC_PORT=3030
+      - LISTEN_BACKLOG=10
+    
+  joiner-credits-2:
+    container_name: joiner-credits-2
+    image: joiner:latest
+    networks:
+      - tp_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    links:
+      - rabbitmq
+    volumes:
+      - ./joiner/config/joiner-credits.ini:/config.ini
+      - ./joiner/backup:/backup
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JOINER_REPLICA_ID=2
+      - JOINER_REPLICA_COUNT=2
       - JOINER_NAME=joiner-credits
       - HC_PORT=3030
       - LISTEN_BACKLOG=10
@@ -531,7 +629,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          ["transformer-1", "filter-arg-spa-movies-1", "filter-decade-movies-1", "data-controller-credits-1", "reducer-max-min", "filter-2000-movies-1", "aggregator-sent-2", "data-controller-ratings-1"]
+          ["transformer-1", "filter-single-country-movies-1", "aggregator-ratings-1", "reducer-top10", "reducer-query1", "joiner-credits-1", "filter-2000-movies-2", "data-controller-movies-1", "data-controller-ratings-2"]
     
   healthchecker-2:
     container_name: healthchecker-2
@@ -553,7 +651,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          ["joiner-ratings-1", "filter-arg-movies-1", "aggregator-budget-1", "reducer-top5", "reducer-average", "filter-2000-movies-2", "data-controller-movies-1", "data-controller-ratings-2"]
+          ["filter-arg-spa-movies-1", "filter-decade-movies-1", "data-controller-credits-1", "reducer-max-min", "joiner-ratings-1", "joiner-credits-2", "aggregator-sent-1", "data-controller-movies-2", "data-controller-ratings-3"]
     
   healthchecker-3:
     container_name: healthchecker-3
@@ -575,7 +673,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          ["joiner-credits-1", "filter-single-country-movies-1", "aggregator-ratings-1", "reducer-top10", "reducer-query1", "aggregator-sent-1", "data-controller-movies-2", "data-controller-ratings-3"]
+          ["filter-arg-movies-1", "aggregator-budget-1", "reducer-top5", "reducer-average", "joiner-ratings-2", "filter-2000-movies-1", "aggregator-sent-2", "data-controller-ratings-1"]
     
 networks:
   tp_network:

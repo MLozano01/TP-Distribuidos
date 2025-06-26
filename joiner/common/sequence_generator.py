@@ -61,12 +61,11 @@ class SequenceGenerator:
             seq = self._counters.get(cid, 0)
             self._counters[cid] = seq + 1
             self._state.save(self._counters)
-            return self._rid + self._R * seq
+            return seq
 
     def current(self, client_id: str) -> int:
         """Return *global* sequence that will be assigned next (without increment)."""
-        local = self._counters.get(str(client_id), 0)
-        return self._rid + self._R * local
+        return self._counters.get(str(client_id), 0)
 
     def clear(self, client_id: str) -> None:
         """Reset counter for *client_id* (e.g. after EOF fully processed)."""
