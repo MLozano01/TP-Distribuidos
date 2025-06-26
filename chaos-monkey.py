@@ -22,13 +22,13 @@ def create_possible_names(prefixes):
 		if name != black_list and any([name.startswith(prefix) for prefix in prefixes]):
 			possible_names.append(name)
 	return possible_names
-        
+
 def set_mode():
 	modes = ["CHAOS", "BOMB"]
 	mode = ""
 	if len(sys.argv) == 2:
 		mode = sys.argv[1]
-        
+
 	if mode not in modes:
 		mode = "CHAOS"
 
@@ -37,15 +37,13 @@ def set_mode():
 def main():
 	mode = set_mode()
 
-	# name_prefix = ['transformer-',
-	# 				  	'joiner-', 
-	# 					'filter-', 
-	# 					'aggregator-',
-	# 					'data-controller-', 
-	# 					'healthchecker-', 
-	# 					'reducer-']
-
-	name_prefix  =['joiner-']
+	name_prefix = ['transformer-',
+	 				  	'joiner-',
+	 					'filter-',
+	 					'aggregator-',
+	 					'data-controller-',
+	 					'healthchecker-',
+	 					'reducer-']
 
 	logging.info(f"Running in mode {mode}")
 	if mode == "CHAOS":
@@ -57,11 +55,11 @@ def main():
 			logging.info(f'Command executed. Killed "{container}". Result={result.returncode}.')
 
 			time.sleep(SLEEP_SECONDS)
-	
+
 	else:
 		possible_names = create_possible_names(name_prefix)
 		command = ['docker', 'kill'] + possible_names
-		
+
 		result = subprocess.run(command, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		logging.info(f'Command executed. Killed containers "{possible_names}". Result={result.returncode}.')
 
