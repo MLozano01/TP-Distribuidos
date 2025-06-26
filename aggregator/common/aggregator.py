@@ -80,6 +80,7 @@ class Aggregator:
         aggr_pb = self.protocol.decode_aggr_batch(self.protocol.create_aggr_batch({}, decoded_msg.client_id, decoded_msg.secuence_number))
         aggr_pb.finished = True
         if decoded_msg.force_finish:
+            logging.info(f"Received force finish for client: {aggr_pb.client_id} | {decoded_msg}")
             aggr_pb.force_finish = decoded_msg.force_finish
         
         finished_serialized = aggr_pb.SerializeToString()

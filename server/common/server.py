@@ -29,7 +29,7 @@ class Server:
         logging.info(f"Status Backup Info: {self.status}")
         self.status.setdefault("current_ids", [])
 
-        self.next_client_id = self.status.setdefault("last_id", 0) + 1
+        self.next_client_id = self.status.setdefault("last_id", -1) + 2
         logging.info(f"Starting from client: {self.next_client_id}")
         for id in self.status["current_ids"]:
             client_process = Process(target=self._handle_client,args=(None, id, True))
@@ -61,6 +61,7 @@ class Server:
 
     def _handle_client(self, client_socket, client_id, force_finish=False):
         try:
+            logging.info(f"Starting client with id: {client_id} and force_finish: {force_finish}")
             client = Client(client_socket, client_id, self.config, force_finish)
             client.run()
         except Exception as e:
