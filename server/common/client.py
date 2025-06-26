@@ -24,6 +24,7 @@ class Client:
 
         self.stop_event = Event()
         self.results_received = set()
+        self.results_query1 = set()
         self.total_expected = 5
         self.eof_sent = 0
         self.config = config
@@ -157,12 +158,29 @@ class Client:
     def result_controller_func(self, ch, method, properties, body):
         try:
             msg = self.protocol.create_client_result(body)
+            _type, result = self.protocol.decode_msg(msg)
+            if result.query_id in self.results_received:
+                #duplicated result, ignore
+                logging.info(f"Duplicated result for query {result.query_id}")
+                return
+            elif result.query_id == 1:
+                if result.final:
+                    self.results_received.add(result.query_id)
+                elif result.result_row[0].title in self.results_query1:
+                    #duplicated result, ignore
+                    logging.info(f"Duplicated result for query {result.query_id}")
+                    return
+                else:
+                    titles = [result.title for result in result.result_row]
+                    self.results_query1.update(titles)
+                    logging.info(f"Updating query1 results for client {result.client_id}")
+            else:
+                self.results_received.add(result.query_id)
+
+
             if self.socket:
                 self.socket.sendall(msg)
-
-            _type, result = self.protocol.decode_msg(msg)
-            self.results_received.add(result.query_id)
-            logging.info(f"Results received: {len(self.results_received)}.")
+            logging.info(f"Results received for client {result.client_id}: {len(self.results_received)}.")
             if len(self.results_received) == self.total_expected:
                 logging.info(f"{self.results_received} results received for client {self.client_id} with total {self.total_expected}.")
                 logging.info(f"All results received for client {self.client_id}. Closing connection.")

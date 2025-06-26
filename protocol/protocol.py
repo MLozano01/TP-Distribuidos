@@ -184,6 +184,8 @@ class Protocol:
       msg_finished.finished = True
       if len(msg[CODE_LENGTH:]) > 0:
         msg_finished.force_finish = True
+      else:
+        msg_finished.force_finish = False
       msg_finished.client_id = client_id
       msg_finished.secuence_number = secuence_number
 

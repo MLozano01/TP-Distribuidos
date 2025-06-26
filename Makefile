@@ -64,6 +64,10 @@ chaos-bomb:
 	./chaos-monkey.sh BOMB
 .PHONY: chaos-bomb
 
+client-loop:
+	./client-test.sh
+.PHONY: chaos-bomb
+
 clean-backup:
 	chmod +x clean-backup.sh
 	./clean-backup.sh

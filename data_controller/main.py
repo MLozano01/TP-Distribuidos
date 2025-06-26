@@ -23,7 +23,11 @@ def main():
     except Exception as e:
         logging.error(f"DataController error: {e}")
     finally:
+        comms_process.terminate()
         data_controller.stop()
+        comms_process.join()
+        logging.info("DataController stopped")
+
 
 if __name__ == "__main__":
     main()

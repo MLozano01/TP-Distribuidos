@@ -1,9 +1,10 @@
 import logging
+import signal
 import socket
 import subprocess
 import time
 
-from multiprocessing import Process
+from multiprocessing import Process, Event
 
 class HealthCheck:
     """
@@ -21,18 +22,28 @@ class HealthCheck:
         self.sckt.bind(('', self.port))
         self.sckt.listen(config['listen_backlog'])
 
-        self.running = True
+        self.stop_event = Event()
 
         self.check_process = Process(target=self.check)
+        
+        # Setup signal handler for SIGTERM
+        signal.signal(signal.SIGTERM, self._handle_shutdown)
+        signal.signal(signal.SIGINT, self._handle_shutdown)
+
+    def _handle_shutdown(self, _sig, _frame):
+        logging.info("Graceful exit")
+        self.stop()
 
     def run(self):
         logging.info(f"Starting the healthcheck-{self.id}")
         self.check_process.start()
         self.accept_check()
 
+        self.check_process.join()
+
     def check(self):
         logging.info("Starting checkers")
-        while self.running:
+        while not self.stop_event.is_set():
             time.sleep(5)
             try:
                 self._check_workers()
@@ -43,6 +54,8 @@ class HealthCheck:
     def _check_workers(self):
         for node in self.nodes:
             try:
+                if self.stop_event.is_set():
+                    return
                 con = socket.create_connection((node, self.port))
                 logging.info(f"The node {node} is ok")
                 con.shutdown(socket.SHUT_RDWR)
@@ -55,7 +68,7 @@ class HealthCheck:
     def _check_healthcheckers(self):
         checking = True
         i = self.id
-        while checking:
+        while not self.stop_event.is_set() and checking:
             hc_id_to_check = i % self.healthcheckers_count + 1
             if hc_id_to_check == self.id: checking= False
 
@@ -87,7 +100,7 @@ class HealthCheck:
     def accept_check(self):
         logging.info("Starting Accepter")
 
-        while self.running:
+        while not self.stop_event.is_set():
             try:
                 _, addr = self.sckt.accept()
                 logging.info(f"The checker in addr {addr} has checked in")
@@ -98,13 +111,13 @@ class HealthCheck:
                 logging.info(f"An unexpected error has ocurred: {e}")
 
     def stop(self):
-        self.running = False
-        if not self.sckt:
+        if self.stop_event.is_set():
             return
-        self.sckt.shutdown(socket.SHUT_RDWR)
-        self.sckt.close()
-        self.sckt = None
-        logging.info("Socket Closed")
+        self.stop_event.set()
+        if self.sckt:
+            self.sckt.shutdown(socket.SHUT_RDWR)
+            self.sckt.close()
+            self.sckt = None
 
-        self.accept_process.terminate()
-        self.accept_process.join()
+        self.check_process.terminate()
+        logging.info("Socket Closed")
