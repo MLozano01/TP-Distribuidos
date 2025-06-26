@@ -111,14 +111,17 @@ class StatePersistence:
         try:
             backup = {}
 
-            for filepath in glob.glob(f'/backup/{self.BASE_FILE_NAME}_{self.node_info}_*.txt'):
-                client = filepath.split("_")[5].split(".")[0]
+            for filepath in glob.glob(f'/backup/{self.BASE_FILE_NAME}_{self.node_info}_client_*.txt'):
+                
+                client = filepath.split("_")[4].split(".")[0]
                 with open(filepath) as f:
                     backup.setdefault(client, [])
                     for line in f:
                         if not self.ORUGA in line:
                             break
-                        backup[client].append(line.strip()[:-1])     
+                        stripped = line.strip()
+                        if stripped:
+                            backup[client].append(stripped[:-1])    
             return backup       
             
         except Exception as e:

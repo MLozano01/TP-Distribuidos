@@ -30,7 +30,6 @@ docker-compose-up: docker-image
 .PHONY: docker-compose-up
 
 docker-compose-up-system: docker-image
-	./clean-backup.sh
 	docker compose -f docker-compose.yaml up --build -d
 .PHONY: docker-compose-up-system
 
