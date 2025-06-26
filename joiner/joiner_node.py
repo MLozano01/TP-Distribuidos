@@ -7,9 +7,10 @@ from protocol.rabbit_protocol import RabbitMQ
 from protocol.protocol import Protocol
 from state.joiner_state import JoinerState
 from common.requeue import RequeueException
+from common.sequence_number_monitor import SequenceNumberMonitor
 
 class JoinerNode:
-    def __init__(self, config, join_strategy):
+    def __init__(self, config, join_strategy, state_manager):
         self.config = config
         self.replica_id = self.config['replica_id']
         self.join_strategy = join_strategy
@@ -31,6 +32,7 @@ class JoinerNode:
         self._stop_event = threading.Event()
         self._threads = []
         self._hc_sckt = None
+        self._seq_monitor = SequenceNumberMonitor(state_manager)
 
     def start(self):
         self._setup_signal_handlers()
@@ -164,10 +166,19 @@ class JoinerNode:
                 f"Finished: {movies_msg.finished}, Items: {len(movies_msg.movies)}"
             )"""
 
+            seq = movies_msg.secuence_number
+            if self._seq_monitor.is_duplicate(client_id, seq):
+                logging.info(
+                    f"[CreditsJoinStrategy] Dropping duplicate OTHER message seq={seq} client={client_id}"
+                )
+                return None
+
             if movies_msg.finished:
-                self._handle_movie_eof(client_id)
+                self._handle_movie_eof(client_id, int(movies_msg.secuence_number))
             else:
+                self.state.increment_movies_seen(client_id)
                 self._handle_movie_batch(client_id, movies_msg.movies)
+                self._seq_monitor.record(client_id, seq)
 
         except RequeueException:
             raise
@@ -219,9 +230,17 @@ class JoinerNode:
         """Return True when node is stopping and delivery must be requeued."""
         return self._stop_event.is_set()
 
-    def _handle_movie_eof(self, client_id: str) -> None:
+    def _handle_movie_eof(self, client_id: str, expected_total: int) -> None:
         """Handle EOF for movies stream of *client_id*."""
         logging.info("[Node] Movie EOF received for client %s.", client_id)
+        processed_total = self.state.get_movies_count(client_id)
+
+        if expected_total is not None and expected_total != processed_total:
+            logging.warning(
+                f"[CreditsJoinStrategy] Mismatch total_to_process (expected={expected_total}, processed={processed_total}) – requeuing."
+            )
+            raise RequeueException()
+
         self.state.set_stream_eof(client_id, "movies")
         self.join_strategy.handle_movie_eof(client_id, self.state)
         self._check_and_handle_client_finished(client_id)

@@ -35,7 +35,7 @@ def main():
             state_manager,
         )
 
-        joiner_instance = JoinerNode(config, join_strategy)
+        joiner_instance = JoinerNode(config, join_strategy, state_manager)
         joiner_instance.start()
 
     except KeyboardInterrupt:

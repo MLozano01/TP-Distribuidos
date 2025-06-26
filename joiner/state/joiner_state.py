@@ -62,6 +62,7 @@ class JoinerState:
         ) = self._normalise_snapshots(persisted_raw)
 
         self._processed_counts: dict[str, int] = {}
+        self._movies_counts: dict[str, int] = {}
         self._pc_managers: dict[str, StatePersistence] = {}
 
     
@@ -344,3 +345,22 @@ class JoinerState:
 
     def get_processed_count(self, client_id: str) -> int:
         return self._processed_counts.get(client_id, 0) 
+
+    def increment_movies_seen(self, client_id: str, count: int = 1) -> None:
+        """Increment processed counter for client by *count*. This method doest not persist"""
+        new_val = self._movies_counts.get(client_id, 0) + int(count)
+        self._movies_counts[client_id] = new_val
+
+        mgr = self._pc_managers.get(client_id)
+        if mgr is None and self._state_manager is not None:
+            mgr = StatePersistence(
+                f"movies_seen_{self._node_tag}_client_{client_id}.txt",
+                directory=self._base_dir,
+                serializer=StatePersistence._JSON,
+            )
+            self._pc_managers[client_id] = mgr
+        if mgr is not None:
+            mgr.save(new_val)
+
+    def get_movies_count(self, client_id: str) -> int:
+        return self._movies_counts.get(client_id, 0) 
