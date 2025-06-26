@@ -39,34 +39,30 @@ class RatingsJoinStrategy(JoinStrategy):
         )
 
         seq_num = str(ratings_msg.secuence_number)
-        dedup_key = f"{seq_num}-{movie_id_val}"
 
-        if self._seq_monitor.is_duplicate(client_id, dedup_key):
+        if self._seq_monitor.is_duplicate(client_id, seq_num):
             logging.info(
-                f"[RatingsJoinStrategy] Discarding duplicate OTHER message key={dedup_key} client={client_id}"
+                f"[RatingsJoinStrategy] Discarding duplicate OTHER message key={seq_num} client={client_id}"
             )
             return None
 
         if ratings_msg.finished:
-            expected_total = getattr(ratings_msg, "total_to_process", None)
-            processed_total = state.get_processed_count(client_id)
+            processed_total = self._seq_monitor.get_num_unique(client_id)
 
             logging.info(
-                f"[RatingsJoinStrategy] FINISHED received – client={client_id} total_to_process={expected_total} processed={processed_total}"
+                f"[RatingsJoinStrategy] FINISHED received – client={client_id} total_to_process={seq_num} processed={processed_total}"
             )
 
-            if expected_total is not None and expected_total != processed_total:
+            if seq_num is not None and int(seq_num) != processed_total:
                 logging.warning(
-                    f"[RatingsJoinStrategy] Mismatch total_to_process (expected={expected_total}, processed={processed_total}) – requeuing EOF."
+                    f"[RatingsJoinStrategy] Mismatch total_to_process (expected={seq_num}, processed={processed_total}) – requeuing EOF."
                 )
                 raise RequeueException()
+            
 
             state.set_stream_eof(client_id, "other")
             # No clean-up yet – wait until both EOFs arrive.
             return client_id
-
-        if ratings_msg.ratings:
-            state.increment_processed(client_id, len(ratings_msg.ratings))
 
         for rating in ratings_msg.ratings:
             rating_value = float(rating.rating)
@@ -86,7 +82,9 @@ class RatingsJoinStrategy(JoinStrategy):
 
             state.buffer_other(client_id, rating.movieId, rating_value)
 
-        self._seq_monitor.record(client_id, dedup_key)
+        self._seq_monitor.record(client_id, seq_num)
+        if ratings_msg.ratings:
+            state.increment_processed(client_id, len(ratings_msg.ratings))
         self._snapshot_if_needed(client_id)
         return None
 

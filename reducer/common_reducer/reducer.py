@@ -54,6 +54,9 @@ class Reducer:
     def reducer(self, data):
         try:
             msg = self._get_msg(data)
+            
+            self.partial_status.setdefault(str(msg.client_id), {"results": {}, "final_secuence": None})
+            self.batches_seen.setdefault(str(msg.client_id), [])
 
             if self._is_repeated(str(msg.client_id), str(msg.secuence_number)):
                 logging.info(f"Discading a repeated package of secuence number {msg.secuence_number}")
@@ -81,7 +84,6 @@ class Reducer:
             raise e
 
     def _is_repeated(self, client_id, secuence_number):
-        self.batches_seen.setdefault(client_id, [])
         return secuence_number in self.batches_seen[client_id]
 
     def _save_info(self, client_id, secuence_number):
@@ -91,7 +93,6 @@ class Reducer:
         self._state_manager.save_secuence_number_data(secuence_number, client_id)
 
     def _manage_msg(self, data, client_id, secuence_number):
-        self.partial_status.setdefault(client_id, {"results": {}, "final_secuence": None})
         self.partial_status[client_id]['results'] = parse_reduce_funct(data, self.reduce_by, self.partial_status[client_id]['results'])
 
         self._save_info(client_id, secuence_number)

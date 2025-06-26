@@ -35,7 +35,11 @@ def main():
             state_manager,
         )
 
-        joiner_instance = JoinerNode(config, join_strategy, state_manager)
+        state_manager_movies = StatePersistence(
+            config["backup_file"], node_info=f"movies-{node_tag}", serializer="json"
+        )
+
+        joiner_instance = JoinerNode(config, join_strategy, state_manager_movies)
         joiner_instance.start()
 
     except KeyboardInterrupt:
