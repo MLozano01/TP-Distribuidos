@@ -169,7 +169,7 @@ class Transformer:
         if self._validate_movie(incoming_movie):
             processed_movie = self._enrich_movie(incoming_movie)
             # Log successful processing of a movie
-            logging.info(f"Processed Movie ID {processed_movie.id}: Sentiment='{processed_movie.sentiment}', Rate='{processed_movie.rate_revenue_budget:.4f}'")
+            logging.debug(f"Processed Movie ID {processed_movie.id}: Sentiment='{processed_movie.sentiment}', Rate='{processed_movie.rate_revenue_budget:.4f}'")
             return processed_movie
         return None
 
