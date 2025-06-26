@@ -42,12 +42,7 @@ def get_publisher_instance(config):
     if config.get("publish_to_joiners", False):
         publisher_instance = ShardedPublisher(
             protocol=protocol,
-            exchange_snd_ratings=config["exchange_snd_ratings"],
-            exc_snd_type_ratings=config["exc_snd_type_ratings"],
-            exchange_snd_credits=config["exchange_snd_credits"],
-            exc_snd_type_credits=config["exc_snd_type_credits"],
-            q_name_credits=config["queue_snd_name_credits"],
-            q_name_ratings=config["queue_snd_name_ratings"]
+            config=config,
         )
     else:
         publisher_instance = SinglePublisher(

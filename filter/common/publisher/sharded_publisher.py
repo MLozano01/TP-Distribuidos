@@ -1,73 +1,73 @@
 import logging
 from .publisher import Publisher
-from protocol.rabbit_protocol import RabbitMQ
+from protocol.rabbit_protocol import RabbitMQ, get_routing
 
 class ShardedPublisher(Publisher):
-    def __init__(self, protocol, exchange_snd_ratings, exc_snd_type_ratings, exchange_snd_credits, exc_snd_type_credits, q_name_ratings, q_name_credits):
+    def __init__(self, protocol, config):
         self.protocol = protocol
-        self.exchange_snd_ratings = exchange_snd_ratings
-        self.exc_snd_type_ratings = exc_snd_type_ratings
-        self.exchange_snd_credits = exchange_snd_credits
-        self.exc_snd_type_credits = exc_snd_type_credits
-        self.queue_snd_movies_to_ratings_joiner = None
-        self.queue_snd_movies_to_credits_joiner = None
-        self.q_name_ratings = q_name_ratings
-        self.q_name_credits = q_name_credits
+        self.config = config
+        self.queues_snd_movies_to_ratings_joiner = {}
+        self.queues_snd_movies_to_credits_joiner = {}
+
 
     def setup_queues(self):
-        self.queue_snd_movies_to_ratings_joiner = RabbitMQ(self.exchange_snd_ratings, self.q_name_ratings, "", self.exc_snd_type_ratings, joiner=True)
-        self.queue_snd_movies_to_credits_joiner = RabbitMQ(self.exchange_snd_credits, self.q_name_credits, "", self.exc_snd_type_credits, joiner=True)
+        
+        for i in range(1, self.config["ratings_replicas"]+1):
+            self.queues_snd_movies_to_ratings_joiner[f"ratings_{i}"] = RabbitMQ(self.config["exchange_snd_ratings"], f'{self.config["q_name_ratings"]}_{i}', f'{self.config["routing_key_ratings"]}_{i}', self.config["exc_snd_type_ratings"])
+        
+        for i in range(1, self.config["credits_replicas"]+1):
+            self.queues_snd_movies_to_credits_joiner[f"credits_{i}"] = RabbitMQ(self.config["exchange_snd_credits"], f'{self.config["q_name_credits"]}_{i}', f'{self.config["routing_key_credits"]}_{i}', self.config["exc_snd_type_credits"])
         logging.info(f"Initialized sharded sender to ratings joiner and credits joiner")
 
     def publish(self, result_list, client_id, secuence_number):
-        if not self.queue_snd_movies_to_ratings_joiner or not self.queue_snd_movies_to_credits_joiner:
+        if not self.queues_snd_movies_to_ratings_joiner or not self.queues_snd_movies_to_credits_joiner:
             logging.error("Cannot publish by movie_id: One or both sender queues (ratings/credits joiner) are not initialized.")
             return
-
-        exchange_ratings = self.queue_snd_movies_to_ratings_joiner.exchange
-        exchange_credits = self.queue_snd_movies_to_credits_joiner.exchange
         # logging.info(f"Publishing {len(result_list)} filtered messages individually by movie_id to exchanges '{exchange_ratings}' and '{exchange_credits}'.")
 
         movie_batch_bytes = self.protocol.create_movie_list(result_list, client_id, secuence_number)
-        pub_routing_key = str(client_id)
+
 
         # Publish to RATINGS joiner exchange
         try:
-            self.queue_snd_movies_to_ratings_joiner.publish(movie_batch_bytes, routing_key=pub_routing_key)
+            routing_key_ratings = get_routing(self.config["ratings_replicas"], client_id)
+            self.queues_snd_movies_to_ratings_joiner[f"ratings_{routing_key_ratings}"].publish(movie_batch_bytes)
         except Exception as e_pub_r:
-            logging.error(f"Failed to publish movie batch to RATINGS exchange '{exchange_ratings}': {e_pub_r}")
+            logging.error(f"Failed to publish movie batch to RATINGS: {e_pub_r}")
 
         # Publish to CREDITS joiner exchange
         try:
-            self.queue_snd_movies_to_credits_joiner.publish(movie_batch_bytes, routing_key=pub_routing_key)
+            routing_key_credits = get_routing(self.config["credits_replicas"], client_id)
+            self.queues_snd_movies_to_credits_joiner[f"credits_{routing_key_credits}"].publish(movie_batch_bytes)
         except Exception as e_pub_c:
-            logging.error(f"Failed to publish movie batch to CREDITS exchange '{exchange_credits}': {e_pub_c}")
+            logging.error(f"Failed to publish movie batch to CREDITS exchange: {e_pub_c}")
         
         logging.info(f"Finished publishing messages to both exchanges.")
 
     def publish_finished_signal(self, msg):
         msg_to_send = msg.SerializeToString()
-        pub_routing_key = str(msg.client_id)
 
         # Publish finished signal to RATINGS joiner
-        self.queue_snd_movies_to_ratings_joiner.publish(msg_to_send, pub_routing_key)
+        routing_key_ratings = get_routing(self.config["ratings_replicas"], msg.client_id)
+        self.queues_snd_movies_to_ratings_joiner[f"ratings_{routing_key_ratings}"].publish(msg_to_send)
 
         # Publish finished signal to CREDITS joiner
-        self.queue_snd_movies_to_credits_joiner.publish(msg_to_send, pub_routing_key)
+        routing_key_credits = get_routing(self.config["credits_replicas"], msg.client_id)
+        self.queues_snd_movies_to_credits_joiner[f"credits_{routing_key_credits}"].publish(msg_to_send)
 
         logging.info(
-            f"Published movie finished signal for client {msg.client_id} to both joiners with routing_key={pub_routing_key}."
+            f"Published movie finished signal for client {msg.client_id} to both joiners with routing_key_ratings={routing_key_ratings} and routing_key_credits={routing_key_credits}."
         )
 
     def close(self):
-        if self.queue_snd_movies_to_ratings_joiner:
+        if self.queues_snd_movies_to_ratings_joiner:
             try:
-                self.queue_snd_movies_to_ratings_joiner.close_channel()
+                self.queues_snd_movies_to_ratings_joiner.close_channel()
             except Exception as e:
                 logging.error(f"Error closing ratings sender channel: {e}")
 
-        if self.queue_snd_movies_to_credits_joiner:
+        if self.queues_snd_movies_to_credits_joiner:
             try:
-                self.queue_snd_movies_to_credits_joiner.close_channel()
+                self.queuessnd_movies_to_credits_joiner.close_channel()
             except Exception as e:
                 logging.error(f"Error closing credits sender channel: {e}") 
