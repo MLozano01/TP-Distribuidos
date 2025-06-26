@@ -61,3 +61,7 @@ chaos-monkey:
 chaos-bomb:
 	./chaos-monkey.sh BOMB
 .PHONY: chaos-bomb
+
+client-loop:
+	./client-test.sh
+.PHONY: chaos-bomb
