@@ -2,7 +2,7 @@ import logging
 import signal
 from protocol import files_pb2
 from protocol.protocol import Protocol, FileType
-from protocol.rabbit_protocol import RabbitMQ
+from protocol.rabbit_protocol import RabbitMQ, get_routing
 from protocol.utils.parsing_proto_utils import is_date
 from .aux import filter_movies, filter_ratings, filter_credits
 from queue import Empty
@@ -20,7 +20,7 @@ class DataController:
         self.is_alive = True
         self.protocol = Protocol()
         self.work_consumer = None
-        self.send_queues = []
+        self.send_queues = {}
         self.replica_id = kwargs.get('replica_id', 'unknown')
 
         # Set attributes from kwargs
@@ -44,14 +44,18 @@ class DataController:
         logging.info("Queues up, ready to use")
 
     def _settle_send_queues(self):
-        if len(self.names) == 0:
-            self.send_queues.append(RabbitMQ(self.exchange_snd, self.queue_snd_name, self.routing_snd_key, self.exc_snd_type, joiner=True))
-            return
+        if self.is_joiner:
+            for i in range(1, int(self.j_replicas)+1):
+                queue = RabbitMQ(f"{self.exchange_snd}", f"{self.queue_snd_name}_{i}", f"{self.routing_snd_key}_{i}", self.exc_snd_type)
+                logging.info(f"Exchange: {self.exchange_snd}_{i}, Q name: {self.queue_snd_name}_{i}, Routing Key: {self.routing_snd_key}_{i}")
+                self.send_queues[f"{self.names[0]}_{i}"] = queue
 
-        for name in self.names:
-            queue = RabbitMQ(f"{self.exchange_snd}_{name}", f"{self.queue_snd_name}_{name}", f"{self.routing_snd_key}_{name}", self.exc_snd_type)
-            logging.info(f"Exchange: {self.exchange_snd}_{name}, Q name: {self.queue_snd_name}_{name}, Routing Key: {self.routing_snd_key}_{name}")
-            self.send_queues.append(queue)
+                logging.info(f"{self.names[0]}_{i}")
+        else:
+            for name in self.names:
+                queue = RabbitMQ(f"{self.exchange_snd}_{name}", f"{self.queue_snd_name}_{name}", f"{self.routing_snd_key}_{name}", self.exc_snd_type)
+                logging.info(f"Exchange: {self.exchange_snd}_{name}, Q name: {self.queue_snd_name}_{name}, Routing Key: {self.routing_snd_key}_{name}")
+                self.send_queues[name] = queue
 
 
     def run(self):
@@ -78,15 +82,14 @@ class DataController:
         logging.info(f"Propagating finished {message_type} of client {msg.client_id} downstream")
         msg_to_send = msg.SerializeToString()
         if message_type == FileType.MOVIES:
-            for queue in self.send_queues:
+            for _, queue in self.send_queues.items():
                 queue.publish(msg_to_send)
         elif message_type == FileType.RATINGS or message_type == FileType.CREDITS:
-            for queue in self.send_queues:
-                queue.publish(msg_to_send, str(msg.client_id))
-
+            queue = get_routing(self.j_replicas, msg.client_id)
+            self.send_queues[f"{self.names[0]}_{queue}"].publish(msg_to_send)
 
     def _handle_data_message(self, message_type, msg):
-        # logging.info(f"got message of type: {message_type}")
+        logging.info(f"got message of type: {message_type}")
         if message_type == FileType.MOVIES:
             self.publish_movies(msg)
         elif message_type == FileType.RATINGS:
@@ -97,18 +100,18 @@ class DataController:
     def publish_movies(self, movies_csv):
         movies_pb = filter_movies(movies_csv)
         if movies_pb:
-            for queue in self.send_queues:
+            for _, queue in self.send_queues.items():
                 queue.publish(movies_pb.SerializeToString())
 
     def publish_ratings(self, ratings_csv):
         ratings_batch = filter_ratings(ratings_csv)
-        for queue in self.send_queues:
-            queue.publish(ratings_batch.SerializeToString(), routing_key=str(ratings_batch.client_id))
+        queue = get_routing(self.j_replicas, ratings_batch.client_id)
+        self.send_queues[f"ratings_{queue}"].publish(ratings_batch.SerializeToString())
 
     def publish_credits(self, credits_csv):
         credits_batch = filter_credits(credits_csv)
-        for queue in self.send_queues:
-            queue.publish(credits_batch.SerializeToString(), routing_key=str(credits_batch.client_id))
+        queue = get_routing(self.j_replicas, credits_batch.client_id)
+        self.send_queues[f"credits_{queue}"].publish(credits_batch.SerializeToString())
 
     def stop(self):
         """Stop the DataController and close all connections"""

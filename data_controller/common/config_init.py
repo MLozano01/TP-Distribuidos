@@ -29,18 +29,21 @@ def initialize_config():
         config_params["exchange_rcv"] = os.getenv('EXCHANGE_RCV', config["RABBITMQ"]["EXCHANGE_RCV"])
         config_params["exc_rcv_type"] = os.getenv('TYPE_RCV', config["RABBITMQ"]["TYPE_RCV"])
 
+        config_params["is_joiner"] = int(os.getenv('IS_JOINER', config["RABBITMQ"]["IS_JOINER"]))
+
         # Output configuration
         config_params["exchange_snd"] = os.getenv('EXCHANGE_SND', config["RABBITMQ"]["EXCHANGE_SND"])
         config_params["exc_snd_type"] = os.getenv('TYPE_SND', config["RABBITMQ"]["TYPE_SND"])
         config_params["queue_snd_name"] = os.getenv('QUEUE_SND_NAME', config["RABBITMQ"]["QUEUE_SND_NAME"])
-        if config_params["exc_snd_type"] == "direct":
-            config_params["routing_snd_key"] = os.getenv('ROUTING_KEY_SND', config["RABBITMQ"]["ROUTING_KEY_SND"])
-            config_params["names"] = os.getenv('NAMES', config["RABBITMQ"]["NAMES"]).split(",")
-        else:
-        #     config_params["queue_snd_name"] = ""
-            config_params["routing_snd_key"] = ""
-            config_params["names"] = []
+        config_params["routing_snd_key"] = os.getenv('ROUTING_KEY_SND', config["RABBITMQ"]["ROUTING_KEY_SND"])
         
+        config_params["names"] = os.getenv('NAMES', config["RABBITMQ"]["NAMES"]).split(",")
+
+        if config_params["names"][0] == "credits": 
+            config_params["j_replicas"] = int(os.getenv('J_CREDITS_REPLICAS'))
+        elif config_params["names"][0] == "ratings": 
+            config_params["j_replicas"] = int(os.getenv('J_RATINGS_REPLICAS'))
+
         # Inter replica communication configuration
         env_id = os.getenv('DATA_CONTROLLER_REPLICA_ID')
         config_params["replica_id"] = env_id if env_id else "unknown"

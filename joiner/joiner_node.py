@@ -9,6 +9,9 @@ from state.joiner_state import JoinerState
 from common.requeue import RequeueException
 from common.sequence_number_monitor import SequenceNumberMonitor
 
+logging.getLogger("pika").setLevel(logging.ERROR)   
+logging.getLogger("RabbitMQ").setLevel(logging.DEBUG)
+
 class JoinerNode:
     def __init__(self, config, join_strategy, state_manager):
         self.config = config
@@ -95,8 +98,8 @@ class JoinerNode:
                 consumer = RabbitMQ(
                     exchange=self.config['exchange_movies'],
                     q_name=self.config['queue_movies_name'],
-                    key="1",
-                    exc_type='x-consistent-hash',
+                    key=self.config["routing_key"],
+                    exc_type='direct',
                     prefetch_count=100
                 )
                 consumer.consume(self._process_movie_message, stop_event=self._stop_event)
@@ -114,8 +117,8 @@ class JoinerNode:
                 consumer = RabbitMQ(
                     exchange=self.config['exchange_other'],
                     q_name=self.config['queue_other_name'],
-                    key="1",
-                    exc_type='x-consistent-hash',
+                    key=self.config["routing_key"],
+                    exc_type='direct',
                     prefetch_count=100
                 )
                 consumer.consume(self._process_other_message, stop_event=self._stop_event)

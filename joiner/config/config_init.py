@@ -50,6 +50,8 @@ def initialize_config():
     replica_id = config_params["replica_id"]
     config_params["queue_movies_name"] = f"{config_params['queue_movies_base']}{replica_id}"
     config_params["queue_other_name"] = f"{config_params['queue_other_base']}{replica_id}"
+    routing_key_base = os.getenv('ROUTING_KEY_BASE', config["RABBITMQ"]["ROUTING_KEY_BASE"])
+    config_params["routing_key"] = f"routing_{routing_key_base}_{replica_id}"
     
     logging.info(f"Joiner Config Initialized. Replica ID: {config_params['replica_id']}")
     return config_params 

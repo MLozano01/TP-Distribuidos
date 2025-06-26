@@ -5,15 +5,18 @@ import threading
 
 rabbit_logger = logging.getLogger("RabbitMQ")
 
+
+def get_routing(replicas_count, key):
+    return key % replicas_count + 1
+
 class RabbitMQ:
-    def __init__(self, exchange, q_name, key, exc_type, auto_ack=False, prefetch_count=None, joiner=False):
+    def __init__(self, exchange, q_name, key, exc_type, auto_ack=False, prefetch_count=None):
         self.exchange = exchange
         self.q_name = q_name
         self.key = key
         self.exc_type = exc_type
         self.auto_ack = auto_ack
         self.prefetch_count = prefetch_count
-        self.joiner = joiner
         self.connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq', heartbeat=500))
         self.channel = self.create_channel()
         self.callback_func = None
@@ -27,10 +30,9 @@ class RabbitMQ:
             channel.basic_qos(prefetch_count=1)
             channel.exchange_declare(exchange=self.exchange, exchange_type=self.exc_type, durable=True)
 
-            if not self.joiner:
-                res = channel.queue_declare(queue=self.q_name, durable=True)
-                q_name = res.method.queue
-                channel.queue_bind(exchange=self.exchange, queue=q_name, routing_key=self.key)
+            res = channel.queue_declare(queue=self.q_name, durable=True)
+            q_name = res.method.queue
+            channel.queue_bind(exchange=self.exchange, queue=q_name, routing_key=self.key)
 
             rabbit_logger.debug(f"Channel created with exchange {self.exchange} of type {self.exc_type}")
 
@@ -51,9 +53,6 @@ class RabbitMQ:
         try:
             key_to_use = routing_key if routing_key is not None else self.key
             
-            # if self.joiner:
-            #     self.channel.queue_bind(exchange=self.exchange, queue=self.q_name, routing_key=int(key_to_use))
-            
             self.channel.basic_publish(exchange=self.exchange,
                                 routing_key=key_to_use,
                                 body=message,
@@ -71,13 +70,7 @@ class RabbitMQ:
         """The callback function is defined by the different nodes."""
 
         try:
-            key_to_use = routing_key if routing_key is not None else self.key
-
-            if self.joiner:
-                res = self.channel.queue_declare(queue=self.q_name, durable=True)
-                q_name = res.method.queue
-                self.channel.queue_bind(exchange=self.exchange, queue=q_name, routing_key=key_to_use)
-                # self.channel.queue_bind(exchange=self.exchange, queue=self.q_name, routing_key=int(key_to_use))
+            # key_to_use = routing_key if routing_key is not None else self.key
 
             if self.prefetch_count is not None:
                 self.channel.basic_qos(prefetch_count=self.prefetch_count)

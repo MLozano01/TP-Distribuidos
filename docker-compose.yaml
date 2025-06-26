@@ -33,9 +33,9 @@ services:
         condition: service_started
     volumes:
       - ./client/config.ini:/config.ini
-      - ./data/credits.csv:/credits.csv
-      - ./data/ratings_small.csv:/ratings.csv
-      - ./data/movies_metadata.csv:/movies_metadata.csv
+      - ./data/credits_demo.csv:/credits.csv
+      - ./data/ratings_demo.csv:/ratings.csv
+      - ./data/movies_metadata_demo.csv:/movies_metadata.csv
       - ./data/results_client1.json:/results.json
     
   client2:
@@ -51,71 +51,17 @@ services:
         condition: service_started
     volumes:
       - ./client/config.ini:/config.ini
-      - ./data/credits.csv:/credits.csv
-      - ./data/ratings_small.csv:/ratings.csv
-      - ./data/movies_metadata.csv:/movies_metadata.csv
+      - ./data/credits_demo.csv:/credits.csv
+      - ./data/ratings_demo.csv:/ratings.csv
+      - ./data/movies_metadata_demo.csv:/movies_metadata.csv
       - ./data/results_client2.json:/results.json
-    
-  client3:
-    container_name: client3
-    image: client:latest
-    profiles: [clients]
-    environment:
-      - CLI_ID=3
-    networks:
-      - tp_network
-    depends_on:
-      server:
-        condition: service_started
-    volumes:
-      - ./client/config.ini:/config.ini
-      - ./data/credits.csv:/credits.csv
-      - ./data/ratings_small.csv:/ratings.csv
-      - ./data/movies_metadata.csv:/movies_metadata.csv
-      - ./data/results_client3.json:/results.json
-    
-  client4:
-    container_name: client4
-    image: client:latest
-    profiles: [clients]
-    environment:
-      - CLI_ID=4
-    networks:
-      - tp_network
-    depends_on:
-      server:
-        condition: service_started
-    volumes:
-      - ./client/config.ini:/config.ini
-      - ./data/credits.csv:/credits.csv
-      - ./data/ratings_small.csv:/ratings.csv
-      - ./data/movies_metadata.csv:/movies_metadata.csv
-      - ./data/results_client4.json:/results.json
-    
-  client5:
-    container_name: client5
-    image: client:latest
-    profiles: [clients]
-    environment:
-      - CLI_ID=5
-    networks:
-      - tp_network
-    depends_on:
-      server:
-        condition: service_started
-    volumes:
-      - ./client/config.ini:/config.ini
-      - ./data/credits.csv:/credits.csv
-      - ./data/ratings_small.csv:/ratings.csv
-      - ./data/movies_metadata.csv:/movies_metadata.csv
-      - ./data/results_client5.json:/results.json
     
   server:
     container_name: server
     image: server:latest
     entrypoint: python3 /main.py
     environment:
-      - NUM_CLIENTS=5
+      - NUM_CLIENTS=2
     networks:
       - tp_network
     depends_on:
@@ -145,6 +91,8 @@ services:
     environment:
       - FILTER_REPLICA_ID=1
       - FILTER_REPLICA_COUNT=2
+      - J_RATINGS_REPLICAS=2
+      - J_CREDITS_REPLICAS=2
     
   filter-2000-movies-2:
     container_name: filter-2000-movies-2
@@ -162,6 +110,8 @@ services:
     environment:
       - FILTER_REPLICA_ID=2
       - FILTER_REPLICA_COUNT=2
+      - J_RATINGS_REPLICAS=2
+      - J_CREDITS_REPLICAS=2
     
   filter-arg-spa-movies-1:
     container_name: filter-arg-spa-movies-1
@@ -179,6 +129,8 @@ services:
     environment:
       - FILTER_REPLICA_ID=1
       - FILTER_REPLICA_COUNT=1
+      - J_RATINGS_REPLICAS=2
+      - J_CREDITS_REPLICAS=2
     
   filter-arg-movies-1:
     container_name: filter-arg-movies-1
@@ -196,6 +148,8 @@ services:
     environment:
       - FILTER_REPLICA_ID=1
       - FILTER_REPLICA_COUNT=1
+      - J_RATINGS_REPLICAS=2
+      - J_CREDITS_REPLICAS=2
     
   filter-single-country-movies-1:
     container_name: filter-single-country-movies-1
@@ -213,6 +167,8 @@ services:
     environment:
       - FILTER_REPLICA_ID=1
       - FILTER_REPLICA_COUNT=1
+      - J_RATINGS_REPLICAS=2
+      - J_CREDITS_REPLICAS=2
     
   filter-decade-movies-1:
     container_name: filter-decade-movies-1
@@ -230,6 +186,8 @@ services:
     environment:
       - FILTER_REPLICA_ID=1
       - FILTER_REPLICA_COUNT=1
+      - J_RATINGS_REPLICAS=2
+      - J_CREDITS_REPLICAS=2
     
   
   data-controller-movies-1:
@@ -249,6 +207,8 @@ services:
       - PYTHONUNBUFFERED=1
       - DATA_CONTROLLER_REPLICA_ID=1
       - DATA_CONTROLLER_REPLICA_COUNT=2
+      - J_RATINGS_REPLICAS=2
+      - J_CREDITS_REPLICAS=2
     
   data-controller-movies-2:
     container_name: data-controller-movies-2
@@ -267,6 +227,8 @@ services:
       - PYTHONUNBUFFERED=1
       - DATA_CONTROLLER_REPLICA_ID=2
       - DATA_CONTROLLER_REPLICA_COUNT=2
+      - J_RATINGS_REPLICAS=2
+      - J_CREDITS_REPLICAS=2
     
   data-controller-ratings-1:
     container_name: data-controller-ratings-1
@@ -285,6 +247,8 @@ services:
       - PYTHONUNBUFFERED=1
       - DATA_CONTROLLER_REPLICA_ID=1
       - DATA_CONTROLLER_REPLICA_COUNT=3
+      - J_RATINGS_REPLICAS=2
+      - J_CREDITS_REPLICAS=2
     
   data-controller-ratings-2:
     container_name: data-controller-ratings-2
@@ -303,6 +267,8 @@ services:
       - PYTHONUNBUFFERED=1
       - DATA_CONTROLLER_REPLICA_ID=2
       - DATA_CONTROLLER_REPLICA_COUNT=3
+      - J_RATINGS_REPLICAS=2
+      - J_CREDITS_REPLICAS=2
     
   data-controller-ratings-3:
     container_name: data-controller-ratings-3
@@ -321,6 +287,8 @@ services:
       - PYTHONUNBUFFERED=1
       - DATA_CONTROLLER_REPLICA_ID=3
       - DATA_CONTROLLER_REPLICA_COUNT=3
+      - J_RATINGS_REPLICAS=2
+      - J_CREDITS_REPLICAS=2
     
   data-controller-credits-1:
     container_name: data-controller-credits-1
@@ -339,6 +307,8 @@ services:
       - PYTHONUNBUFFERED=1
       - DATA_CONTROLLER_REPLICA_ID=1
       - DATA_CONTROLLER_REPLICA_COUNT=1
+      - J_RATINGS_REPLICAS=2
+      - J_CREDITS_REPLICAS=2
     
   
   transformer-1:

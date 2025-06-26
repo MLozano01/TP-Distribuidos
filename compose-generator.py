@@ -51,11 +51,11 @@ def create_yaml_file(replicas, datasets, config_files):
     server = create_server(replicas['client_amount'])
     network = create_network()
     rabbit = create_rabbit()
-    filters = write_filters(replicas, config_files)
+    filters = write_filters(replicas, config_files, replicas['joiner-ratings'], replicas['joiner-credits'])
     transformer = create_transformers(replicas['transformer'])
     aggregator = create_aggregators(replicas, config_files)
     reducer = create_reducers()
-    data_controller_services = write_data_controllers(replicas, config_files)
+    data_controller_services = write_data_controllers(replicas, config_files, replicas['joiner-ratings'], replicas['joiner-credits'])
     
     # Loop to create multiple joiner services
     joiner_ratings_services = ""
@@ -172,18 +172,18 @@ def create_rabbit():
     """
     return rabbit
 
-def write_filters(replicas, config_files):
+def write_filters(replicas, config_files, j_ratings_replicas, j_credits_replicas):
 
     filters = ""
     filter_names = ["filter-2000-movies", "filter-arg-spa-movies", "filter-arg-movies", "filter-single-country-movies", "filter-decade-movies"]
 
     for filter in filter_names:
         for i in range(1, replicas[filter] + 1):
-            filters += create_filter(filter, i, config_files[filter], replicas[filter])
+            filters += create_filter(filter, i, config_files[filter], replicas[filter], j_ratings_replicas, j_credits_replicas)
     
     return filters
 
-def create_filter(filter_name, filter_replica, filter_path, replica_count):
+def create_filter(filter_name, filter_replica, filter_path, replica_count, j_ratings_replicas, j_credits_replicas):
 
     filter_name = f"{filter_name}-{filter_replica}"
 
@@ -204,6 +204,8 @@ def create_filter(filter_name, filter_replica, filter_path, replica_count):
     environment:
       - FILTER_REPLICA_ID={filter_replica}
       - FILTER_REPLICA_COUNT={replica_count}
+      - J_RATINGS_REPLICAS={j_ratings_replicas}
+      - J_CREDITS_REPLICAS={j_credits_replicas}
     """
     return filter_cont
 
@@ -338,17 +340,17 @@ def create_joiner(service_base_name, replica_id, total_replicas, config_source_p
     return joiner_yaml
 
 
-def write_data_controllers(replicas, config_files):
+def write_data_controllers(replicas, config_files, j_ratings_replicas, j_credits_replicas):
     data_controllers = ""
 
     dc_names = ["data-controller-movies", "data-controller-ratings", "data-controller-credits"]
     for data_controller in dc_names:
         for i in range(1, replicas[data_controller] + 1):
-            data_controllers += create_data_controller(data_controller, i, replicas[data_controller], config_files[data_controller])
+            data_controllers += create_data_controller(data_controller, i, replicas[data_controller], config_files[data_controller], j_ratings_replicas, j_credits_replicas)
     
     return data_controllers
 
-def create_data_controller(replica_name, replica_id, total_replicas, config_file):
+def create_data_controller(replica_name, replica_id, total_replicas, config_file, j_ratings_replicas, j_credits_replicas):
     """Creates a unique data controller service definition for docker compose up."""
     service_name = f"{replica_name}-{replica_id}"
     container_name = service_name
@@ -371,6 +373,8 @@ def create_data_controller(replica_name, replica_id, total_replicas, config_file
       - PYTHONUNBUFFERED=1
       - DATA_CONTROLLER_REPLICA_ID={replica_id}
       - DATA_CONTROLLER_REPLICA_COUNT={total_replicas}
+      - J_RATINGS_REPLICAS={j_ratings_replicas}
+      - J_CREDITS_REPLICAS={j_credits_replicas}
     """
     return data_controller_yaml
 
