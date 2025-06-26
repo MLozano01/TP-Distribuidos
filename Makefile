@@ -30,7 +30,6 @@ docker-compose-up: docker-image
 .PHONY: docker-compose-up
 
 docker-compose-up-system: docker-image
-	./clean-backup.sh
 	docker compose -f docker-compose.yaml up --build -d
 .PHONY: docker-compose-up-system
 
@@ -56,10 +55,12 @@ docker-compose-logs:
 .PHONY: docker-compose-logs
 
 chaos-monkey:
+	chmod +x chaos-monkey.sh
 	./chaos-monkey.sh CHAOS
 .PHONY: chaos-monkey
 
 chaos-bomb:
+	chmod +x chaos-monkey.sh
 	./chaos-monkey.sh BOMB
 .PHONY: chaos-bomb
 

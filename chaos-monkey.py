@@ -44,26 +44,26 @@ def main():
 						'data-controller-', 
 						'healthchecker-', 
 						'reducer-']
-	
+
 	logging.info(f"Running in mode {mode}")
 	if mode == "CHAOS":
 		while True:
 			possible_names = create_possible_names(name_prefix)
 			container = random.choice(possible_names)
 
-			result = subprocess.run(['docker', 'stop', container], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-			logging.info(f'Command executed. Stopped "{container}". Result={result.returncode}.')
-			
+			result = subprocess.run(['docker', 'kill', container], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+			logging.info(f'Command executed. Killed "{container}". Result={result.returncode}.')
+
 			time.sleep(SLEEP_SECONDS)
-			
+	
 	else:
 		possible_names = create_possible_names(name_prefix)
-		command = ['docker', 'stop'] + possible_names
+		command = ['docker', 'kill'] + possible_names
 		
 		result = subprocess.run(command, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-		logging.info(f'Command executed. Stopped containers "{possible_names}". Result={result.returncode}.')
-			
-			
+		logging.info(f'Command executed. Killed containers "{possible_names}". Result={result.returncode}.')
+
+
 
 if __name__ == '__main__':
     main()

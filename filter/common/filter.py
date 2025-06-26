@@ -13,6 +13,9 @@ logging.getLogger("RabbitMQ").setLevel(logging.ERROR)
 START = False
 DONE = True
 
+# import time
+
+from common.requeue import RequeueException
 class Filter:
     def __init__(self, publisher: Publisher, **kwargs):
         self.protocol = Protocol()
@@ -67,11 +70,13 @@ class Filter:
     def filter(self, decoded_msg):
         try:
             result = parse_filter_funct(decoded_msg, self.filter_by)
+            # logging.info("Sleeping for 5")
+            # time.sleep(5)
+            # logging.info("Woke up")
             self.publisher.publish(result, decoded_msg.client_id, decoded_msg.secuence_number)
         except Exception as e:
             logging.error(f"Error processing message: {e}")
-            # Do a raise for nack ? 
-            return
+            raise RequeueException()
 
     def _close_publishers(self):
         """Close publish channels of the filter."""
