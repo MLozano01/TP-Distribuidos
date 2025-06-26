@@ -34,6 +34,7 @@ class ShardedPublisher(Publisher):
             self.queues_snd_movies_to_ratings_joiner[f"ratings_{routing_key_ratings}"].publish(movie_batch_bytes)
         except Exception as e_pub_r:
             logging.error(f"Failed to publish movie batch to RATINGS: {e_pub_r}")
+            raise
 
         # Publish to CREDITS joiner exchange
         try:
@@ -41,6 +42,7 @@ class ShardedPublisher(Publisher):
             self.queues_snd_movies_to_credits_joiner[f"credits_{routing_key_credits}"].publish(movie_batch_bytes)
         except Exception as e_pub_c:
             logging.error(f"Failed to publish movie batch to CREDITS exchange: {e_pub_c}")
+            raise
         
         logging.info(f"Finished publishing messages to both exchanges.")
 
