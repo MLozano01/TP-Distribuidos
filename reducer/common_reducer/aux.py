@@ -140,7 +140,7 @@ def calculate_top(partial_results, count):
 
     key = options[count]
 
-    sorted_items = sorted(partial_results.items(), key=operator.itemgetter(1), reverse=True)
+    sorted_items = sorted(partial_results.items(), key=lambda kv: (-kv[1], kv[0]))
     top= dict(sorted_items[:count]) 
     logging.debug(f"[parse_final_result] top_{count}_{key}: {top}")
     
