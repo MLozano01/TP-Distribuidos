@@ -44,7 +44,7 @@ class CreditsJoinStrategy(JoinStrategy):
                 f"[RatingsJoinStrategy] FINISHED received – client={client_id} total_to_process={seq} processed={processed_total}"
             )
 
-            if seq is not None and int(seq) != processed_total:
+            if not credits_msg.force_finish and seq is not None and int(seq) != processed_total:
                 logging.warning(
                     f"[RatingsJoinStrategy] Mismatch total_to_process (expected={seq}, processed={processed_total}) – requeuing EOF."
                 )

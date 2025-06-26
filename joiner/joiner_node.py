@@ -177,6 +177,9 @@ class JoinerNode:
                 return None
 
             if movies_msg.finished:
+                if movies_msg.force_finish:
+                    logging.info(f"Received force finish for client {client_id}")
+                    self.handle_eof(client_id)
                 self._handle_movie_eof(client_id, int(movies_msg.secuence_number))
             else:
                 self._handle_movie_batch(client_id, movies_msg.movies)
@@ -244,6 +247,9 @@ class JoinerNode:
             )
             raise RequeueException()
 
+        self.handle_eof(client_id)
+    
+    def handle_eof(self, client_id: str):
         self.state.set_stream_eof(client_id, "movies")
         self.join_strategy.handle_movie_eof(client_id, self.state)
         self._check_and_handle_client_finished(client_id)

@@ -94,11 +94,11 @@ class Client:
       try:
         closed_socket = recvall(self.client_socket, buffer, read_amount)
         if closed_socket:
-          return
+          break
         read_amount = protocol.define_buffer_size(buffer)
         closed_socket = recvall(self.client_socket, buffer, read_amount)
         if closed_socket:
-          return
+          break
       except socket.error as err:
         logging.info(f"A socket error occurred: {err}")
         self.continue_running = False

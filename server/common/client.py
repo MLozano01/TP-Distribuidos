@@ -24,7 +24,7 @@ class Client:
 
         self.stop_event = Event()
         self.results_received = set()
-        self.results_query1 = set()
+        # self.results_query1 = set()
         self.total_expected = 5
         self.eof_sent = 0
         self.config = config
@@ -163,17 +163,6 @@ class Client:
                 #duplicated result, ignore
                 logging.info(f"Duplicated result for query {result.query_id}")
                 return
-            elif result.query_id == 1:
-                if result.final:
-                    self.results_received.add(result.query_id)
-                elif result.result_row[0].title in self.results_query1:
-                    #duplicated result, ignore
-                    logging.info(f"Duplicated result for query {result.query_id}")
-                    return
-                else:
-                    titles = [result.title for result in result.result_row]
-                    self.results_query1.update(titles)
-                    logging.info(f"Updating query1 results for client {result.client_id}")
             else:
                 self.results_received.add(result.query_id)
 
