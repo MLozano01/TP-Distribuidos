@@ -16,14 +16,19 @@ class SequenceNumberMonitor:
     """
 
     def __init__(self, state_manager: StatePersistence) -> None:
-        self._state_manager = state_manager
-        backup = state_manager.load_saved_secuence_number_data()
-        # Use sets for O(1) membership checks.
-        logging.info(f"Loaded Backup {backup}")
-        self._batches_seen: Dict[str, Set[str]] = {
-            cid: set(seq_list) for cid, seq_list in backup.items()
-        }
         self._lock = threading.Lock()
+        self._state_manager = state_manager
+        self._batches_seen = {}
+        self.intizalize()
+
+    def intizalize(self):
+        with self._lock:
+            backup = self._state_manager.load_saved_secuence_number_data()
+            logging.info(f"Loaded Backup {backup}")
+            self._batches_seen = {
+            cid: set(seq_list) for cid, seq_list in backup.items()
+            }
+            logging.info(f"Loaded _batches_seen {self._batches_seen}")
 
     # ------------------------------------------------------------------
     # Public API
@@ -31,15 +36,17 @@ class SequenceNumberMonitor:
     def is_duplicate(self, client_id: str, seq_num: str) -> bool:
         """Return ``True`` iff *seq_num* was already recorded for *client_id*."""
         with self._lock:
-            return seq_num in self._batches_seen.get(client_id, set())
+            logging.info(f"Checking _batches_seen from credits consumer: {self._batches_seen}")
+            return str(seq_num) in self._batches_seen.get(client_id, set())
         
     def get_num_unique(self, client_id):
-        return len(self._batches_seen.get(client_id, set()))
+        with self._lock:
+            return len(self._batches_seen.get(client_id, set()))
 
     def record(self, client_id: str, seq_num: str) -> None:
         """Persist *seq_num* for *client_id* (in-memory **and** on disk)."""
         with self._lock:
-            self._batches_seen.setdefault(client_id, set()).add(seq_num)
+            self._batches_seen.setdefault(client_id, set()).add(str(seq_num))
             try:
                 self._state_manager.save_secuence_number_data(seq_num, client_id)
             except Exception as exc:

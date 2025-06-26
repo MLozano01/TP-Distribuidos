@@ -50,13 +50,11 @@ class CreditsJoinStrategy(JoinStrategy):
                 )
                 raise RequeueException()
 
+
             state.set_stream_eof(client_id, "other")
             return client_id
 
         # Data path -------------------------------------------------------
-        if credits_msg.credits:
-            state.increment_processed(client_id, len(credits_msg.credits))
-
         for credit in credits_msg.credits:
             actor_names = [cm.name.strip() for cm in credit.cast if cm.name.strip() not in {"\\N", "NULL", "null", "N/A", "-"}]
 

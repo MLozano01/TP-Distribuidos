@@ -112,6 +112,7 @@ class Client:
             is_eof, file_type = self.protocol.get_file_type(message)
             if is_eof:
                 self.eof_sent+=1
+                logging.info(f"Sent finished for client: {self.client_id}, data type: {file_type}")
 
             # Count rows in ratings/credits batches
             if file_type in ("ratings", "credits") and not self.protocol.is_end_file(message):

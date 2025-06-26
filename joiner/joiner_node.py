@@ -14,6 +14,7 @@ logging.getLogger("RabbitMQ").setLevel(logging.DEBUG)
 
 class JoinerNode:
     def __init__(self, config, join_strategy, state_manager):
+        self._seq_monitor = SequenceNumberMonitor(state_manager)
         self.config = config
         self.replica_id = self.config['replica_id']
         self.join_strategy = join_strategy
@@ -35,7 +36,6 @@ class JoinerNode:
         self._stop_event = threading.Event()
         self._threads = []
         self._hc_sckt = None
-        self._seq_monitor = SequenceNumberMonitor(state_manager)
 
     def start(self):
         self._setup_signal_handlers()
@@ -179,7 +179,6 @@ class JoinerNode:
             if movies_msg.finished:
                 self._handle_movie_eof(client_id, int(movies_msg.secuence_number))
             else:
-                self.state.increment_movies_seen(client_id)
                 self._handle_movie_batch(client_id, movies_msg.movies)
                 self._seq_monitor.record(client_id, seq)
 
@@ -227,6 +226,7 @@ class JoinerNode:
             )
         finally:
             # Always cleanup local buffers to avoid leaks.
+            self._seq_monitor.clear_client(client_id)
             self.state.remove_client_data(client_id)
 
     def _should_requeue(self) -> bool:
@@ -236,7 +236,7 @@ class JoinerNode:
     def _handle_movie_eof(self, client_id: str, expected_total: int) -> None:
         """Handle EOF for movies stream of *client_id*."""
         logging.info("[Node] Movie EOF received for client %s.", client_id)
-        processed_total = self.state.get_movies_count(client_id)
+        processed_total = self._seq_monitor.get_num_unique(client_id)
 
         if expected_total is not None and expected_total != processed_total:
             logging.warning(

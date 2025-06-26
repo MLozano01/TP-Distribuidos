@@ -89,7 +89,7 @@ class DataController:
             self.send_queues[f"{self.names[0]}_{queue}"].publish(msg_to_send)
 
     def _handle_data_message(self, message_type, msg):
-        logging.info(f"got message of type: {message_type}")
+        logging.debug(f"got message of type: {message_type}")
         if message_type == FileType.MOVIES:
             self.publish_movies(msg)
         elif message_type == FileType.RATINGS:

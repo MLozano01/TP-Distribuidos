@@ -55,7 +55,7 @@ class RatingsJoinStrategy(JoinStrategy):
 
             if seq_num is not None and int(seq_num) != processed_total:
                 logging.warning(
-                    f"[RatingsJoinStrategy] Mismatch total_to_process (expected={seq_num}, processed={processed_total}) – requeuing EOF."
+                    f"[RatingsJoinStrategy] Mismatch total_to_process (client={client_id} expected={seq_num}, processed={processed_total}) – requeuing EOF."
                 )
                 raise RequeueException()
             
