@@ -69,6 +69,7 @@ class RatingsJoinStrategy(JoinStrategy):
 
             state.buffer_other(client_id, rating.movieId, rating_value)
 
+        state.persist_client(client_id)
         self._seq_monitor.record(client_id, dedup_key)
         self._snapshot_if_needed(client_id)
         return None

@@ -145,7 +145,7 @@ class JoinerInteractor:
                     client_id,
                     self._publisher,
                 )
-        #self._state.persist_client(client_id) TODO: Persist again
+        self._state.persist_client(client_id)
         self._state.increment_movies_processed(client_id, len(movies))
         #logging.info("[Interactor] Incremented %d movies processed for client %s", len(movies), client_id)
 

@@ -33,9 +33,9 @@ services:
         condition: service_started
     volumes:
       - ./client/config.ini:/config.ini
-      - ./data/credits.csv:/credits.csv
-      - ./data/ratings_small.csv:/ratings.csv
-      - ./data/movies_metadata.csv:/movies_metadata.csv
+      - ./data/credits_demo.csv:/credits.csv
+      - ./data/ratings_demo.csv:/ratings.csv
+      - ./data/movies_metadata_demo.csv:/movies_metadata.csv
       - ./data/results_client1.json:/results.json
     
   client2:
@@ -51,17 +51,35 @@ services:
         condition: service_started
     volumes:
       - ./client/config.ini:/config.ini
-      - ./data/credits.csv:/credits.csv
-      - ./data/ratings_small.csv:/ratings.csv
-      - ./data/movies_metadata.csv:/movies_metadata.csv
+      - ./data/credits_demo.csv:/credits.csv
+      - ./data/ratings_demo.csv:/ratings.csv
+      - ./data/movies_metadata_demo.csv:/movies_metadata.csv
       - ./data/results_client2.json:/results.json
+    
+  client3:
+    container_name: client3
+    image: client:latest
+    profiles: [clients]
+    environment:
+      - CLI_ID=3
+    networks:
+      - tp_network
+    depends_on:
+      server:
+        condition: service_started
+    volumes:
+      - ./client/config.ini:/config.ini
+      - ./data/credits_demo.csv:/credits.csv
+      - ./data/ratings_demo.csv:/ratings.csv
+      - ./data/movies_metadata_demo.csv:/movies_metadata.csv
+      - ./data/results_client3.json:/results.json
     
   server:
     container_name: server
     image: server:latest
     entrypoint: python3 /main.py
     environment:
-      - NUM_CLIENTS=2
+      - NUM_CLIENTS=3
     networks:
       - tp_network
     depends_on:
@@ -283,7 +301,7 @@ services:
       - ./transformer/config.ini:/config.ini
     environment:
       - TRANSFORMER_REPLICA_ID=1
-      - TRANSFORMER_REPLICAS_COUNT=3
+      - TRANSFORMER_REPLICAS_COUNT=2
     
   transformer-2:
     container_name: transformer-2
@@ -300,24 +318,7 @@ services:
       - ./transformer/config.ini:/config.ini
     environment:
       - TRANSFORMER_REPLICA_ID=2
-      - TRANSFORMER_REPLICAS_COUNT=3
-    
-  transformer-3:
-    container_name: transformer-3
-    image: transformer:latest
-    networks:
-      - tp_network
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-        restart: true
-    links:
-      - rabbitmq
-    volumes:
-      - ./transformer/config.ini:/config.ini
-    environment:
-      - TRANSFORMER_REPLICA_ID=3
-      - TRANSFORMER_REPLICAS_COUNT=3
+      - TRANSFORMER_REPLICAS_COUNT=2
     
   
   aggregator-sent-1:
@@ -678,7 +679,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          ["filter-arg-spa-movies-1", "filter-decade-movies-1", "data-controller-movies-1", "reducer-max-min", "filter-2000-movies-1", "aggregator-sent-2", "data-controller-ratings-1", "transformer-2", "joiner-ratings-2", "joiner-credits-1", "joiner-credits-4"]
+          ["filter-arg-spa-movies-1", "filter-decade-movies-1", "data-controller-movies-1", "reducer-max-min", "transformer-1", "filter-2000-movies-2", "data-controller-credits-1", "data-controller-ratings-2", "joiner-ratings-3", "joiner-credits-2"]
     
   healthchecker-2:
     container_name: healthchecker-2
@@ -700,7 +701,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          ["filter-arg-movies-1", "aggregator-budget-1", "reducer-top5", "reducer-average", "filter-2000-movies-2", "data-controller-credits-1", "data-controller-ratings-2", "transformer-3", "joiner-ratings-3", "joiner-credits-2"]
+          ["filter-arg-movies-1", "aggregator-budget-1", "reducer-top5", "reducer-average", "transformer-2", "aggregator-sent-1", "data-controller-credits-2", "joiner-ratings-1", "joiner-ratings-4", "joiner-credits-3"]
     
   healthchecker-3:
     container_name: healthchecker-3
@@ -722,7 +723,7 @@ services:
       LOGGING_LEVEL: INFO
       LISTEN_BACKLOG: 10
       NODES: >
-          ["filter-single-country-movies-1", "aggregator-ratings-1", "reducer-top10", "reducer-query1", "aggregator-sent-1", "data-controller-credits-2", "transformer-1", "joiner-ratings-1", "joiner-ratings-4", "joiner-credits-3"]
+          ["filter-single-country-movies-1", "aggregator-ratings-1", "reducer-top10", "reducer-query1", "filter-2000-movies-1", "aggregator-sent-2", "data-controller-ratings-1", "joiner-ratings-2", "joiner-credits-1", "joiner-credits-4"]
     
 networks:
   tp_network:

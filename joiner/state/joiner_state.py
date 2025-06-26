@@ -221,7 +221,6 @@ class JoinerState:
             # House-keeping – remove empty nested dicts.
             if client_id in self._other_data and not self._other_data[client_id]:
                 del self._other_data[client_id]
-            #self._persist(client_id)
             # Return an *immutable* view so callers cannot mutate internal state.
             return tuple(unmatched)
 
@@ -239,8 +238,6 @@ class JoinerState:
             else:
                 movie_buff[movie_id].append(other_pb)
 
-            #self._persist(client_id)
-
     def get_buffered_other(self, client_id: str, movie_id: int) -> List[Any]:
         """Return (but DO NOT remove) buffered *other* data for a movie."""
         return self._other_data.get(client_id, {}).get(movie_id, [])
@@ -252,7 +249,7 @@ class JoinerState:
         with self._lock:
             self._eof_trackers.setdefault(client_id, {"movies": False, "other": False})[stream] = True
             logging.debug(f"EOF for stream '{stream}' received ‑ client {client_id}")
-            #self._persist(client_id)
+            self._persist(client_id)
 
     def has_eof(self, client_id: str, stream: str) -> bool:
         return self._eof_trackers.get(client_id, {}).get(stream, False)
@@ -276,7 +273,7 @@ class JoinerState:
             if not other_for_client:
                 del self._other_data[client_id]
             logging.debug(f"Purged {len(orphan_ids)} orphan other-records for client {client_id}")
-            #self._persist(client_id)
+            self._persist(client_id)
 
     def remove_client_data(self, client_id: str) -> None:
         """Remove *all* cached data & trackers for *client_id* to free memory."""
