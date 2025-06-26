@@ -138,6 +138,7 @@ message MoviesCSV {
   int32 secuence_number = 4;
   optional int32 total_to_process = 5;
   optional int32 discarded_count = 6;
+  optional int32 expected_batches = 7;
 }
 // [END movies messages]
 
@@ -154,6 +155,7 @@ message AggregationBatch {
   optional bool finished = 2;
   int32 client_id = 3;
   int32 secuence_number = 4;
+  optional int32 expected_batches = 5;
 }
 // [END] Aggregators messages
 
@@ -169,6 +171,7 @@ message ActorParticipationsBatch {
     optional bool finished = 2;
     int32 client_id = 3;
     int32 secuence_number = 4;
+    optional int32 expected_batches = 5;
 }
 // [END] Actor Participation messages
 
@@ -208,6 +211,7 @@ message JoinedRatingsBatch {
     optional bool finished = 2;
     int32 client_id = 3;
     int32 secuence_number = 4;
+    optional int32 expected_batches = 5;
 }
 
 // [END messages]
@@ -215,6 +219,11 @@ message JoinedRatingsBatch {
 message ProcessedCount {
     uint32 replica_id      = 1;
     uint64 total_processed = 2;
+}
+
+message BatchCount {
+    uint32 replica_id    = 1;
+    uint64 batches_sent  = 2;
 }
 
 message StreamEOF {
@@ -225,4 +234,5 @@ message StreamEOF {
     uint64  highest_sn_produced    = 5;       // max SN produced by a joiner seen so far
     bool    for_movies             = 6;       // true → movies, false → ratings/credits
     repeated uint32 inverse_stream_confirmed = 7;
+    repeated BatchCount batch_counts = 8;   // per-replica flushed batch counts
 }

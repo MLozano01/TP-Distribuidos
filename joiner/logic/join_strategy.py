@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import logging
+from typing import Optional
 from protocol.protocol import Protocol
 from common.sequence_number_monitor import SequenceNumberMonitor
 
@@ -44,4 +45,12 @@ class JoinStrategy(ABC):
         The method is responsible for emitting the consolidated EOF message
         downstream (if required by the protocol).
         """
-        pass 
+        pass
+
+    def get_flushed_batches(self, client_id: str) -> Optional[int]:
+        """Return how many *data* batches were flushed downstream for *client_id*."""
+        return None 
+
+    def clear_flushed_batches(self, client_id: str) -> None:
+        """Hook to erase the per-client flush counter after FINISHED is emitted."""
+        return 

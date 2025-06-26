@@ -4,6 +4,7 @@ import os
 from logic.join_strategy import JoinStrategy
 from protocol import files_pb2
 from common.batcher import PerClientBatcher
+from typing import Optional
 
 class CreditsJoinStrategy(JoinStrategy):
     """Join strategy that produces ActorParticipations from movie credits."""
@@ -86,6 +87,12 @@ class CreditsJoinStrategy(JoinStrategy):
             self._ensure_batcher(producer)
 
             for part in participations:
+                logging.debug(
+                    "[CreditsJoinStrategy] queue participation – client=%s movie_id=%s actor=%s",
+                    client_id,
+                    movie_id,
+                    part.actor_name,
+                )
                 self._batcher.add(part, client_id)
         except Exception as exc:
             logging.error(
@@ -125,13 +132,22 @@ class CreditsJoinStrategy(JoinStrategy):
         batch_size = int(os.getenv("JOINER_BATCH_SIZE", "100"))
 
         from protocol.protocol import Protocol
-        proto = Protocol()
 
         def _encode_batch(parts, cid):
             from protocol import files_pb2
+            seq = self._seqgen.next(str(cid))
             batch_pb = files_pb2.ActorParticipationsBatch(client_id=cid)
             batch_pb.participations.extend(parts)
-            batch_pb.secuence_number = self._seqgen.next(str(cid))
+            batch_pb.secuence_number = seq
+            count = self._batcher.flushes(str(cid)) if self._batcher else 0
+            batch_pb.expected_batches = count + 1
+
+            logging.info(
+                "[CreditsJoinStrategy] Sending batch – client=%s seq=%s items=%s",
+                cid,
+                seq,
+                len(parts),
+            )
             return batch_pb.SerializeToString()
 
         self._batcher = PerClientBatcher(
@@ -148,3 +164,19 @@ class CreditsJoinStrategy(JoinStrategy):
             except Exception as exc:
                 logging.error("Error snapshotting batch for client %s: %s", client_id, exc)
                 raise
+
+    def get_flushed_batches(self, client_id: str) -> Optional[int]:
+            if self._batcher is None:
+                return None
+            try:
+                return self._batcher.flushes(client_id)
+            except Exception:
+                return None
+
+    def clear_flushed_batches(self, client_id: str) -> None:
+        if self._batcher is None:
+            return
+        try:
+            self._batcher.pop_flushes(client_id)
+        except Exception:
+            pass

@@ -50,7 +50,7 @@ class Transformer:
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
-        logging.info(f"Received message, with routing key: {method.routing_key}")
+        logging.debug(f"Received message, with routing key: {method.routing_key}")
         decoded_msg = self.protocol.decode_movies_msg(body)
 
         if decoded_msg.finished:
@@ -144,14 +144,25 @@ class Transformer:
             outgoing_movies_msg = self.protocol.create_movie_list(processed_movies, client_id, sequence_number)
             logging.debug(f"Sending {len(processed_movies)} processed movies")
             self.queue_snd.publish(outgoing_movies_msg)
-            logging.info(f"Successfully SENT batch of {len(processed_movies)} movies to exchange '{self.queue_snd.exchange}'")
+            logging.info(
+                "Successfully SENT batch for client %s of %s movies (seq=%s) to exchange '%s'",
+                client_id,
+                len(processed_movies),
+                sequence_number,
+                self.queue_snd.exchange,
+            )
         except Exception as e:
             logging.error(f"Failed to send processed batch: {e}", exc_info=True)
 
 
     def _publish_movie_finished_signal(self, msg):
         self.queue_snd.publish(msg.SerializeToString())
-        logging.info(f"Published movie finished signal to {self.queue_snd.exchange}")
+        logging.info(
+            "Published movie finished for client %s signal (seq=%s) to %s",
+            msg.client_id,
+            msg.secuence_number,
+            self.queue_snd.exchange,
+        )
 
         
     def _process_movie(self, incoming_movie):

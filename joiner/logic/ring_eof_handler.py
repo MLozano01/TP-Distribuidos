@@ -113,11 +113,20 @@ class EofRingHandler:
         # Check if the total_to_process matches the sum of all the processed counts
         # It means the EOF is in the correct SN order for the client
         total_processed_distributed = sum(p.total_processed for p in eof_msg.processed)
-        logging.info(f"Replica {self.replica_id} received incoming EOF for client {client_id} on stream {stream} total_to_process={eof_msg.total_to_process} total_processed_distributed={total_processed_distributed}")
+        logging.debug(
+            "Replica %s incoming EOF client=%s stream=%s total_to_process=%s total_processed_distributed=%s",
+            self.replica_id,
+            client_id,
+            stream,
+            eof_msg.total_to_process,
+            total_processed_distributed,
+        )
         if eof_msg.total_to_process == total_processed_distributed:
             joiner_state.set_stream_eof(client_id, stream_key)
             if stream_key == "movies":
                 joiner_state.purge_orphan_other_after_movie_eof(client_id)
+            
+            logging.info(f"Replica {self.replica_id} set stream eof for client {client_id} on stream {stream_key}")
 
             if joiner_state.has_both_eof(client_id):
                 join_strategy.handle_client_finished(client_id, joiner_state)
@@ -126,9 +135,21 @@ class EofRingHandler:
             if self.replica_id not in eof_msg.replicas_confirmed:
                 eof_msg.replicas_confirmed.append(self.replica_id)
 
+            local_batches = join_strategy.get_flushed_batches(client_id) or 0
+
+            filtered_bc = [b for b in eof_msg.batch_counts if b.replica_id != self.replica_id]
+            eof_msg.ClearField("batch_counts")
+            eof_msg.batch_counts.extend(filtered_bc)
+            eof_msg.batch_counts.append(
+                files_pb2.BatchCount(replica_id=self.replica_id, batches_sent=local_batches)
+            )
+            
+            if joiner_state.has_both_eof(client_id):
+                join_strategy.clear_flushed_batches(client_id)
+
         current_stream_all_confirmed = len(eof_msg.replicas_confirmed) == self.replicas_count
         inverse_stream_all_confirmed = len(eof_msg.inverse_stream_confirmed) == self.replicas_count
-
+        
         if current_stream_all_confirmed and inverse_stream_all_confirmed:
             logging.info(
                 "EOF ring fully closed for client %s both streams. The last stream was %s. and highest_sn_produced was %s",
@@ -136,7 +157,28 @@ class EofRingHandler:
                 stream,
                 eof_msg.highest_sn_produced
             )
-            send_finished_signal(output_producer, client_id, join_strategy.protocol, secuence_number=eof_msg.highest_sn_produced)
+            # Derive the correct final sequence number: we only need +1 when
+            # the last *produced* sequence belongs to the **last** replica in
+            # the stride (i.e. highest_sn % R == R-1).  Otherwise the current
+            # highest is already the (N-1)th item and represents exactly the
+            # total batch count.
+
+            R = self.replicas_count
+            highest = eof_msg.highest_sn_produced
+            if (highest % R) == (R - 1):
+                final_seq = highest + 1
+            else:
+                final_seq = highest
+
+            # Total batches = sum over replicas
+            expected_batches = sum(b.batches_sent for b in eof_msg.batch_counts)
+
+            send_finished_signal(
+                output_producer,
+                str(client_id),
+                final_seq,
+                expected_batches
+            )
             # Ring termination – do NOT forward further.
             return
         
@@ -159,15 +201,10 @@ class EofRingHandler:
         next_queue = f"{base}{next_replica_id}"
 
         publisher.publish(eof_msg.SerializeToString(), routing_key=next_queue)
-        logging.info(
-            "Replica %s forwarded EOF to client %s to queue %s (stream %s)",
-            self.replica_id,
-            eof_msg.client_id,
-            next_queue,
-            stream,
-        )
-        logging.debug(
-            "[EofRing] Published StreamEOF bytes=%s to %s",
-            len(eof_msg.SerializeToString()),
-            next_queue,
-        )
+        #logging.info(
+        #    "Replica %s forwarded EOF to client %s to queue %s (stream %s)",
+        #    self.replica_id,
+        #    eof_msg.client_id,
+        #    next_queue,
+        #    stream,
+        #)

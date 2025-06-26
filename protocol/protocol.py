@@ -203,6 +203,7 @@ class Protocol:
   def lines_to_batch(self, csv_batch, columns, file_type):
     ProtoClass = type(self.__file_classes[file_type])
     data_csv = ProtoClass()
+    dropped_rows = 0  # count rows that fail validation
 
     for line in csv_batch.rows:
       data = self.parse_line(line, file_type)
@@ -222,6 +223,14 @@ class Protocol:
           data_csv.ratings.append(line_parsed)
         elif file_type == FileType.CREDITS:
           data_csv.credits.append(line_parsed)
+      else: # TODO: Other types need it too?
+        if file_type == FileType.MOVIES:
+          dropped_rows += 1
+
+    if file_type == FileType.MOVIES and dropped_rows:
+        data_csv.discarded_count = dropped_rows
+        logging.info(f"data_csv discarded_count {data_csv.discarded_count}")
+
     return data_csv
 
   def begins_field(self, part):
@@ -466,12 +475,13 @@ class Protocol:
     movies_pb_str = movies_pb.SerializeToString()
     return movies_pb_str
 
-  def create_aggr_batch(self, dict_results, client_id, secuence_number):
+  def create_aggr_batch(self, dict_results, client_id, secuence_number, expected_batches=None):
     batch_pb = files_pb2.AggregationBatch()
 
     batch_pb.client_id = client_id
     batch_pb.secuence_number = secuence_number
-
+    if expected_batches is not None and hasattr(batch_pb, "expected_batches"):
+      batch_pb.expected_batches = int(expected_batches)
     for key, results in dict_results.items():
       aggr_pb = batch_pb.aggr_row.add()
       aggr_pb.key = str(key)
@@ -479,8 +489,7 @@ class Protocol:
         aggr_pb.sum =  to_float(results.get("sum"))
       if "count" in results:
         aggr_pb.count =  to_int(results.get("count"))
-    batch_pb_str = batch_pb.SerializeToString()
-    return batch_pb_str
+    return batch_pb.SerializeToString()
 
   def decode_aggr_batch(self, buffer):
     aggr = files_pb2.AggregationBatch()

@@ -22,7 +22,10 @@ class SequenceNumberMonitor:
     # ------------------------------------------------------------------
     def is_duplicate(self, client_id: str, seq_num: str) -> bool:
         with self._lock:
-            return seq_num in self._batches_seen.get(client_id, set())
+            seen = seq_num in self._batches_seen.get(client_id, set())
+            if seen:
+                logging.info("[SeqMonitor] Duplicate detected – client=%s seq=%s", client_id, seq_num)
+            return seen
 
     def record(self, client_id: str, seq_num: str) -> None:
         with self._lock:

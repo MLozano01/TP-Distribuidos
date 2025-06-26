@@ -27,6 +27,13 @@ class SinglePublisher(Publisher):
                 payload = msg.SerializeToString()
 
             self.queue_snd_movies.publish(payload)
+            logging.info(
+                "[SinglePublisher] Published batch client=%s seq=%s discarded=%s bytes=%s",
+                client_id,
+                secuence_number,
+                discarded_count,
+                len(payload),
+            )
         else:
             logging.error("Single sender queue not initialized for non-sharded publish.")
 

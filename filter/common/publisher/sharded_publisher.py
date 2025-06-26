@@ -28,6 +28,12 @@ class ShardedPublisher(Publisher):
         ]
 
     def _fanout(self, payload: bytes, routing_key: str) -> None:
+        # Trace every message leaving the filter with its routing key and size.
+        logging.info(
+            "[ShardedPublisher] Fan-out payload bytes=%s routing_key=%s",
+            len(payload),
+            routing_key,
+        )
         for q in self._targets:
             q.publish(payload, routing_key=routing_key)
 

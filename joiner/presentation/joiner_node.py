@@ -26,6 +26,7 @@ from ..state.joiner_state import JoinerState
 from ..domain.state_repository import StateRepository
 from joiner.logic.ring_eof_handler import EofRingHandler
 
+logging.getLogger("RabbitMQ").setLevel(logging.ERROR)
 
 class JoinerNode:  # pylint: disable=too-many-instance-attributes
     """High-level coordinator for the Joiner replica.

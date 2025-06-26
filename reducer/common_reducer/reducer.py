@@ -49,13 +49,31 @@ class Reducer:
         try:
             msg = self._get_msg(data)
 
-            if self._is_repeated(str(msg.client_id), str(msg.secuence_number)):
-                logging.info(f"Discading a repeated package of secuence number {msg.secuence_number}")
+            # Only treat as duplicate if this is *not* the FINISHED control
+            # message.  The joiner may legitimately reuse the last sequence
+            # number for FINISHED (e.g. when the final batch came from a
+            # different replica in stride generation).
+            if (
+                not msg.finished
+                and self._is_repeated(str(msg.client_id), str(msg.secuence_number))
+            ):
+                logging.info(
+                    "Discading a repeated package of secuence number %s", msg.secuence_number
+                )
                 return
 
             if msg.finished:
-                logging.info(f"Finished msg received on query_id {self.query_id}, with final secuence number {msg.secuence_number}")
-                self.partial_status[str(msg.client_id)]["final_secuence"] = msg.secuence_number
+                # Guarantee dict exists for this client if finished arrives first
+                self.partial_status.setdefault(str(msg.client_id), {"results": {}, "final_secuence": None})
+
+                if self.query_id in (3, 4):
+                    logging.info(f"Finished msg received for client {msg.client_id}, with final expected_batches {msg.expected_batches}")
+                    final_secuence = msg.expected_batches
+                else:
+                    logging.info(f"Finished msg received for client {msg.client_id}, with final secuence number {msg.secuence_number}")
+                    final_secuence = msg.secuence_number
+
+                self.partial_status[str(msg.client_id)]["final_secuence"] = final_secuence
                 self._handle_finished(str(msg.client_id))
                 return
 
@@ -80,6 +98,13 @@ class Reducer:
 
         self._state_manager.save(self.partial_status)
         self._state_manager.save_secuence_number_data(secuence_number, client_id)
+        logging.info(
+            "[Reducer %s] Accepted batch client=%s seq=%s (total seen=%s)",
+            self.query_id,
+            client_id,
+            secuence_number,
+            len(self.batches_seen[client_id]),
+        )
 
     def _manage_msg(self, data, client_id, secuence_number):
         self.partial_status.setdefault(client_id, {"results": {}, "final_secuence": None})
@@ -124,7 +149,10 @@ class Reducer:
 
         if is_aggr_msg:
             msg = aggr_msg
+            if (msg.finished and self.query_id == 4):
+                msg = self.protocol.decode_movies_msg(data)
         else:
+            logging.info(f"decode_movies_msg")
             msg = self.protocol.decode_movies_msg(data)
 
         return msg

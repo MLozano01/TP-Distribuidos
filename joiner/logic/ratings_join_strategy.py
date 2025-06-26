@@ -6,6 +6,7 @@ from protocol.protocol import Protocol
 
 from common.batcher import PerClientBatcher
 from common.sequence_generator import SequenceGenerator
+from typing import Optional
 
 class RatingsJoinStrategy(JoinStrategy):
     """Join strategy that combines movie details with rating records."""
@@ -90,6 +91,12 @@ class RatingsJoinStrategy(JoinStrategy):
             )
 
             self._batcher.add(rating_pb, client_id)
+            logging.debug(
+                "[RatingsJoinStrategy] queue joined rating – client=%s movie_id=%s rating=%s",
+                client_id,
+                movie_id,
+                rating_val,
+            )
         except Exception as exc:
             logging.error(
                 f"Failed to batch joined rating – client {client_id} movie {movie_id}: {exc}",
@@ -107,10 +114,10 @@ class RatingsJoinStrategy(JoinStrategy):
         if self._batcher:
             self._batcher.flush_key(client_id)
             self._batcher.clear(client_id)
+
         state.remove_client_data(client_id)
         self._seqgen.clear(client_id)
 
-        # Cleaning sequence numbers for client
         if hasattr(self, "_seq_monitor") and self._seq_monitor:
             try:
                 self._seq_monitor.clear_client(client_id)
@@ -125,9 +132,19 @@ class RatingsJoinStrategy(JoinStrategy):
 
         def _encode_batch(ratings_list, cid):
             from protocol import files_pb2
+            seq = self._seqgen.next(str(cid))
             batch = files_pb2.JoinedRatingsBatch(client_id=cid)
             batch.ratings.extend(ratings_list)
-            batch.secuence_number = self._seqgen.next(str(cid))
+            batch.secuence_number = seq
+            count = self._batcher.flushes(str(cid)) if self._batcher else 0
+            batch.expected_batches = count + 1
+            
+            logging.info(
+                "[RatingsJoinStrategy] Sending batch – client=%s seq=%s items=%s",
+                cid,
+                seq,
+                len(ratings_list),
+            )
             return batch.SerializeToString()
 
         self._batcher = PerClientBatcher(
@@ -144,3 +161,19 @@ class RatingsJoinStrategy(JoinStrategy):
             except Exception as exc:
                 logging.error("Error snapshotting batch for client %s: %s", client_id, exc)
                 raise
+
+    def get_flushed_batches(self, client_id: str) -> Optional[int]:
+        if self._batcher is None:
+            return None
+        try:
+            return self._batcher.flushes(client_id)
+        except Exception:
+            return None
+
+    def clear_flushed_batches(self, client_id: str) -> None:
+        if self._batcher is None:
+            return
+        try:
+            self._batcher.pop_flushes(client_id)
+        except Exception:
+            pass

@@ -37,15 +37,20 @@ class Aggregator:
 
     def callback(self, ch, method, properties, body):
         """Callback function to process messages."""
-        logging.info(f"Received message, with routing key: {method.routing_key}")
-        
+        logging.debug(f"Received message, with routing key: {method.routing_key}")
+
+        path = ""
         if getattr(self, 'file_name', '') == 'joined_ratings':
             decoded_msg = self.protocol.decode_joined_ratings_batch(body)
+            path = "decode_joined_ratings_batch"
             logging.info(f"Received rating: {decoded_msg}")
         else:
             decoded_msg = self.protocol.decode_movies_msg(body)
+            path = "decode_movies_msg"
 
         if decoded_msg.finished:
+            logging.info(f"Received finished message, with path: {path}")
+            decoded_msg = self.protocol.decode_movies_msg(body)
             self.publish_finished_msg(decoded_msg)
             return
 
@@ -55,11 +60,13 @@ class Aggregator:
         try:
             result = parse_aggregate_func(decoded_msg, self.key, self.field, self.operations, self.file_name)
             logging.info(f"Aggregation result: {result}")
+            exp_batches = getattr(decoded_msg, "expected_batches", None)
             self.queue_snd.publish(
                 self.protocol.create_aggr_batch(
                     result,
                     decoded_msg.client_id,
                     decoded_msg.secuence_number,
+                    exp_batches,
                 )
             )
         except Exception as e:
@@ -68,7 +75,10 @@ class Aggregator:
         
     def publish_finished_msg(self, decoded_msg):
         """Publishes an AggregationBatch with finished=True to downstream consumers."""
-        aggr_pb = self.protocol.decode_aggr_batch(self.protocol.create_aggr_batch({}, decoded_msg.client_id, decoded_msg.secuence_number))
+        exp_batches = getattr(decoded_msg, "expected_batches", None)
+        aggr_pb = self.protocol.decode_aggr_batch(
+            self.protocol.create_aggr_batch({}, decoded_msg.client_id, decoded_msg.secuence_number, exp_batches)
+        )
         aggr_pb.finished = True
         
         finished_serialized = aggr_pb.SerializeToString()

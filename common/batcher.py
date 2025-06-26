@@ -49,6 +49,7 @@ class PerClientBatcher:
         self._buffers: Dict[str, List[Any]] = defaultdict(list)
         self._state_helpers: Dict[str, StatePersistence] = {}
         self._last_flush: Dict[str, float] = defaultdict(lambda: time.monotonic())
+        self._flush_count: Dict[str, int] = defaultdict(int)
         self._lock = threading.Lock()
 
         self._restore_existing_batches()
@@ -83,6 +84,7 @@ class PerClientBatcher:
         buf.clear()
         self._get_state_helper(key).save([])
         self._last_flush[key] = time.monotonic()
+        self._flush_count[key] += 1
 
     def _get_state_helper(self, key: str) -> StatePersistence:
         helper = self._state_helpers.get(key)
@@ -136,4 +138,12 @@ class PerClientBatcher:
     def snapshot_all(self) -> None:
         with self._lock:
             for key in self._buffers:
-                self._get_state_helper(key).save(self._buffers[key]) 
+                self._get_state_helper(key).save(self._buffers[key])
+
+    def flushes(self, key: str) -> int:
+        """Return how many batches have been flushed for *key*."""
+        return self._flush_count.get(key, 0)
+
+    def pop_flushes(self, key: str) -> int:
+        """Return and clear the flushed-batch counter for *key*."""
+        return self._flush_count.pop(key, 0) 

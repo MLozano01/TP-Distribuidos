@@ -6,7 +6,7 @@ def filter_movies(movies_csv):
     movies_pb = files_pb2.MoviesCSV()
     movies_pb.client_id = movies_csv.client_id
     movies_pb.secuence_number = movies_csv.secuence_number
-    discarded = 0
+    discarded = movies_csv.discarded_count
     for movie in movies_csv.movies:
         if not movie.id or movie.id < 0 or not movie.release_date or not movie.overview:
             discarded += 1
