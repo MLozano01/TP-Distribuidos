@@ -1,4 +1,5 @@
-data
+# Ignore the root-level data directory only
++/data/
 *.csv
 .idea
 results_ratings.json
