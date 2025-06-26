@@ -19,6 +19,7 @@ class SequenceNumberMonitor:
         self._state_manager = state_manager
         backup = state_manager.load_saved_secuence_number_data()
         # Use sets for O(1) membership checks.
+        logging.info(f"Loaded Backup {backup}")
         self._batches_seen: Dict[str, Set[str]] = {
             cid: set(seq_list) for cid, seq_list in backup.items()
         }
@@ -31,6 +32,9 @@ class SequenceNumberMonitor:
         """Return ``True`` iff *seq_num* was already recorded for *client_id*."""
         with self._lock:
             return seq_num in self._batches_seen.get(client_id, set())
+        
+    def get_num_unique(self, client_id):
+        return len(self._batches_seen.get(client_id, set()))
 
     def record(self, client_id: str, seq_num: str) -> None:
         """Persist *seq_num* for *client_id* (in-memory **and** on disk)."""
@@ -53,6 +57,7 @@ class SequenceNumberMonitor:
             self._batches_seen.pop(client_id, None)
             try:
                 self._state_manager.clean_client(client_id)
+                pass
             except Exception as exc:
                 logging.error(
                     "[SeqMonitor] Error cleaning sequence number file for client %s: %s",

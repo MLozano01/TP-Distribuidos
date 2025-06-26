@@ -4,7 +4,7 @@ import subprocess
 import sys
 import time
 
-SLEEP_SECONDS = 5
+SLEEP_SECONDS = 2
 
 logging.basicConfig(level=logging.INFO)
 
@@ -37,13 +37,15 @@ def set_mode():
 def main():
 	mode = set_mode()
 
-	name_prefix = ['transformer-',
-					  	'joiner-', 
-						'filter-', 
-						'aggregator-',
-						'data-controller-', 
-						'healthchecker-', 
-						'reducer-']
+	# name_prefix = ['transformer-',
+	# 				  	'joiner-', 
+	# 					'filter-', 
+	# 					'aggregator-',
+	# 					'data-controller-', 
+	# 					'healthchecker-', 
+	# 					'reducer-']
+
+	name_prefix  =['joiner-']
 
 	logging.info(f"Running in mode {mode}")
 	if mode == "CHAOS":

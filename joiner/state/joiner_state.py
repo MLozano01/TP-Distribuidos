@@ -64,7 +64,7 @@ class JoinerState:
         self._processed_counts: dict[str, int] = {}
         self._movies_counts: dict[str, int] = {}
         self._pc_managers: dict[str, StatePersistence] = {}
-
+        self._pc_movies: dict[str, StatePersistence] = {}
     
         for cid in set(self._movies_data) | set(self._other_data) | set(self._eof_trackers):
             mgr = StatePersistence(
@@ -73,10 +73,22 @@ class JoinerState:
                 serializer=StatePersistence._JSON,
             )
             self._pc_managers[cid] = mgr
+
+            mov = StatePersistence(
+                f"movies_seen_{self._node_tag}_client_{cid}.txt",
+                directory=self._base_dir,
+                serializer=StatePersistence._JSON,
+            )
+            self._pc_movies[cid] = mov
+
             try:
                 self._processed_counts[cid] = int(mgr.load(lambda: 0))
-            except Exception:
+                self._movies_counts[cid] = int(mov.load(lambda: 0))
+
+            except Exception as e:
+                logging.warning(f"Error while loading counts: {e}")
                 self._processed_counts[cid] = 0
+                self._movies_counts[cid] = 0
 
         restored_movies = sum(len(m) for m in self._movies_data.values())
         logging.info(
@@ -283,6 +295,10 @@ class JoinerState:
             if pc_mgr is not None:
                 pc_mgr.clear()
 
+            pc_mov = self._pc_movies.pop(client_id, None)
+            if pc_mov is not None:
+                pc_mgr.clear()
+
     def _persist(self, client_id: str) -> None:
         """Persist the state snapshot for *client_id* only."""
         if self._state_manager is None:
@@ -351,14 +367,14 @@ class JoinerState:
         new_val = self._movies_counts.get(client_id, 0) + int(count)
         self._movies_counts[client_id] = new_val
 
-        mgr = self._pc_managers.get(client_id)
+        mgr = self._pc_movies.get(client_id)
         if mgr is None and self._state_manager is not None:
             mgr = StatePersistence(
                 f"movies_seen_{self._node_tag}_client_{client_id}.txt",
                 directory=self._base_dir,
                 serializer=StatePersistence._JSON,
             )
-            self._pc_managers[client_id] = mgr
+            self._pc_movies[client_id] = mgr
         if mgr is not None:
             mgr.save(new_val)
 

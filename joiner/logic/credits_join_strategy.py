@@ -30,25 +30,23 @@ class CreditsJoinStrategy(JoinStrategy):
             f"[CreditsJoinStrategy] Received msg client={client_id} seq={seq} movie_id={movie_id_val} items={len(credits_msg.credits)}"
         )
 
-        dedup_key = f"{seq}-{movie_id_val}"
-        if self._seq_monitor.is_duplicate(client_id, dedup_key):
+        if self._seq_monitor.is_duplicate(client_id, seq):
             logging.info(
-                f"[CreditsJoinStrategy] Dropping duplicate OTHER message seq={dedup_key} client={client_id}"
+                f"[CreditsJoinStrategy] Dropping duplicate OTHER message seq={seq} client={client_id}"
             )
             return None
 
         # EOF path --------------------------------------------------------
         if credits_msg.finished:
-            expected_total = getattr(credits_msg, "total_to_process", None)
-            processed_total = state.get_processed_count(client_id)
+            processed_total = self._seq_monitor.get_num_unique(client_id)
 
             logging.info(
-                f"[CreditsJoinStrategy] FINISHED received – client={client_id} total_to_process={expected_total} processed={processed_total}"
+                f"[RatingsJoinStrategy] FINISHED received – client={client_id} total_to_process={seq} processed={processed_total}"
             )
 
-            if expected_total is not None and expected_total != processed_total:
+            if seq is not None and int(seq) != processed_total:
                 logging.warning(
-                    f"[CreditsJoinStrategy] Mismatch total_to_process (expected={expected_total}, processed={processed_total}) – requeuing."
+                    f"[RatingsJoinStrategy] Mismatch total_to_process (expected={seq}, processed={processed_total}) – requeuing EOF."
                 )
                 raise RequeueException()
 
@@ -75,7 +73,7 @@ class CreditsJoinStrategy(JoinStrategy):
 
             state.buffer_other(client_id, credit.id, actor_names)
 
-        self._seq_monitor.record(client_id, dedup_key)
+        self._seq_monitor.record(client_id, seq)
         self._snapshot_if_needed(client_id)
         return None
 

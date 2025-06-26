@@ -112,8 +112,7 @@ class StatePersistence:
             backup = {}
 
             for filepath in glob.glob(f'/backup/{self.BASE_FILE_NAME}_{self.node_info}_client_*.txt'):
-                
-                client = filepath.split("_")[4].split(".")[0]
+                client = filepath.split("_")[-1].split(".")[0]
                 with open(filepath) as f:
                     backup.setdefault(client, [])
                     for line in f:
