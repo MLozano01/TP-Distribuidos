@@ -1,12 +1,9 @@
 import logging
 import signal
-from protocol import files_pb2
 from protocol.protocol import Protocol, FileType
 from protocol.rabbit_protocol import RabbitMQ
-from protocol.utils.parsing_proto_utils import is_date
 from .aux import filter_movies, filter_ratings, filter_credits
-from queue import Empty
-from multiprocessing import Process, Value
+from multiprocessing import Event
 
 START = False
 DONE = True
@@ -17,11 +14,12 @@ logging.getLogger('RabbitMQ').setLevel(logging.WARNING)
 
 class DataController:
     def __init__(self, **kwargs):
-        self.is_alive = True
         self.protocol = Protocol()
         self.work_consumer = None
         self.send_queues = []
         self.replica_id = kwargs.get('replica_id', 'unknown')
+
+        self.stop_event = Event()
 
         # Set attributes from kwargs
         for key, value in kwargs.items():
@@ -57,7 +55,7 @@ class DataController:
     def run(self):
         """Start the DataController with message consumption"""
         self._settle_queues()
-        self.work_consumer.consume(self.callback)
+        self.work_consumer.consume(self.callback, stop_event=self.stop_event)
 
 
     def callback(self, ch, method, properties, body):
@@ -75,7 +73,7 @@ class DataController:
 
     def _handle_finished_message(self, message_type, msg):
         """Handle finished messages with coordination"""
-        logging.info(f"Propagating finished {message_type} of client {msg.client_id} downstream")
+        logging.info(f"Propagating finished (force:{msg.force_finish}) {message_type} of client {msg.client_id} downstream")
         msg_to_send = msg.SerializeToString()
         for queue in self.send_queues:
             queue.publish(msg_to_send)
@@ -108,28 +106,12 @@ class DataController:
 
     def stop(self):
         """Stop the DataController and close all connections"""
-        if not self.is_alive:
+        if self.stop_event.is_set():
             logging.info(f"Already stopped DataController {self.replica_id}")
             return
         
         logging.info(f"Stopping DataController {self.replica_id}...")
-        self.is_alive = False
-        # Close work consumer connection
-        if self.work_consumer:
-            try:
-                self.work_consumer.close_channel()
-                logging.info("Work consumer channel closed")
-            except Exception as e:
-                logging.error(f"Error closing work consumer channel: {e}")
-        
-        # Close movies publisher connection
-        for queue in self.send_queues:
-            if queue:
-                try:
-                    queue.close_channel()
-                    logging.info("Publisher channel closed")
-                except Exception as e:
-                    logging.error(f"Error closing publisher channel: {e}")
+        self.stop_event.set()
         
         logging.info(f"DataController {self.replica_id} stopped successfully")
 
