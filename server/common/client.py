@@ -151,7 +151,7 @@ class Client:
                 self.results_received.add(result.query_id)
 
 
-            if self.socket:
+            if self.socket != None:
                 self.socket.sendall(msg)
             logging.info(f"Results received for client {result.client_id}: {len(self.results_received)}.")
             if len(self.results_received) == self.total_expected:
@@ -160,7 +160,6 @@ class Client:
                 self.stop_consumer()
                 return
         except socket.error as err:
-            self.stop_consumer()
             return
         except Exception as e:
             logging.error(f"Error processing message: {e}")
