@@ -58,7 +58,7 @@ class Reducer:
             self.partial_status.setdefault(str(msg.client_id), {"results": {}, "final_secuence": None})
             self.batches_seen.setdefault(str(msg.client_id), [])
 
-            if self._is_repeated(str(msg.client_id), str(msg.secuence_number)):
+            if not msg.force_finish and self._is_repeated(str(msg.client_id), str(msg.secuence_number)):
                 logging.info(f"Discading a repeated package of secuence number {msg.secuence_number}")
                 return
 

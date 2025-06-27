@@ -55,6 +55,7 @@ class Aggregator:
             decoded_msg = self.protocol.decode_movies_msg(body)
 
         if decoded_msg.finished:
+            decoded_msg = self.protocol.decode_movies_msg(body)
             self.publish_finished_msg(decoded_msg)
             return
 
