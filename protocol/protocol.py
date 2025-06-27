@@ -78,20 +78,13 @@ class Protocol:
     code = self.__type_codes.get(type)
     return self.create_bytes(code, batch)
 
-  def create_inform_end_file(self, type, total_to_process=None):
-    """Create an END_FILE message.
-
-    If *total_to_process* is provided (int), it will be appended after the
-    file-code so downstream components can verify the number of processed
-    records.  This is currently used for ratings and credits streams.
-    """
+  def create_inform_end_file(self, type,force=False):
     code = self.__type_codes.get(type)
-    payload = bytearray()
-    payload.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
-    if total_to_process is not None:
-      payload.extend(int(total_to_process).to_bytes(INT_LENGTH, byteorder='big'))
-
-    return self.create_bytes(END_FILE_CODE, payload)
+    msg = bytearray()
+    msg.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
+    if force:
+      msg.extend(force.to_bytes(BOOL_LENGTH, byteorder='big'))
+    return self.create_bytes(END_FILE_CODE, msg)
 
   def create_finished_message(self, type, client_id, force=False):
       """Creates and serializes a 'finished' message for the given type."""

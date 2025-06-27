@@ -50,12 +50,12 @@ class RatingsJoinStrategy(JoinStrategy):
             processed_total = self._seq_monitor.get_num_unique(client_id)
 
             logging.info(
-                f"[RatingsJoinStrategy] FINISHED received – client={client_id} total_to_process={seq_num} processed={processed_total} force_finished={ratings_msg.finished}"
+                f"[RatingsJoinStrategy] FINISHED received – client={client_id} total_to_process={seq_num} processed={processed_total} force_finished={ratings_msg.force_finish}"
             )
 
             if not ratings_msg.force_finish and seq_num is not None and int(seq_num) != processed_total:
                 logging.warning(
-                    f"[RatingsJoinStrategy] Mismatch total_to_process (client={client_id} expected={seq_num}, processed={processed_total}) – requeuing EOF."
+                    f"[RatingsJoinStrategy] Mismatch total_to_process (client={client_id} expected={seq_num}, processed={processed_total}, force_finish={ratings_msg.force_finish}) – requeuing EOF."
                 )
                 raise RequeueException()
             

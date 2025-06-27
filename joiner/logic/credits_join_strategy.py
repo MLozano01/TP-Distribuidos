@@ -41,7 +41,7 @@ class CreditsJoinStrategy(JoinStrategy):
             processed_total = self._seq_monitor.get_num_unique(client_id)
 
             logging.info(
-                f"[RatingsJoinStrategy] FINISHED received – client={client_id} total_to_process={seq} processed={processed_total}"
+                f"[RatingsJoinStrategy] FINISHED received – client={client_id} total_to_process={seq} processed={processed_total} force_finished={ratings_msg.force_finish}"
             )
 
             if not credits_msg.force_finish and seq is not None and int(seq) != processed_total:
