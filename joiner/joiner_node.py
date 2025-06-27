@@ -179,8 +179,9 @@ class JoinerNode:
             if movies_msg.finished:
                 if movies_msg.force_finish:
                     logging.info(f"Received force finish for client {client_id}")
-                    self.handle_eof(client_id)
-                self._handle_movie_eof(client_id, int(movies_msg.secuence_number))
+                    self.handle_eof(client_id, movies_msg.force_finish)
+                else:
+                    self._handle_movie_eof(client_id, int(movies_msg.secuence_number))
             else:
                 self._handle_movie_batch(client_id, movies_msg.movies)
                 self._seq_monitor.record(client_id, seq)
@@ -197,12 +198,12 @@ class JoinerNode:
             raise RequeueException()
 
         try:
-            client_finished_id = self.join_strategy.process_other_message(
+            client_finished_id, force_finish = self.join_strategy.process_other_message(
                 body, self.state, self.output_producer
             )
 
             if client_finished_id:
-                self._check_and_handle_client_finished(str(client_finished_id))
+                self._check_and_handle_client_finished(str(client_finished_id), force_finish)
         except RequeueException:
             raise
         except Exception as e:
@@ -217,7 +218,7 @@ class JoinerNode:
         logging.warning(f"Received signal {signum}. Initiating shutdown...")
         self.stop()
 
-    def _check_and_handle_client_finished(self, client_id: str):
+    def _check_and_handle_client_finished(self, client_id: str, force_finish: bool):
         """If both streams have finished for *client_id*, finalise processing."""
         if not self.state.has_both_eof(client_id):
             return
@@ -225,7 +226,7 @@ class JoinerNode:
         logging.info(f"[Node] Both streams finished for client {client_id}. Finalising...")
         try:
             self.join_strategy.handle_client_finished(
-                client_id, self.state, self.output_producer
+                client_id, self.output_producer, force_finish
             )
         finally:
             # Always cleanup local buffers to avoid leaks.
@@ -249,10 +250,10 @@ class JoinerNode:
 
         self.handle_eof(client_id)
     
-    def handle_eof(self, client_id: str):
+    def handle_eof(self, client_id: str, force_finish: bool=False):
         self.state.set_stream_eof(client_id, "movies")
         self.join_strategy.handle_movie_eof(client_id, self.state)
-        self._check_and_handle_client_finished(client_id)
+        self._check_and_handle_client_finished(client_id, force_finish)
 
     def _handle_movie_batch(self, client_id: str, movies) -> None:
         """Process a batch of movie protos."""

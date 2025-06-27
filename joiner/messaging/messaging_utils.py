@@ -26,7 +26,7 @@ def send_actor_participations_batch(producer, participations_list, client_id, pr
         logging.error(f"Failed to send actor participations batch: {e}")
         raise
 
-def send_finished_signal(producer, client_id, protocol, secuence_number=None):
+def send_finished_signal(producer, client_id, force_finish, secuence_number=None):
     """Sends a finished signal for a specific client.
 
     The joiner must propagate the *last* sequence number it used for that
@@ -42,6 +42,7 @@ def send_finished_signal(producer, client_id, protocol, secuence_number=None):
         movies_pb.client_id = int(client_id)
         movies_pb.finished = True
         movies_pb.secuence_number = int(secuence_number)
+        movies_pb.force_finish = force_finish
         finished_msg = movies_pb.SerializeToString()
         producer.publish(finished_msg)
         logging.info(f"Sent FINISHED signal for client {client_id}.")

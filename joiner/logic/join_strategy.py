@@ -45,7 +45,7 @@ class JoinStrategy(ABC):
         pass
 
     @abstractmethod
-    def handle_client_finished(self, client_id, state, producer):
+    def handle_client_finished(self, client_id, producer, force_finish):
         """Called exactly once per client when *both* streams have signalled EOF.
 
         The method is responsible for emitting the consolidated EOF message

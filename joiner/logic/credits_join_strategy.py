@@ -41,18 +41,18 @@ class CreditsJoinStrategy(JoinStrategy):
             processed_total = self._seq_monitor.get_num_unique(client_id)
 
             logging.info(
-                f"[RatingsJoinStrategy] FINISHED received – client={client_id} total_to_process={seq} processed={processed_total} force_finished={ratings_msg.force_finish}"
+                f"[CreditsJoinStrategy] FINISHED received – client={client_id} total_to_process={seq} processed={processed_total} force_finished={credits_msg.force_finish}"
             )
 
             if not credits_msg.force_finish and seq is not None and int(seq) != processed_total:
                 logging.warning(
-                    f"[RatingsJoinStrategy] Mismatch total_to_process (expected={seq}, processed={processed_total}) – requeuing EOF."
+                    f"[CreditsJoinStrategy] Mismatch total_to_process (expected={seq}, processed={processed_total}) – requeuing EOF."
                 )
                 raise RequeueException()
 
 
             state.set_stream_eof(client_id, "other")
-            return client_id
+            return client_id, credits_msg.force_finish
 
         # Data path -------------------------------------------------------
         for credit in credits_msg.credits:
@@ -122,12 +122,12 @@ class CreditsJoinStrategy(JoinStrategy):
         # Credits that correspond to movies that never arrived can be discarded.
         state.purge_orphan_other_after_movie_eof(client_id)
 
-    def handle_client_finished(self, client_id, state, producer):
+    def handle_client_finished(self, client_id, producer, force_finish):
         if self._batcher:
             self._batcher.flush_key(client_id)
             self._batcher.clear(client_id)
         last_seq = self._seqgen.current(client_id)
-        send_finished_signal(producer, client_id, self.protocol, secuence_number=last_seq)
+        send_finished_signal(producer, client_id, force_finish, secuence_number=last_seq)
         self._seqgen.clear(client_id)
 
         # Cleaning sequence numbers for client

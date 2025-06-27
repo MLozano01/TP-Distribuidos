@@ -62,7 +62,7 @@ class RatingsJoinStrategy(JoinStrategy):
 
             state.set_stream_eof(client_id, "other")
             # No clean-up yet – wait until both EOFs arrive.
-            return client_id
+            return client_id, ratings_msg.force_finish
 
         for rating in ratings_msg.ratings:
             rating_value = float(rating.rating)
@@ -120,13 +120,13 @@ class RatingsJoinStrategy(JoinStrategy):
         """After movies EOF we purge orphan ratings that will never match."""
         state.purge_orphan_other_after_movie_eof(client_id)
 
-    def handle_client_finished(self, client_id, state, producer):
+    def handle_client_finished(self, client_id, producer, force_finish):
         """Both streams are done – flush pending batches and propagate EOF."""
         if self._batcher:
             self._batcher.flush_key(client_id)
             self._batcher.clear(client_id)
         last_seq = self._seqgen.current(client_id)
-        send_finished_signal(producer, client_id, self.protocol, secuence_number=last_seq)
+        send_finished_signal(producer, client_id, force_finish, secuence_number=last_seq)
         self._seqgen.clear(client_id)
 
         # Cleaning sequence numbers for client
