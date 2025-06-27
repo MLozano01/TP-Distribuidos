@@ -83,8 +83,8 @@ class RatingsJoinStrategy(JoinStrategy):
             state.buffer_other(client_id, rating.movieId, rating_value)
 
         state.persist_client(client_id)
-        self._seq_monitor.record(client_id, seq_num)
         self._snapshot_if_needed(client_id)
+        self._seq_monitor.record(client_id, seq_num)
         return None
 
     def _join_and_batch(self, ratings, movie_id, title, client_id, producer):
