@@ -100,6 +100,7 @@ class JoinerNode:
                     q_name=self.config['queue_movies_name'],
                     key=self.config["routing_key"],
                     exc_type='direct',
+                    prefetch_count=100
                 )
                 consumer.consume(self._process_movie_message, stop_event=self._stop_event)
             except Exception as e:
@@ -117,7 +118,8 @@ class JoinerNode:
                     exchange=self.config['exchange_other'],
                     q_name=self.config['queue_other_name'],
                     key=self.config["routing_key"],
-                    exc_type='direct'
+                    exc_type='direct',
+                    prefetch_count= 100 # Eof handling
                 )
                 consumer.consume(self._process_other_message, stop_event=self._stop_event)
             except Exception as e:
