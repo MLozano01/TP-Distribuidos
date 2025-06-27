@@ -50,7 +50,7 @@ class RatingsJoinStrategy(JoinStrategy):
             processed_total = self._seq_monitor.get_num_unique(client_id)
 
             logging.info(
-                f"[RatingsJoinStrategy] FINISHED received – client={client_id} total_to_process={seq_num} processed={processed_total}"
+                f"[RatingsJoinStrategy] FINISHED received – client={client_id} total_to_process={seq_num} processed={processed_total} force_finished={ratings_msg.finished}"
             )
 
             if not ratings_msg.force_finish and seq_num is not None and int(seq_num) != processed_total:
@@ -82,9 +82,8 @@ class RatingsJoinStrategy(JoinStrategy):
 
             state.buffer_other(client_id, rating.movieId, rating_value)
 
+        state.persist_client(client_id)
         self._seq_monitor.record(client_id, seq_num)
-        if ratings_msg.ratings:
-            state.increment_processed(client_id, len(ratings_msg.ratings))
         self._snapshot_if_needed(client_id)
         return None
 

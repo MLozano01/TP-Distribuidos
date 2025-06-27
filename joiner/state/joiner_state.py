@@ -221,7 +221,6 @@ class JoinerState:
             # House-keeping – remove empty nested dicts.
             if client_id in self._other_data and not self._other_data[client_id]:
                 del self._other_data[client_id]
-            self._persist(client_id)
             # Return an *immutable* view so callers cannot mutate internal state.
             return tuple(unmatched)
 
@@ -238,8 +237,6 @@ class JoinerState:
                 movie_buff[movie_id].extend(other_pb)
             else:
                 movie_buff[movie_id].append(other_pb)
-
-            self._persist(client_id)
 
     def get_buffered_other(self, client_id: str, movie_id: int) -> List[Any]:
         """Return (but DO NOT remove) buffered *other* data for a movie."""

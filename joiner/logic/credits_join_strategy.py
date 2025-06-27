@@ -71,6 +71,7 @@ class CreditsJoinStrategy(JoinStrategy):
 
             state.buffer_other(client_id, credit.id, actor_names)
 
+        state.persist_client(client_id)
         self._seq_monitor.record(client_id, seq)
         self._snapshot_if_needed(client_id)
         return None
