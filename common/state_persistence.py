@@ -67,7 +67,7 @@ class StatePersistence:
                     fp.flush()
 
             os.replace(tmp_path, self._file_path)
-        except PermissionError as e:
+        except PermissionError as exc:
             logging.error(f"[StatePersistence] Permission error while saving state | couldn't replace the state: {exc}")
             if Path(tmp_path).exists():
                 os.remove(tmp_path)

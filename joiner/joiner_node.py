@@ -198,11 +198,12 @@ class JoinerNode:
             raise RequeueException()
 
         try:
-            client_finished_id, force_finish = self.join_strategy.process_other_message(
+            client_finished = self.join_strategy.process_other_message(
                 body, self.state, self.output_producer
             )
 
-            if client_finished_id:
+            if client_finished:
+                client_finished_id, force_finish = client_finished
                 self._check_and_handle_client_finished(str(client_finished_id), force_finish)
         except RequeueException:
             raise
