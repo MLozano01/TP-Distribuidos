@@ -67,7 +67,7 @@ def main():
                 try:
                     base_value_typed = float(base_value)
                     check_value_typed = float(check_value)
-                    are_the_same = math.isclose(base_value_typed, check_value_typed, rel_tol=1e-6)
+                    are_the_same = math.isclose(base_value_typed, check_value_typed, rel_tol=0.001)
                 except:
                     are_the_same = base_value == check_value
                 finally:

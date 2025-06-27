@@ -10,7 +10,7 @@ def get_routing(replicas_count, key):
     return key % replicas_count + 1
 
 class RabbitMQ:
-    def __init__(self, exchange, q_name, key, exc_type, auto_ack=False, prefetch_count=None):
+    def __init__(self, exchange, q_name, key, exc_type, auto_ack=False, prefetch_count=1):
         self.exchange = exchange
         self.q_name = q_name
         self.key = key
