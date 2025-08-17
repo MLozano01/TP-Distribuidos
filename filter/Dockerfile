@@ -2,7 +2,8 @@ FROM python:3.9.7-slim
 
 COPY filter /
 COPY protocol /protocol
-COPY utils /utils
+COPY common /common
+
 
 COPY requirements.txt /
 

@@ -1,19 +1,46 @@
 import logging
-import common.config_init as config_init
-from utils.utils import config_logger
-from common.joiner import Joiner
+import os
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+
+from config.config_init import initialize_config
+from logic.strategy_factory import get_join_strategy
+from joiner_node import JoinerNode
+from common.logger import config_logger
+from common.state_persistence import StatePersistence
 
 def main():
-    joiner_instance = None # Define outside try for finally block
+    joiner_instance = None
     try:
-        config = config_init.initialize_config()
+        config = initialize_config()
         config_logger(config["logging_level"])
 
-        replica_id = config.get("replica_id", "N/A") # Get replica ID for logging
+        replica_id = config.get("replica_id", "N/A")
         logging.info(f"Joiner Replica {replica_id} started")
+        
+        join_strategy_name = config.get("other_data_type", "RATINGS")
 
-        joiner_instance = Joiner(**config)
-        joiner_instance.start() # This will block until stopped
+        # Create a StatePersistence helper solely for the SequenceNumberMonitor
+        node_tag = f"{config.get('joiner_name', 'joiner')}_{config.get('replica_id', 0)}"
+        state_manager = StatePersistence(
+            config["backup_file"], node_info=node_tag, serializer="json"
+        )
+
+        join_strategy = get_join_strategy(
+            join_strategy_name,
+            config['replica_id'],
+            config['replicas_count'],
+            state_manager,
+        )
+
+        state_manager_movies = StatePersistence(
+            config["backup_file"], node_info=f"movies-{node_tag}", serializer="json"
+        )
+
+        joiner_instance = JoinerNode(config, join_strategy, state_manager_movies)
+        joiner_instance.start()
 
     except KeyboardInterrupt:
         logging.info(f"Joiner Replica {replica_id} stopped by user")

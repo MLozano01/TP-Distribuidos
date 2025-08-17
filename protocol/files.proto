@@ -21,6 +21,9 @@ message RatingsCSV {
   repeated RatingCSV ratings = 1;
   optional bool finished = 2;
   int32 client_id = 3;
+  int32 secuence_number = 4;
+  optional bool force_finish = 5;
+  optional int32 total_to_process = 6;
 }
 // [END ratings messages]
 
@@ -58,6 +61,9 @@ message CreditsCSV {
   repeated CreditCSV credits = 1;
   optional bool finished = 2;
   int32 client_id = 3;
+  int32 secuence_number = 4;
+  optional bool force_finish = 5;
+  optional int32 total_to_process = 6;
 }
 // [END credits messages]
 
@@ -131,6 +137,8 @@ message MoviesCSV {
   repeated MovieCSV movies = 1;
   optional bool finished = 2;
   int32 client_id = 3;
+  int32 secuence_number = 4;
+  optional bool force_finish = 5;
 }
 // [END movies messages]
 
@@ -146,6 +154,8 @@ message AggregationBatch {
   repeated Aggregation aggr_row = 1;
   optional bool finished = 2;
   int32 client_id = 3;
+  int32 secuence_number = 4;
+  optional bool force_finish = 5;
 }
 // [END] Aggregators messages
 
@@ -160,6 +170,8 @@ message ActorParticipationsBatch {
     repeated ActorParticipation participations = 1;
     optional bool finished = 2;
     int32 client_id = 3;
+    int32 secuence_number = 4;
+    optional bool force_finish = 5;
 }
 // [END] Actor Participation messages
 
@@ -186,5 +198,20 @@ message ResultBatch {
 }
 
 // [END] ResultBatch messages
+
+message JoinedRating {
+    int32 movie_id = 1;
+    string title = 2;
+    float rating = 3;
+    string timestamp = 4;
+}
+
+message JoinedRatingsBatch {
+    repeated JoinedRating ratings = 1;
+    optional bool finished = 2;
+    int32 client_id = 3;
+    int32 secuence_number = 4;
+    optional bool force_finish = 5;
+}
 
 // [END messages]

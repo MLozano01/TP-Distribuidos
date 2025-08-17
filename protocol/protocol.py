@@ -43,6 +43,9 @@ class Protocol:
     self.__codes_to_types = {MOVIES_FILE_CODE: FileType.MOVIES, 
                             RATINGS_FILE_CODE: FileType.RATINGS, 
                             CREDITS_FILE_CODE: FileType.CREDITS}
+    self.__codes_to_string = {MOVIES_FILE_CODE: "movies", 
+                            RATINGS_FILE_CODE: "ratings", 
+                            CREDITS_FILE_CODE: "credits"}
     self.__headers = {
       FileType.MOVIES: self.MOVIES_HEADERS,
       FileType.RATINGS: self.RATINGS_HEADERS,
@@ -75,16 +78,20 @@ class Protocol:
     code = self.__type_codes.get(type)
     return self.create_bytes(code, batch)
 
-  def create_inform_end_file(self, type):
+  def create_inform_end_file(self, type,force=False):
     code = self.__type_codes.get(type)
-    msg = code.to_bytes(CODE_LENGTH, byteorder='big')
+    msg = bytearray()
+    msg.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
+    if force:
+      msg.extend(force.to_bytes(BOOL_LENGTH, byteorder='big'))
     return self.create_bytes(END_FILE_CODE, msg)
 
-  def create_finished_message(self, type, client_id):
+  def create_finished_message(self, type, client_id, force=False):
       """Creates and serializes a 'finished' message for the given type."""
       msg = self.__file_classes[type]
       msg.finished = True
       msg.client_id = client_id
+      msg.force_finish = force
 
       serialized_msg = msg.SerializeToString()
       code = self.__type_codes.get(type)
@@ -99,39 +106,86 @@ class Protocol:
     message.extend(data)
     return message
 
+  def get_file_type(self, message):
+    """Reads the message and returns the file type of the data received."""
+    code = int.from_bytes(message[:CODE_LENGTH], byteorder='big')
+    data = message[CODE_LENGTH + INT_LENGTH:]
+  
+    type = int.from_bytes(data[:CODE_LENGTH], byteorder='big') if code == END_FILE_CODE else code
+    
+    return code == END_FILE_CODE, self.__codes_to_string[type]
 
-  def add_client_id(self, message, client_id):
+  def is_end_file(self, message):
+    """Return True if *message* is an END_FILE control message."""
+    if not message:
+      return False
+    return int.from_bytes(message[:CODE_LENGTH], byteorder='big') == END_FILE_CODE
+
+  def string_to_file_type(self, s):
+    """Map 'ratings'/'credits'/'movies' → FileType enum (or raise KeyError)."""
+    code = {v: k for k, v in self.__codes_to_string.items()}[s]
+    return self.__codes_to_types[code]
+
+  def add_metadata(self, message, client_id, secuence_number):
     """Adds client ID to the message to call before forwarding to the distributed system."""
     code = int.from_bytes(message[:CODE_LENGTH], byteorder='big')
     length = int.from_bytes(message[CODE_LENGTH:CODE_LENGTH + INT_LENGTH], byteorder='big')
     data = message[CODE_LENGTH + INT_LENGTH:]
     
-    # Add client ID to the data
+    # Add metadata to the data
     client_id_bytes = client_id.to_bytes(INT_LENGTH, byteorder='big')
-    new_data = client_id_bytes + data
+    secuence_number_bytes = secuence_number.to_bytes(INT_LENGTH, byteorder='big')
+    new_data = client_id_bytes + secuence_number_bytes + data
     
     # Create new message with updated length
     new_message = bytearray()
     new_message.extend(code.to_bytes(CODE_LENGTH, byteorder='big'))
-    new_message.extend((length + INT_LENGTH).to_bytes(INT_LENGTH, byteorder='big'))
+    new_message.extend((length + 2 * INT_LENGTH).to_bytes(INT_LENGTH, byteorder='big'))
     new_message.extend(new_data)
     
     return new_message
 
   def decode_client_msg(self, msg_buffer, columns):
     code = int.from_bytes(msg_buffer[:CODE_LENGTH], byteorder='big')
-    length = int.from_bytes(msg_buffer[CODE_LENGTH:CODE_LENGTH + INT_LENGTH], byteorder='big')
-    
+    amount_read = CODE_LENGTH
+    length = int.from_bytes(msg_buffer[amount_read:amount_read + INT_LENGTH], byteorder='big')
+    amount_read += INT_LENGTH 
     # Extract client ID
-    client_id = int.from_bytes(msg_buffer[CODE_LENGTH + INT_LENGTH:CODE_LENGTH + 2*INT_LENGTH], byteorder='big')
-    msg = msg_buffer[CODE_LENGTH + 2*INT_LENGTH:]
+    client_id = int.from_bytes(msg_buffer[amount_read:amount_read + INT_LENGTH], byteorder='big')
+    amount_read += INT_LENGTH 
+    secuence_number = int.from_bytes(msg_buffer[amount_read:amount_read + INT_LENGTH], byteorder='big')
+    amount_read += INT_LENGTH 
+    
+    msg = msg_buffer[amount_read:]
     
     if code == END_FILE_CODE:
-      file_code = int.from_bytes(msg[:CODE_LENGTH], byteorder='big')
+      cursor = 0
+      file_code = int.from_bytes(msg[cursor:cursor + CODE_LENGTH], byteorder='big')
+      cursor += CODE_LENGTH
+
+      # Default when the sender provided no total counter (backwards compat.)
+      total_to_process = None
+
+      # If there are at least 4 extra bytes, read them as total_to_process.
+      if len(msg) >= cursor + INT_LENGTH:
+        total_to_process = int.from_bytes(
+          msg[cursor:cursor + INT_LENGTH], byteorder='big'
+        )
+
       file_type = self.__codes_to_types[file_code]
       msg_finished = self.__file_classes[file_type]
       msg_finished.finished = True
+      if len(msg[CODE_LENGTH:]) > 0:
+        msg_finished.force_finish = True
+      else:
+        msg_finished.force_finish = False
       msg_finished.client_id = client_id
+      msg_finished.secuence_number = secuence_number
+
+      # Only RatingsCSV and CreditsCSV currently support this extra field.
+      if total_to_process is not None and hasattr(msg_finished, "total_to_process"):
+        msg_finished.total_to_process = total_to_process
+
       return file_type, msg_finished
 
     file_type = self.__codes_to_types[code]
@@ -142,6 +196,7 @@ class Protocol:
     # Then process the batch and add client_id to the final message
     batch = self.lines_to_batch(csv_batch, columns, file_type)
     batch.client_id = client_id
+    batch.secuence_number = secuence_number
     return file_type, batch
 
   def lines_to_batch(self, csv_batch, columns, file_type):
@@ -357,6 +412,27 @@ class Protocol:
     credits.ParseFromString(msg_buffer)
     return credits
   
+  def decode_joined_ratings_batch(self, buffer):
+      """Deserializes a JoinedRatingsBatch message."""
+      try:
+          batch = files_pb2.JoinedRatingsBatch()
+          batch.ParseFromString(buffer)
+          return batch
+      except Exception as e:
+          logging.error(f"Error decoding JoinedRatingsBatch: {e}")
+          return None
+
+  def encode_joined_rating_msg(self, client_id, movie_id, title, rating, timestamp):
+      """Encodes a single joined rating into a JoinedRatingsBatch of one."""
+      rating_pb = files_pb2.JoinedRating(
+          movie_id=movie_id,
+          title=title,
+          rating=rating,
+          timestamp=timestamp,
+      )
+      batch_pb = files_pb2.JoinedRatingsBatch(client_id=client_id)
+      batch_pb.ratings.append(rating_pb)
+      return batch_pb.SerializeToString()
 
   def create_client_result(self, data):
     message = bytearray()
@@ -366,36 +442,40 @@ class Protocol:
     message.extend(data)
     return message
   
-  def create_movie_finished_msg(self, client_id):
+  def create_movie_finished_msg(self, client_id, force=False):
     movies_pb = files_pb2.MoviesCSV()
     movies_pb.finished = True
+    movies_pb.force_finish = force
     movies_pb.client_id = client_id
     return movies_pb.SerializeToString()
   
-  def create_actor_participations_finished_msg(self, client_id):
+  def create_actor_participations_finished_msg(self, client_id, force=False):
     actor_participations_pb = files_pb2.ActorParticipationsBatch()
     actor_participations_pb.finished = True
+    actor_participations_pb.force_finish = force
     actor_participations_pb.client_id = client_id
     return actor_participations_pb.SerializeToString()
 
-  def create_movie_list(self, movies, client_id):
+  def create_movie_list(self, movies, client_id, secuence_number):
     movies_pb = files_pb2.MoviesCSV()
 
     for movie in movies:
       movies_pb.movies.append(movie)
 
     movies_pb.client_id = client_id
+    movies_pb.secuence_number = secuence_number
     movies_pb_str = movies_pb.SerializeToString()
     return movies_pb_str
 
-  def create_aggr_batch(self, dict_results, client_id):
+  def create_aggr_batch(self, dict_results, client_id, secuence_number):
     batch_pb = files_pb2.AggregationBatch()
 
     batch_pb.client_id = client_id
+    batch_pb.secuence_number = secuence_number
 
     for key, results in dict_results.items():
       aggr_pb = batch_pb.aggr_row.add()
-      aggr_pb.key = key
+      aggr_pb.key = str(key)
       if "sum" in results:
         aggr_pb.sum =  to_float(results.get("sum"))
       if "count" in results:
@@ -415,16 +495,18 @@ class Protocol:
       batch.client_id = client_id
       return batch.SerializeToString()
 
-  def create_finished_actor_participations_msg(self):
+  def create_finished_actor_participations_msg(self, force=False):
       """Creates and serializes an ActorParticipationsBatch message with finished=True."""
       batch_pb = files_pb2.ActorParticipationsBatch()
       batch_pb.finished = True
+      batch_pb.force_finish = force
       return batch_pb.SerializeToString()
   
-  def create_finished_movies_msg(self):
+  def create_finished_movies_msg(self, force=False):
       """Creates and serializes an MoviesCsv message with finished=True."""
       movies_pb = files_pb2.MoviesCSV()
       movies_pb.finished = True
+      movies_pb.force_finish = force
       return movies_pb.SerializeToString()
 
   def decode_actor_participations_batch(self, buffer):
@@ -437,7 +519,7 @@ class Protocol:
     batch_pb = files_pb2.ResultBatch()
     batch_pb.client_id = client_id
 
-    if final: 
+    if final:
       batch_pb.final = True
 
     for key, results in dict_results.items():
@@ -480,3 +562,65 @@ class Protocol:
     result = files_pb2.ResultBatch()
     result.ParseFromString(buffer)
     return result
+
+  def encode_movies_msg(self, movies_list, client_id, finished=False, force=False):
+      """Encodes a list of MovieCSV objects into a serialized MoviesCSV message.
+
+      Args:
+          movies_list (list[files_pb2.MovieCSV]): The list of movies to include in the batch.
+          client_id (int): The client identifier.
+          finished (bool): Whether this is a FINISHED signal (defaults to False).
+
+      Returns:
+          bytes: Serialized MoviesCSV protobuf message.
+      """
+      movies_pb = files_pb2.MoviesCSV()
+      if movies_list:
+          movies_pb.movies.extend(movies_list)
+      movies_pb.client_id = client_id
+      if finished:
+          movies_pb.finished = True
+          movies_pb.force_finish = force
+      return movies_pb.SerializeToString()
+
+  def encode_actor_participations_msg(self, participations_list, client_id, finished=False, force=False):
+      """Encodes a list of ActorParticipation objects into a serialized ActorParticipationsBatch.
+
+      Args:
+          participations_list (list[files_pb2.ActorParticipation]): Actor participations to include.
+          client_id (int): The client identifier.
+          finished (bool): Whether this is a FINISHED signal (defaults to False).
+
+      Returns:
+          bytes: Serialized ActorParticipationsBatch protobuf message.
+      """
+      batch_pb = files_pb2.ActorParticipationsBatch()
+      if participations_list:
+          batch_pb.participations.extend(participations_list)
+      batch_pb.client_id = client_id
+      if finished:
+          batch_pb.finished = True
+          batch_pb.force_finish = force
+      return batch_pb.SerializeToString()
+
+
+  def count_csv_rows(self, message):
+    """Return the number of CSV rows in a *ratings* or *credits* batch.
+
+    For non-ratings/credits messages, or END_FILE messages, returns 0.
+    """
+    if not message:
+      return 0
+
+    code = int.from_bytes(message[:CODE_LENGTH], byteorder='big')
+    if code not in (RATINGS_FILE_CODE, CREDITS_FILE_CODE):
+      return 0
+
+    try:
+      length = int.from_bytes(message[CODE_LENGTH:CODE_LENGTH + INT_LENGTH], byteorder='big')
+      data = message[CODE_LENGTH + INT_LENGTH : CODE_LENGTH + INT_LENGTH + length]
+      csv_batch = files_pb2.CSVBatch()
+      csv_batch.ParseFromString(data)
+      return len(csv_batch.rows)
+    except Exception:
+      return 0

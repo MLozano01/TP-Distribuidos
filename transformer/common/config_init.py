@@ -16,7 +16,6 @@ def initialize_config():
     """
 
     config_params = {}
-    communication_config = {}
 
     config = ConfigParser(os.environ)
     # If config.ini does not exists original config object is not modified
@@ -36,18 +35,15 @@ def initialize_config():
         config_params["exc_snd_type"] = os.getenv('TYPE_SND', config["RABBITMQ"]["TYPE_SND"])
         
 
-        comm_name = os.getenv('QUEUE_COMMUNICATION', config["RABBITMQ"]["QUEUE_COMMUNICATION"])
-        env_id = os.getenv('TRANSFORMER_REPLICA_ID')
-        communication_config["queue_communication_name"] = f"{comm_name}_{env_id}" if env_id else comm_name
-        communication_config["routing_communication_key"] = os.getenv('ROUTING_KEY_COMMUNICATION', config["RABBITMQ"]["ROUTING_KEY_COMMUNICATION"])
-        communication_config["exchange_communication"] = os.getenv('EXCHANGE_COMMUNICATION', config["RABBITMQ"]["EXCHANGE_COMMUNICATION"])
-        communication_config["exc_communication_type"] = os.getenv('TYPE_COMMUNICATION', config["RABBITMQ"]["TYPE_COMMUNICATION"])
-        communication_config[f"transformer_replicas_count"] = int(os.getenv("TRANSFORMER_REPLICAS_COUNT"))
+        config_params["port"] = int(os.getenv('COMM_PORT', config["COMM"]["COMM_PORT"]))
+        config_params["id"] = os.getenv("TRANSFORMER_REPLICA_ID")
+        config_params[f"replicas_count"] = int(os.getenv("TRANSFORMER_REPLICAS_COUNT"))
+        config_params[f"name"] = "transformer"
 
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
     except ValueError as e:
         raise ValueError("Key could not be parsed. Error: {}. Aborting server".format(e))
 
-    return config_params, communication_config
+    return config_params
 

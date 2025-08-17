@@ -21,7 +21,6 @@ def initialize_config():
     # If config.ini does not exists original config object is not modified
     config.read(CONFIG_FILE)
     config_params = {}
-    communication_config = {}
     logging.info(config)
     try:
         config_params["logging_level"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"])
@@ -41,17 +40,14 @@ def initialize_config():
         config_params["operations"] = os.getenv("OPERATIONS", config["AGGREGATOR"]["OPERATIONS"])
         config_params["expected_finished_msg_amount"] = int(os.getenv('EXPECTED_FINISHED_MSG_AMOUNT', config["AGGREGATOR"].get('EXPECTED_FINISHED_MSG_AMOUNT', 1)))
 
-        comm_name = os.getenv('QUEUE_COMMUNICATION', config["RABBIT_MQ"]["QUEUE_COMMUNICATION"])
-        env_id = os.getenv('AGGR_REPLICA_ID')
-        communication_config["queue_communication_name"] = f"{comm_name}_{env_id}" if env_id else comm_name
-        communication_config["routing_communication_key"] = os.getenv('ROUTING_KEY_COMMUNICATION', config["RABBIT_MQ"]["ROUTING_KEY_COMMUNICATION"])
-        communication_config["exchange_communication"] = os.getenv('EXCHANGE_COMMUNICATION', config["RABBIT_MQ"]["EXCHANGE_COMMUNICATION"])
-        communication_config["exc_communication_type"] = os.getenv('TYPE_COMMUNICATION', config["RABBIT_MQ"]["TYPE_COMMUNICATION"])
-        communication_config["aggr_replicas_count"] = int(os.getenv("AGGR_REPLICA_COUNT"))
-
+        config_params["id"] = os.getenv('AGGR_REPLICA_ID')
+        config_params["port"] = int(os.getenv('COMM_PORT', config["COMM"]["COMM_PORT"]))
+        config_params["name"] = os.getenv('COMM_NAME', config["COMM"]["COMM_NAME"])
+        config_params["replicas_count"] = int(os.getenv("AGGR_REPLICA_COUNT"))
+        
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e} .Aborting server")
     except ValueError as e:
         raise ValueError(f"Key could not be parsed. Error: {e}. Aborting server")
 
-    return config_params, communication_config
+    return config_params

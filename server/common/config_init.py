@@ -21,6 +21,18 @@ def initialize_config():
         config_params["port"] = int(os.getenv('SERVER_PORT', config["DEFAULT"]["SERVER_PORT"]))
         config_params["listen_backlog"] = int(os.getenv('SERVER_LISTEN_BACKLOG', config["DEFAULT"]["SERVER_LISTEN_BACKLOG"]))
         config_params["logging_level"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"])
+
+        config_params["q_rcv_name_movies"] = os.getenv('QUEUE_RCV_NAME_MOVIES', config["RABBITMQ"]["QUEUE_RCV_NAME_MOVIES"])
+        config_params["q_rcv_name_credits"] = os.getenv('QUEUE_RCV_NAME_CREDITS', config["RABBITMQ"]["QUEUE_RCV_NAME_CREDITS"])
+        config_params["q_rcv_name_ratings"] = os.getenv('QUEUE_RCV_NAME_RATINGS', config["RABBITMQ"]["QUEUE_RCV_NAME_RATINGS"])
+        config_params["q_rcv_exc_movies"] = os.getenv('EXCHANGE_RCV_MOVIES', config["RABBITMQ"]["EXCHANGE_RCV_MOVIES"])
+        config_params["q_rcv_exc_credits"] = os.getenv('EXCHANGE_RCV_CREDITS', config["RABBITMQ"]["EXCHANGE_RCV_CREDITS"])
+        config_params["q_rcv_exc_raitings"] = os.getenv('EXCHANGE_RCV_RATINGS', config["RABBITMQ"]["EXCHANGE_RCV_RATINGS"])
+        config_params["q_rcv_key_movies"] = os.getenv('ROUTING_KEY_RCV_MOVIES', config["RABBITMQ"]["ROUTING_KEY_RCV_MOVIES"])
+        config_params["q_rcv_key_credits"] = os.getenv('ROUTING_KEY_RCV_CREDITS', config["RABBITMQ"]["ROUTING_KEY_RCV_CREDITS"])
+        config_params["q_rcv_key_raitings"] = os.getenv('ROUTING_KEY_RCV_RATINGS', config["RABBITMQ"]["ROUTING_KEY_RCV_RATINGS"])
+        config_params["type_rcv"] = os.getenv('TYPE_RCV', config["RABBITMQ"]["TYPE_RCV"])
+
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
     except ValueError as e:

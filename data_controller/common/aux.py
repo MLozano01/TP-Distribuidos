@@ -5,6 +5,7 @@ import logging
 def filter_movies(movies_csv):
     movies_pb = files_pb2.MoviesCSV()
     movies_pb.client_id = movies_csv.client_id
+    movies_pb.secuence_number = movies_csv.secuence_number
     for movie in movies_csv.movies:
         if not movie.id or movie.id < 0 or not movie.release_date or not movie.overview:
             continue
@@ -31,7 +32,9 @@ def filter_movies(movies_csv):
     return movies_pb if len(movies_pb.movies) else None
 
 def filter_ratings(ratings_csv):
-    ratings_by_movie = dict()
+    ratings_batch = files_pb2.RatingsCSV()
+    ratings_batch.client_id = ratings_csv.client_id
+    ratings_batch.secuence_number = ratings_csv.secuence_number
     total_ratings = len(ratings_csv.ratings)
     filtered_out = 0
     
@@ -45,15 +48,15 @@ def filter_ratings(ratings_csv):
         rating_pb.movieId = rating.movieId
         rating_pb.rating = rating.rating
 
-        ratings_pb = ratings_by_movie.setdefault(rating.movieId, files_pb2.RatingsCSV())
-        ratings_pb.client_id = ratings_csv.client_id
-        ratings_pb.ratings.append(rating_pb)
+        ratings_batch.ratings.append(rating_pb)
 
-    logging.debug(f"Filtered {filtered_out} out of {total_ratings} ratings. Remaining: {len(ratings_by_movie)}")
-    return ratings_by_movie
+    logging.debug(f"Filtered {filtered_out} out of {total_ratings} ratings. Remaining: {len(ratings_batch.ratings)}")
+    return ratings_batch
 
 def filter_credits(credits_csv):
-    credits_by_movie = dict()
+    credits_batch = files_pb2.CreditsCSV()
+    credits_batch.client_id = credits_csv.client_id
+    credits_batch.secuence_number = credits_csv.secuence_number
     total_credits = len(credits_csv.credits)
     filtered_out = 0
     for credit in credits_csv.credits:
@@ -71,9 +74,7 @@ def filter_credits(credits_csv):
             cast_pb = credit_pb.cast.add()
             cast_pb.name = name
 
-        credits_pb = credits_by_movie.setdefault(credit.id, files_pb2.CreditsCSV())
-        credits_pb.client_id = credits_csv.client_id
-        credits_pb.credits.append(credit_pb)
+        credits_batch.credits.append(credit_pb)
 
-    logging.debug(f"Filtered {filtered_out} out of {total_credits} credits. Remaining: {len(credits_by_movie)}")
-    return credits_by_movie 
+    logging.debug(f"Filtered {filtered_out} out of {total_credits} credits. Remaining: {len(credits_batch.credits)}")
+    return credits_batch 

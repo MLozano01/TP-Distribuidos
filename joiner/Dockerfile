@@ -1,11 +1,15 @@
 FROM python:3.9.7-slim
 
 COPY joiner /
+COPY common /common
 COPY protocol /protocol
-COPY utils /utils
 
 COPY requirements.txt /
 
 RUN pip install -r requirements.txt
+
+# Ensure common & protocol packages are import-able and create backup dir
+ENV PYTHONPATH="/common:${PYTHONPATH}"
+RUN mkdir -p /backup
 
 ENTRYPOINT ["python3", "/main.py"]

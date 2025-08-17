@@ -1,21 +1,31 @@
-import common.controller
 import logging
 import common.config_init as config_init
-from utils.utils import config_logger
+from common.logger import config_logger
+from common.communicator import Communicator
+from common.aggregator import Aggregator
+from multiprocessing import Process
 
 def main():
-    config, comms = config_init.initialize_config()
+    config = config_init.initialize_config()
     config_logger(config["logging_level"])
 
     try: 
-        controller = common.controller.Controller(config, comms)
-        controller.start()
+        comms = Communicator(config['port'])
+        config.pop('port')
+
+        comms_process = Process(target=comms.start, args=())
+        comms_process.start()
+
+        aggregator = Aggregator(**config)
+        aggregator.run()
     except KeyboardInterrupt:
         logging.info("Aggregator stopped by user")
     except Exception as e:
         logging.error(f"Aggregator error: {e}")
     finally:
-        controller.stop()
+        comms_process.terminate()
+        aggregator.stop()
+        comms_process.join()
         logging.info("Aggregator stopped")
 
     
